@@ -18,14 +18,23 @@ const temporary = t => {
   return dir;
 };
 
-test('path selection is narrow, fails missing history and expands only relevant full-sim/main changes', () => {
-  for (const path of ['apps/mobile/README.md', 'apps/mobile/app/index.tsx', 'scripts/sim/ci.mjs', 'scripts/verify/impact-plan.mjs', '.github/workflows/simulator.yml']) {
-    assert.deepEqual(actionsSelection([path], 'pull_request', {}), { required: true, scope: 'smoke' });
-    assert.equal(actionsSelection([path], 'pull_request', { pull_request: { labels: [{ name: 'full-sim' }] } }).scope, 'full');
-    assert.equal(actionsSelection([path], 'push', {}).scope, 'full');
+test('hosted PR and main use affected journeys, retain bounded control smoke and fail closed on unknown impact', () => {
+  for (const event of ['pull_request', 'push']) {
+    for (const path of ['scripts/sim/ci.mjs', 'scripts/verify/impact-plan.mjs', '.github/workflows/simulator.yml'])
+      assert.equal(actionsSelection([path], event, {}).scope, 'smoke');
+    for (const path of ['apps/mobile/app/index.tsx', 'apps/mobile/new-unmapped.ts', 'package-lock.json'])
+      assert.equal(actionsSelection([path], event, {}).scope, 'full');
+    for (const path of ['apps/mobile/README.md', 'scripts/sim/actions.test.mjs', 'docs/ci-simulator.md'])
+      assert.equal(actionsSelection([path], event, {}).scope, 'none');
+    const selected = actionsSelection(['apps/mobile/app/notification-settings.tsx'], event, {});
+    assert.equal(selected.scope, 'flow');
+    assert.deepEqual(selected.flows, ['reminders']);
+    assert.equal(actionsSelection(['apps/api/app/api/search/route.ts'], event, {}).scope, 'flow');
   }
-  assert.deepEqual(actionsSelection(['docs/ci-simulator.md', 'apps/api/app/api/search/route.ts'], 'push', {}), { required: false, scope: 'none' });
+  for (const label of ['full-sim', 'needs-sim'])
+    assert.equal(actionsSelection(['docs/ci-simulator.md'], 'pull_request', { pull_request: { labels: [{ name: label }] } }).scope, 'full');
   assert.throws(() => actionsSelection(null, 'pull_request', {}), /comparison/);
+  assert.throws(() => actionsSelection([], 'unavailable', {}), /context/);
 });
 
 test('local runner preflight checks real CLI inventory without confusing missing capacity with denied access', t => {
@@ -57,7 +66,7 @@ test('local runner preflight checks real CLI inventory without confusing missing
 
 test('the real selector sees a mobile deletion beyond 300 unrelated changed files', t => {
   const dir = temporary(t);
-  const git = args => execFileSync('git', args, { cwd: dir, env, stdio: 'pipe', encoding: 'utf8' }).trim();
+  const git = args => execFileSync('git', ['-c', 'gc.auto=0', '-c', 'maintenance.auto=false', ...args], { cwd: dir, env, stdio: 'pipe', encoding: 'utf8' }).trim();
   mkdirSync(join(dir, 'scripts/verify'), { recursive: true });
   for (const name of ['impact-plan.mjs', 'simulator-actions.mjs']) copyFileSync(join(root, 'scripts/verify', name), join(dir, 'scripts/verify', name));
   mkdirSync(join(dir, 'apps/mobile'), { recursive: true });
@@ -75,7 +84,21 @@ test('the real selector sees a mobile deletion beyond 300 unrelated changed file
     cwd: dir, env: { ...env, CI: 'true', GITHUB_EVENT_NAME: 'pull_request', GITHUB_EVENT_PATH: event, GITHUB_OUTPUT: output }, encoding: 'utf8',
   });
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(readFileSync(output, 'utf8'), 'required=true\nscope=smoke\n');
+  assert.equal(readFileSync(output, 'utf8'), 'required=true\nscope=full\n');
+  // The real runner recomputes source impact before any native command. A
+  // stale/tampered smoke output cannot hide this unknown deleted dependency.
+  const work = join(dir, 'fitsy-simulator-12-1');
+  mkdirSync(work); writeFileSync(join(work, 'device.json'), '{}');
+  const rejected = spawnSync(process.execPath, [join(root, 'scripts/sim/actions.mjs'), 'run'], {
+    cwd: dir, encoding: 'utf8', env: { ...env, CI: 'true', FITSY_PRODUCT_ROOT: dir,
+      GITHUB_EVENT_NAME: 'pull_request', GITHUB_EVENT_PATH: event, GITHUB_ACTIONS: 'true', GITHUB_WORKSPACE: dir,
+      RUNNER_OS: 'macOS', RUNNER_TEMP: dir, GITHUB_RUN_ID: '12', GITHUB_RUN_ATTEMPT: '1',
+      FITSY_XCTEST_SIM_UDID: '11111111-1111-1111-1111-111111111111', SIM_SCOPE: 'smoke',
+      EXPO_PUBLIC_API_URL: 'https://dev.fitsy.org', EXPO_PUBLIC_SUPABASE_URL: 'https://kegycybiruksmrzvniha.supabase.co',
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_synthetic', EXPO_PUBLIC_REVENUECAT_TEST_KEY: 'test_synthetic' },
+  });
+  assert.equal(rejected.status, 1);
+  assert.match(rejected.stderr, /scope does not match the current source impact/);
 });
 
 test('the actual required-check shell never converts a failed, cancelled or missing Mac run to success', () => {
@@ -131,6 +154,11 @@ test('full Test Store selection includes maintained failures and rejects incompl
   assert.deepEqual(selectFlows('full', catalog), ['chain-menu-serving', 'cold-start-welcome', 'new-flow', 'paywall-access', 'signin-options']);
   assert.deepEqual(selectFlows('full', catalog, [{ flow: 'apple', status: 'EXCEPTED' }]),
     ['apple', 'chain-menu-serving', 'cold-start-welcome', 'new-flow', 'paywall-access', 'signin-options']);
+  assert.deepEqual(selectFlows('flow', catalog, [], ['chain-menu-serving']), ['chain-menu-serving']);
+  assert.deepEqual(selectFlows('flow', catalog, [], ['apple', 'chain-menu-serving']), ['chain-menu-serving']);
+  for (const flows of [[], ['missing'], ['chain-menu-serving', 'chain-menu-serving']])
+    assert.throws(() => selectFlows('flow', catalog, [], flows), /missing or ambiguous/);
+  assert.throws(() => selectFlows('flow', catalog, [], ['apple']), /compatible store/);
   assert.throws(() => selectFlows('none', catalog));
   const accounts = { 'unsubscribed-dev': { email: 'seed-test@fitsy.dev', password: 'synthetic' } };
   assert.doesNotThrow(() => fixtureAccounts(selectFlows('smoke', catalog), catalog, JSON.stringify(accounts)));

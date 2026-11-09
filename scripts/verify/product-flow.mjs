@@ -112,7 +112,7 @@ export function impact(paths, configKeys = [], options = {}) {
     else categories.add('changed-journey');
   }
   return { required: simulator.required,
-    paths: [...affected, ...configKeys.map(key => `public-env:${key}`)], categories: [...categories].sort(),
+    paths: [...affected, ...configKeys.map(key => `public-env:${key}`)], categories: simulator.acceptanceCategories || [...categories].sort(),
     baseline: simulator.flows.filter(name => baseline.includes(name)), flows: simulator.flows, simulator };
 }
 
@@ -305,7 +305,13 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
   const acceptedCategories = typeof report.publicConfigAcceptance?.verifiedConfigHash === 'string' &&
     report.publicConfigAcceptance.verifiedConfigHash === report.configHash
     ? impact([], report.publicConfigAcceptance.keys || []).categories : [];
-  for (const category of new Set([...plan.categories, ...acceptedCategories])) {
+  const observations = report.exploration || [];
+  insist(Array.isArray(observations) && new Set(observations.map(item => item?.category)).size === observations.length,
+    'duplicate or invalid walkthrough categories');
+  // Reusing a larger completed report retains its observations too. Validate
+  // every retained charter even when the current plan requires fewer flows.
+  for (const category of new Set([...plan.categories, ...acceptedCategories,
+    ...observations.map(observation => observation?.category)])) {
     insist(covered.has(category), `no deterministic coverage for ${category}`);
     const observation = report.exploration?.find(o => o.category === category);
     insist(observation?.result === 'pass' && observation.expected?.trim() && observation.observed?.trim(), `missing walkthrough outcome: ${category}`);

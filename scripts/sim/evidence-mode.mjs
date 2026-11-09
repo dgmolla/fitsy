@@ -22,6 +22,9 @@ export function matchesFinalCandidate(report, { udid, appHash, configHash, backe
     Boolean(previousRecording) === recordVideo &&
     report.simulator === udid && report.appHash === appHash && report.configHash === configHash &&
     report.backendDeployment === backendDeployment && report.fixture === fixture &&
-    Array.isArray(report.flows) && report.flows.length === flows.length &&
-    report.flows.every((flow, index) => flow.name === flows[index].name && flow.sourceHash === flows[index].sourceHash);
+    Array.isArray(report.flows) && Array.isArray(flows) && flows.length > 0 &&
+    new Set(report.flows.map(flow => flow?.name)).size === report.flows.length &&
+    new Set(flows.map(flow => flow?.name)).size === flows.length &&
+    flows.every(flow => flow?.name && flow.sourceHash && report.flows.some(previous =>
+      previous?.name === flow.name && previous.sourceHash === flow.sourceHash));
 }

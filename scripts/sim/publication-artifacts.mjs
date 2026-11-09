@@ -8,5 +8,6 @@ export function publicationArtifacts(report, categories) {
     if (flow.video) artifacts.add(flow.video);
   }
   for (const category of categories) artifacts.add(report.exploration.find(item => item.category === category).trace);
+  for (const observation of report.exploration || []) artifacts.add(observation.trace);
   return [...artifacts];
 }

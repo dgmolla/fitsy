@@ -6,7 +6,8 @@ import { appendFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSyn
 import { createRequire } from 'node:module';
 import { delimiter, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { isMain, repository, simulatorFlows } from '../verify/impact-plan.mjs';
+import { changedFiles, isMain, repository, simulatorFlows } from '../verify/impact-plan.mjs';
+import { actionsSelection } from '../verify/simulator-actions.mjs';
 import { maestroApiArgs } from './backend-identity.mjs';
 import { releaseExceptions } from './journey-fixtures.mjs';
 
@@ -18,13 +19,16 @@ const smoke = ['cold-start-welcome', 'signin-options', 'paywall-access'];
 const command = (binary, args) => execFileSync(binary, args, { cwd: repository, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 120000 }).trim();
 const devices = () => Object.values(JSON.parse(command('xcrun', ['simctl', 'list', 'devices', 'available', '--json'])).devices).flat();
 
-export function selectFlows(scope, catalog, exceptions = []) {
-  if (!['smoke', 'full'].includes(scope)) throw new Error('Simulator scope must be smoke or full');
-  const selected = scope === 'smoke' ? smoke : Object.keys(catalog).filter(name => {
+export function selectFlows(scope, catalog, exceptions = [], affected = []) {
+  if (!['smoke', 'flow', 'full'].includes(scope)) throw new Error('Simulator scope must be smoke, flow or full');
+  const candidates = scope === 'smoke' ? smoke : scope === 'flow' ? affected : Object.keys(catalog).sort();
+  if (!Array.isArray(candidates) || !candidates.length || new Set(candidates).size !== candidates.length ||
+      candidates.some(name => !Object.hasOwn(catalog, name))) throw new Error('Required Maestro flows are missing or ambiguous');
+  const selected = candidates.filter(name => {
     const stores = (catalog[name].tags || []).filter(tag => tag.startsWith('store:'));
     return !stores.length || stores.includes('store:test-store') || exceptions.some(item => item.flow === name);
-  }).sort();
-  if (!selected.length || selected.some(name => !catalog[name])) throw new Error('Required Maestro flows are missing');
+  });
+  if (!selected.length) throw new Error('Required Maestro flows have no compatible store or release exception');
   return selected;
 }
 
@@ -80,10 +84,14 @@ async function runFlows(udid, work) {
   const catalog = Object.fromEntries(simulatorFlows().map(name => [name,
     yaml.loadAll(readFileSync(join(repository, 'apps/mobile/e2e/flows', `${name}.yaml`), 'utf8'))[0]]));
   const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
-  const candidates = process.env.SIM_SCOPE === 'full' ? Object.keys(catalog) : selectFlows(process.env.SIM_SCOPE, catalog);
+  const { files, comparison } = changedFiles();
+  const selection = actionsSelection(files, process.env.GITHUB_EVENT_NAME, event, { comparison });
+  if (!selection.required || selection.scope !== process.env.SIM_SCOPE) throw new Error('Hosted simulator scope does not match the current source impact');
+  const candidates = selection.scope === 'full' ? Object.keys(catalog) : selection.scope === 'flow'
+    ? selection.flows : selectFlows('smoke', catalog);
   const exceptions = await releaseExceptions(candidates, catalog,
     event.pull_request?.number === 754 ? '6716597294' : undefined);
-  const names = selectFlows(process.env.SIM_SCOPE, catalog, exceptions);
+  const names = selectFlows(selection.scope, catalog, exceptions, selection.flows);
   const manual = candidates.filter(name => !names.includes(name)).map(flow => ({ flow, status: 'UNVERIFIED',
     reason: 'Requires separate compatible-store native acceptance; no release exception granted' }));
   const executable = names.filter(name => !exceptions.some(item => item.flow === name));

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,10 +10,78 @@ import { createPublicationArchive, publicationPlan, publishProductFlow as publis
 import { artifactPath, baseline, inputHash, root, publicConfigIdentity } from '../verify/product-flow.mjs';
 import { validateMediaReceipt, writeMediaReceipt } from '../verify/media-integration.mjs';
 import { simulatorFlows } from '../verify/impact-plan.mjs';
+import { matchesFinalCandidate } from './evidence-mode.mjs';
 
 const sha = value => createHash('sha256').update(value).digest('hex');
 const publishProductFlow = (number, options) => publishWithMediaEvidence(number,
   { ...options, validateMediaEvidence: () => ({ required: false }) });
+
+test('final collection preflights the actual child environment and publisher inputs without native work or status writes', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'fitsy-final-preflight-'));
+  try {
+    const env = { ...process.env, FITSY_PRODUCT_ROOT: dir };
+    delete env.FITSY_PRODUCT_FLOW_TEST_FIXTURE;
+    const collect = () => spawnSync(process.execPath,
+      [join(root, 'scripts/sim/product-flow.mjs'), 'run', 'held-device', '--mode=final-candidate'],
+      { cwd: dir, env, encoding: 'utf8', timeout: 30000 });
+    for (const setup of ['missing', 'invalid']) {
+      if (setup === 'invalid') {
+        mkdirSync(join(dir, 'apps/mobile'), { recursive: true });
+        writeFileSync(join(dir, 'apps/mobile/.env.development.local'), 'EXPO_PUBLIC_API_URL=https://forbidden.example\n');
+        for (const key of Object.keys(env)) if (key.startsWith('EXPO_PUBLIC_')) delete env[key];
+      }
+      const result = collect();
+      assert.equal(result.status, 1, result.stderr);
+      const failure = JSON.parse(result.stderr.trim());
+      assert.equal(failure.status, 'fail');
+      assert.match(failure.summary, /canonical mobile environment/);
+      assert.doesNotMatch(result.stdout + result.stderr, /forbidden\.example|not booted|Pass an explicit simulator/);
+    }
+    const head = 'a'.repeat(40), calls = [];
+    let staleHead = false, dirty = false, movedMain = false, mediaFailure = false, staleConfig = false;
+    const execute = (command, args, options) => {
+      calls.push([command, ...args]);
+      assert.equal(options.timeout, 30000);
+      if (command === process.execPath) {
+        assert.equal(args[0], '--env-file=apps/mobile/.env.development.local');
+        return JSON.stringify({ configHash: staleConfig ? 'stale' : publicConfigIdentity().configHash });
+      }
+      if (command === 'git') {
+        if (args[0] === 'rev-parse') return head;
+        if (args[0] === 'status') return dirty ? ' M candidate.js' : '';
+        if (args[0] === 'ls-remote') return `${movedMain ? 'b'.repeat(40) : head}\trefs/heads/main`;
+        assert.deepEqual(args, ['merge-base', '--is-ancestor', 'origin/main', 'HEAD']);
+        return '';
+      }
+      assert.equal(command, 'gh');
+      assert.equal(args[0], 'pr', 'preflight must not write statuses or releases');
+      return JSON.stringify({ headRefOid: staleHead ? 'b'.repeat(40) : head, baseRefName: 'main',
+        headRepositoryOwner: { login: 'dgmolla' }, state: 'OPEN', url: 'https://github.com/dgmolla/fitsy/pull/7',
+        labels: [{ name: 'needs-sim' }] });
+    };
+    const options = { preflight: true, execute,
+      resolvePlan: overrides => publicationPlan(dir, join(dir, 'no-build.json'), ['docs/guide.md'], { configHash: 'same' }, overrides),
+      validateMediaEvidence: () => { if (mediaFailure) throw new Error('stale media receipt'); return { required: true }; } };
+    const ready = await publishWithMediaEvidence(undefined, options);
+    assert.equal(ready.status, 'ready');
+    assert.equal(ready.evidenceRequired, true);
+    assert.deepEqual(ready.plan.flows, simulatorFlows(), 'real PR labels reach the final collector plan');
+    assert.ok(ready.requiredProof.some(proof => proof.includes('before/after XCTest closeouts')));
+    assert.match(ready.note, /not product acceptance/);
+    for (const [set, message] of [
+      [value => { staleHead = value; }, /Local HEAD does not match/],
+      [value => { dirty = value; }, /Commit all candidate inputs/],
+      [value => { movedMain = value; }, /Main advanced/],
+      [value => { mediaFailure = value; }, /stale media receipt/],
+      [value => { staleConfig = value; }, /configuration differs/],
+    ]) {
+      set(true);
+      await assert.rejects(publishWithMediaEvidence(undefined, options), message);
+      set(false);
+    }
+    assert.ok(calls.every(([command]) => ['gh', 'git', process.execPath].includes(command)));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
 
 test('publication preserves needs-sim and release overrides alongside affected selection', () => {
   const dir = mkdtempSync(join(tmpdir(), 'fitsy-publication-selection-'));
@@ -289,7 +357,7 @@ test('final candidate publishes complete non-video proof when recording was not 
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('publisher default validator accepts complete non-video proof and rejects changed commands before upload', async () => {
+test('complete final proof covers a smaller request without rewriting provenance or overlooking extra-flow failures', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'fitsy-default-publication-'));
   try {
     const evidenceDirectory = join(dir, 'product-flow'), publicationDirectory = join(dir, 'publication');
@@ -330,9 +398,20 @@ test('publisher default validator accepts complete non-video proof and rejects c
     const report = { version: 1, evidenceMode: 'final-candidate', videoRequested: false,
       startedAt: new Date(Date.now() - 10_000).toISOString(), finishedAt: new Date().toISOString(),
       inputHash: source, nativeSourceHash, result: 'pass', appHash: 'app', bundleHash: 'bundle',
+      configHash: 'config', backendDeployment: 'deployment',
       backendRevision: 'dev-revision', backend: 'https://dev.fitsy.org', simulator, os: 'iOS 26.4',
       storeMode: 'test-store', fixture: 'run-owned-user', maestroVersion: '2.3.0', flows, exploration: [] };
+    const trace = ['tap_on', 'inspect_view_hierarchy'].map(name => JSON.stringify({
+      at: report.startedAt, command: { name }, result: { content: [{ type: 'text', text: 'Fixture sign-in options visible' }] },
+    })).join('\n');
+    writeFileSync(join(evidenceDirectory, 'auth-trace.jsonl'), trace);
+    report.exploration.push({ category: 'auth', flow: 'signin-options', result: 'pass', expected: 'Fixture sign-in recovery',
+      observed: 'Fixture options remain visible', branches: ['primary', 'recovery'], trace: 'auth-trace.jsonl', sha256: sha(trace) });
     writeFileSync(join(evidenceDirectory, 'report.json'), JSON.stringify(report));
+    const originalReport = readFileSync(join(evidenceDirectory, 'report.json'));
+    assert.equal(matchesFinalCandidate(report, { udid: simulator, appHash: report.appHash,
+      configHash: report.configHash, backendDeployment: report.backendDeployment, fixture: report.fixture,
+      flows: [flows[0]] }), true);
     let uploaded = null, uploads = 0, created = false;
     const execute = (command, args, options = {}) => {
       if (command === 'tar') return execFileSync('tar', args, { encoding: 'utf8' }).trim();
@@ -353,10 +432,23 @@ test('publisher default validator accepts complete non-video proof and rejects c
       return '';
     };
     const options = { execute, evidenceDirectory, publicationDirectory,
-      resolvePlan: () => ({ required: true, categories: [], flows: baseline }), sourceHash: () => source };
+      resolvePlan: () => ({ required: true, categories: [], flows: [baseline[0]] }), sourceHash: () => source };
     const published = await publishProductFlow('9', options);
     assert.equal(published.status, 'pass');
     assert.equal(uploads, 1);
+    assert.deepEqual(readFileSync(join(evidenceDirectory, 'report.json')), originalReport,
+      'reuse retains original source, timestamps and every recorded flow');
+    assert.equal(execFileSync('tar', ['-xOf', join(publicationDirectory, 'local-evidence.tar.gz'), 'auth-trace.jsonl'],
+      { encoding: 'utf8' }), trace, 'retained extra-category observations remain in the verified archive');
+    writeFileSync(join(evidenceDirectory, 'report.json'), JSON.stringify({ ...report,
+      exploration: [...report.exploration, { ...report.exploration[0], trace: 'unchecked-trace.jsonl' }] }));
+    await assert.rejects(publishProductFlow('9', options), /duplicate or invalid walkthrough categories/);
+    assert.equal(uploads, 1, 'a duplicate category cannot hide an unchecked trace');
+    writeFileSync(join(evidenceDirectory, 'report.json'), originalReport);
+    writeFileSync(join(evidenceDirectory, 'auth-trace.jsonl'), '[]');
+    await assert.rejects(publishProductFlow('9', options), /changed walkthrough trace: auth/);
+    assert.equal(uploads, 1, 'invalid retained observation cannot reach upload');
+    writeFileSync(join(evidenceDirectory, 'auth-trace.jsonl'), trace);
     assert.equal(execFileSync('tar', ['-tzf', join(publicationDirectory, 'local-evidence.tar.gz')], { encoding: 'utf8' })
       .includes(flows[0].commands), true);
     assert.equal(execFileSync('tar', ['-tzf', join(publicationDirectory, 'local-evidence.tar.gz')], { encoding: 'utf8' })

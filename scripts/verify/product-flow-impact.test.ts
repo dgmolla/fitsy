@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -25,6 +25,87 @@ test.each([
   const result = evaluate(paths);
   expect(result.status).toBe(0);
   expect(JSON.parse(result.stdout)).toMatchObject({ required, categories });
+});
+
+test('real Discovery entry changes select three journeys across CLI and publication, while uncertain changes retain full coverage', () => {
+  copyProductFlowControls(directory);
+  symlinkSync(resolve(__dirname, '../../node_modules'), join(directory, 'node_modules'));
+  writeFileSync(join(directory, '.gitignore'), 'node_modules\n.evidence/\n');
+  const paths = ['apps/mobile/components/DiscoveryMap.tsx', 'apps/mobile/components/DiscoveryScreen.tsx',
+    '.github/workflows/simulator.yml'];
+  for (const path of paths) {
+    mkdirSync(dirname(join(directory, path)), { recursive: true });
+    copyFileSync(resolve(__dirname, '../..', path), join(directory, path));
+  }
+  const git = (...args: string[]) => execFileSync('git', ['-c', 'gc.auto=0', '-c', 'maintenance.auto=false', ...args],
+    { cwd: directory, env: env() });
+  git('init', '-q'); git('config', 'user.name', 'Entry impact fixture'); git('config', 'user.email', 'fixture@example.test');
+  git('config', 'core.hooksPath', '/dev/null'); git('add', '.'); git('commit', '-qm', 'base');
+  git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  const map = join(directory, paths[0]!), screen = join(directory, paths[1]!), workflow = join(directory, paths[2]!);
+  const originalMap = readFileSync(map, 'utf8'), originalScreen = readFileSync(screen, 'utf8');
+  const cli = (file: string) => spawnSync(process.execPath, [file, '--plan'], { cwd: directory, env: env(), encoding: 'utf8' });
+  writeFileSync(map, originalMap + '\n// Clarify the unchanged renderer.\n');
+  expect(JSON.parse(cli('scripts/verify/product-flow.mjs').stdout)).toMatchObject({ required: false, flows: [] });
+  const changedScreen = originalScreen.replace(/useState<'map' \| 'list'>\([^\n]+\);/,
+    originalScreen.includes("useState<'map' | 'list'>('list')") ? "useState<'map' | 'list'>('map');" : "useState<'map' | 'list'>('list');");
+  expect(changedScreen).not.toBe(originalScreen);
+  writeFileSync(screen, changedScreen);
+  const budget = readFileSync(workflow, 'utf8').replace('    timeout-minutes: 30',
+    "    timeout-minutes: ${{ needs.select.outputs.scope == 'full' && 90 || 30 }}").replace(
+    "      FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS: '1800'",
+    "      FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS: ${{ needs.select.outputs.scope == 'full' && '5400' || '1800' }}");
+  writeFileSync(workflow, budget);
+  const expected = ['map-search', 'map-search-location-denied', 'onboarding-guided-preview'];
+  const final = cli('scripts/verify/product-flow.mjs');
+  expect(final.status).toBe(0);
+  expect(JSON.parse(final.stdout)).toMatchObject({ flows: expected, categories: ['auth', 'billing', 'changed-journey'] });
+  const local = cli('scripts/verify/impact-plan.mjs');
+  expect(JSON.parse(local.stdout).simulator).toEqual(JSON.parse(final.stdout).simulator);
+  const published = spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import {publicationPlan} from ${JSON.stringify(resolve(__dirname, '../sim/publish-product-flow.mjs'))};
+     process.stdout.write(JSON.stringify(publicationPlan(${JSON.stringify(join(directory, '.evidence/product-flow'))},
+       ${JSON.stringify(join(directory, 'missing-build.json'))})));`],
+  { cwd: directory, env: { ...env(), FITSY_PRODUCT_ROOT: directory }, encoding: 'utf8' });
+  expect(published.status).toBe(0);
+  expect(JSON.parse(published.stdout).simulator).toEqual(JSON.parse(final.stdout).simulator);
+  git('add', '.'); git('commit', '-qm', 'entry change');
+  mkdirSync(join(directory, '.evidence'), { recursive: true });
+  const event = join(directory, '.evidence/event.json'), output = join(directory, '.evidence/output');
+  const base = git('rev-parse', 'origin/main').toString().trim(), head = git('rev-parse', 'HEAD').toString().trim();
+  for (const [eventName, body] of [['push', { before: base, after: head }],
+    ['pull_request', { pull_request: { base: { sha: base }, head: { sha: head } } }]] as const) {
+    writeFileSync(event, JSON.stringify(body)); writeFileSync(output, '');
+    const hosted = spawnSync(process.execPath, [resolve(__dirname, 'simulator-actions.mjs')], {
+      cwd: directory, env: { ...env(), CI: 'true', FITSY_PRODUCT_ROOT: directory,
+        GITHUB_EVENT_NAME: eventName, GITHUB_EVENT_PATH: event, GITHUB_OUTPUT: output }, encoding: 'utf8',
+    });
+    expect(hosted.status).toBe(0);
+    expect(readFileSync(output, 'utf8')).toBe('required=true\nscope=flow\n');
+    expect(JSON.parse(hosted.stdout.replace(/^Simulator: /, '')).flows).toEqual(expected);
+  }
+  for (const mutate of [
+    () => writeFileSync(map, originalMap + '\nexport const newRendererBehavior = true;\n'),
+    () => writeFileSync(screen, changedScreen.replace('!onboardingPreview', 'onboardingPreview')),
+    () => writeFileSync(workflow, budget.replace('NODE_ENV: development', 'NODE_ENV: production')),
+  ]) {
+    mutate();
+    expect(JSON.parse(cli('scripts/verify/product-flow.mjs').stdout).simulator.scope).toBe('full');
+    writeFileSync(map, originalMap); writeFileSync(screen, changedScreen); writeFileSync(workflow, budget);
+  }
+  const unknownConfig = spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import {candidatePlan} from ${JSON.stringify(modulePath)}; process.stdout.write(JSON.stringify(candidatePlan(['<unknown>'])));`],
+  { cwd: directory, env: { ...env(), FITSY_PRODUCT_ROOT: directory }, encoding: 'utf8' });
+  expect(JSON.parse(unknownConfig.stdout).simulator.scope).toBe('full');
+  const routing = join(directory, 'scripts/verify/risk-tiers.yml'), routingSource = readFileSync(routing, 'utf8');
+  writeFileSync(routing, 'invalid policy');
+  expect(JSON.parse(cli('scripts/verify/product-flow.mjs').stdout).simulator.scope).toBe('full');
+  writeFileSync(routing, routingSource);
+  writeFileSync(screen, originalScreen);
+  writeFileSync(map, originalMap + '\nexport const literal = `\n// before\n`;\n');
+  git('add', '.'); git('commit', '-qm', 'template literal baseline'); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  writeFileSync(map, originalMap + '\nexport const literal = `\n// after\n`;\n');
+  expect(JSON.parse(cli('scripts/verify/product-flow.mjs').stdout).simulator.scope).toBe('full');
 });
 
 test.each([

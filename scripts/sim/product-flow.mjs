@@ -560,6 +560,10 @@ async function execute(udid, names, mode) {
     console.log(JSON.stringify({ code: recorded.result.code, recorder: recorded.recorderResult.state, report: reportFile }));
     return;
   }
+  // Use the real publication consumer's prerequisites and label-aware plan
+  // before any device, fixture, recording or evidence-directory mutation.
+  const finalPreflight = mode.publishable
+    ? await (await import('./publish-product-flow.mjs')).publishProductFlow(undefined, { preflight: true }) : null;
   if (mode.recordVideo) {
     try { run('ffprobe', ['-version'], { timeout: 5000 }); run('ffmpeg', ['-version'], { timeout: 5000 }); }
     catch { throw new Error('ffprobe and ffmpeg are required to validate recorded product-flow video before running Maestro'); }
@@ -573,7 +577,7 @@ async function execute(udid, names, mode) {
   const priorFile = join(out, 'report.json');
   const prior = existsSync(priorFile) ? readPreviousReportForReuse(priorFile).report : r;
   const publicConfigKeys = requiredPublicConfigKeys(prior, r, environment());
-  const hash = inputHash(), plan = candidatePlan(publicConfigKeys);
+  const hash = inputHash(), plan = finalPreflight?.plan || candidatePlan(publicConfigKeys);
   const currentStoreMode = buildProfile(r.buildMode === 'owned-metro-test-store', process.env).storeMode;
   assert(!plan.categories.includes('billing') || currentStoreMode !== 'unconfigured', 'Billing evidence requires a configured store');
   const selected = selectedFlows(plan, names);

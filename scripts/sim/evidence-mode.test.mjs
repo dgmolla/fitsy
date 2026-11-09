@@ -154,12 +154,21 @@ test('development and final candidate omit recording unless explicitly requested
   assert.throws(() => runSelection(['device', '--mode=unknown']), /Unknown evidence mode/);
 });
 
-test('a final candidate is reused only for the same passing source-bound selection', () => {
+test('a final candidate reuses complete supersets only with the same passing source-bound inputs', () => {
   const selected = { udid: 'device', appHash: 'app', configHash: 'config', backendDeployment: 'backend', fixture: 'fixture',
     flows: [{ name: 'welcome', sourceHash: 'source' }] };
   const report = { result: 'pass', evidenceMode: 'final-candidate', simulator: 'device', appHash: 'app', configHash: 'config',
     backendDeployment: 'backend', fixture: 'fixture', flows: [{ name: 'welcome', sourceHash: 'source' }] };
   assert.equal(matchesFinalCandidate(report, selected), true);
+  const extra = { name: 'signin', sourceHash: 'signin-source' };
+  assert.equal(matchesFinalCandidate({ ...report, flows: [extra, ...report.flows] }, selected), true,
+    'an extra completed journey does not justify replaying already-covered selection');
+  assert.equal(matchesFinalCandidate({ ...report, flows: [extra, ...report.flows] },
+    { ...selected, flows: [...report.flows, extra] }), true, 'flow order is not an acceptance input');
+  assert.equal(matchesFinalCandidate(report, { ...selected, flows: [...report.flows, extra] }), false,
+    'missing coverage still requires execution');
+  assert.equal(matchesFinalCandidate(report, { ...selected, flows: [] }), false);
+  assert.equal(matchesFinalCandidate({ ...report, flows: [...report.flows, ...report.flows] }, selected), false);
   assert.equal(matchesFinalCandidate(report, { ...selected, recordVideo: true }), false);
   assert.equal(matchesFinalCandidate({ ...report, videoRequested: true }, { ...selected, recordVideo: true }), true);
   assert.equal(matchesFinalCandidate({ ...report, flows: [{ ...report.flows[0], video: 'welcome.mp4', videoHash: 'hash' }] },

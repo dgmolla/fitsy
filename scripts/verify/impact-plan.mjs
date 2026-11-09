@@ -205,6 +205,54 @@ function sourceVersions(path, range, cwd, env) {
       : readFileSync(resolve(cwd, path), 'utf8').trimEnd()];
 }
 
+function discoveryEntryImpact(source, configKeys, range, cwd, env) {
+  if (!range || range.unknown || !source.length || configKeys.some(key =>
+    !/^EXPO_PUBLIC_(?:API_URL|SUPABASE_URL|SUPABASE_ANON_KEY|DEV_LOGIN_EMAIL|DEV_LOGIN_PASSWORD|REVENUECAT_TEST_KEY)$/.test(key))) return null;
+  // These journeys cover the entry's map/list/Shuffle controls, denied-location
+  // recovery and the shared onboarding preview. Renderer/state changes do not
+  // qualify. Compare the rest of each real module, not only changed path names.
+  const comments = text => text.replace(/^ *\/\/[^\n]*$|^ *\/\*\*[^@\n]*?\*\/$/gm,
+    (line, offset) => sourceCodeAt(text, offset) ? '' : line);
+  const compact = text => text.split('\n').filter(line => line.trim()).join('\n');
+  let entryChanged = false, productPath = false;
+  try {
+    for (const path of source) {
+      if (/^scripts\/(?:sim|verify)\//.test(path)) continue; // Changed controls retain their own tests/review.
+      const versions = sourceVersions(path, range, cwd, env);
+      if (path === '.github/workflows/simulator.yml') {
+        const budget = text => text
+          .replace(/^    timeout-minutes: (?:30|\$\{\{ needs\.select\.outputs\.scope == 'full' && 90 \|\| 30 \}\})$/m, '    timeout-minutes: <budget>')
+          .replace(/^      FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS: (?:'1800'|\$\{\{ needs\.select\.outputs\.scope == 'full' && '5400' \|\| '1800' \}\})$/m,
+            '      FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS: <budget>');
+        if (budget(versions[0]) !== budget(versions[1])) return null;
+        continue;
+      }
+      if (!/^apps\/mobile\/(?:components\/Discovery(?:Map|Screen)\.tsx|lib\/use(?:MapSearch|Shuffle)Flag\.ts)$/.test(path)) return null;
+      productPath = true;
+      const clean = versions.map(text => compact(comments(text)));
+      if (clean[0] === clean[1]) continue;
+      const normalize = text => {
+        if (path.endsWith('/DiscoveryScreen.tsx')) return text.replace(
+          /const \[view, setView\] = useState<'map' \| 'list'>\((?:'(?:map|list)'|__DEV__ \? '(?:map|list)' : '(?:map|list)')\);/,
+          'const [view, setView] = <initial-view>;');
+        if (!/\/use(?:MapSearch|Shuffle)Flag\.ts$/.test(path)) return text;
+        return compact(text
+          .replace(/^import \{ Platform \} from 'react-native';$/m, '')
+          .replace(/^  const (?:allowed = (?:__DEV__ && )?Platform\.OS === 'ios'|production = !__DEV__|productionIOS = !__DEV__ && Platform\.OS === 'ios');$/gm, '')
+          .replace(/^    if \((?:!allowed(?: \|\| production)?|productionIOS)\) return;$/m, '')
+          .replace(/^  \}, \[(?:allowed(?:, production)?|productionIOS)?\]\);$/m, '  }, [<availability>]);')
+          .replace(/^  return (?:allowed && \((?:production \|\| )?debugOverride \|\| enabled\)|(?:productionIOS \|\| )?\(__DEV__ && debugOverride\) \|\| enabled);$/m,
+            '  return <availability>;'));
+      };
+      if (normalize(clean[0]) === clean[0] || normalize(clean[0]) !== normalize(clean[1])) return null;
+      entryChanged = true;
+    }
+  } catch { return null; } // Missing source, new modules and ambiguous edits keep the ordinary conservative selection.
+  if (!productPath || (!entryChanged && configKeys.length)) return null;
+  return { flows: entryChanged ? ['map-search', 'map-search-location-denied', 'onboarding-guided-preview'] : [],
+    acceptanceCategories: entryChanged ? ['auth', 'billing', 'changed-journey'] : [] };
+}
+
 export function verificationScriptsOnly(path, range, cwd, env) {
   // API Jest setup affects tests, never the served API or native application.
   if (path === 'apps/api/jest.config.js') return true;
@@ -278,10 +326,20 @@ export function simulatorSelection(files, { cwd = repository, env = process.env,
   if (files === null) return full('Comparison history unavailable; all journeys may be affected');
   if (unknownContext) return full('Event context unavailable; simulator overrides cannot be ruled out');
   if (release) return full('Release candidate requires the full simulator flow set');
-  if (configKeys.length) return full(`Public native configuration changed: ${configKeys.join(', ')}`);
   const source = files.filter(path => simulatorSource(path) && !verificationScriptsOnly(path, range, cwd, env));
   const highPath = source.find(highSimulatorPath);
   if (highPath) return full(`Navigation, auth, billing, native configuration or release path: ${highPath}`);
+  const entry = discoveryEntryImpact(source, configKeys, range, cwd, env);
+  if (entry && entry.flows.every(flow => all.includes(flow)) && (entry.flows.length || !labels.includes('needs-sim'))) {
+    let reviewTier;
+    try { reviewTier = simulatorReviewTier(source.filter(path => path !== '.github/workflows/simulator.yml'), cwd, env); }
+    catch { return full('Review routing or risk tiers unavailable; cannot establish a narrower simulator scope'); }
+    if (reviewTier === 'high') return { ...full('High canonical review tier affects a mobile-facing contract'), reviewTier };
+    return { ...result(entry.flows.length ? 'medium' : 'low', entry.flows.length ? 'flow' : 'none', entry.flows,
+      entry.flows.length ? 'Source-mapped Discovery availability/default change; map/list/Shuffle, denied location and onboarding preview cover the affected entry'
+        : 'Only Discovery comments changed; executable product inputs are unchanged', reviewTier), acceptanceCategories: entry.acceptanceCategories };
+  }
+  if (configKeys.length) return full(`Public native configuration changed: ${configKeys.join(', ')}`);
   const sharedUI = source.find(sharedUIPath);
   if (sharedUI) return full(`Shared UI or app shell requires the full smoke suite: ${sharedUI}`);
   const contracts = source.filter(path => mobileContract(path) && !serviceHealthPath(path));

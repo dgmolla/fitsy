@@ -59,6 +59,7 @@ export async function createPublicationArchive(report, categories, dir, archive,
   }
 }
 export async function publishProductFlow(prNumber, {
+  preflight = false,
   execute = run,
   evidenceDirectory = resolve(root, '.evidence/product-flow'),
   buildReceiptFile = resolve(root, '.evidence/product-build/receipt.json'),
@@ -68,19 +69,35 @@ export async function publishProductFlow(prNumber, {
   validateEvidence = validate,
   validateMediaEvidence = candidate => validateMediaReceipt(changedPaths('origin/main'), candidate, sourceHash()),
 } = {}) {
+  if (preflight) {
+    const invoke = execute;
+    execute = (command, args, options = {}) => invoke(command, args, { ...options, timeout: 30000 });
+    // Exercise the same child environment used by the final checker before
+    // collecting native evidence. Never print environment values or stderr.
+    let config;
+    try {
+      config = JSON.parse(execute(process.execPath, ['--env-file=apps/mobile/.env.development.local', '--input-type=module', '-e',
+        `import {environment} from ${JSON.stringify(new URL('./product-flow.mjs', import.meta.url).href)}; console.log(JSON.stringify({configHash:environment().configHash}));`],
+      { stdio: ['ignore', 'pipe', 'pipe'] }));
+    } catch {
+      throw new Error('Final checker cannot load the canonical mobile environment; run npm run dev:env against the existing fitsy-api project and verify development configuration before final collection');
+    }
+    assert(config?.configHash === publicConfigIdentity().configHash, 'Final checker configuration differs from the collection configuration');
+  }
   const gh = args => execute('gh', args);
   let head;
   function status(state, description, target_url) {
     return execute('gh', ['api', `repos/${repo}/statuses/${head}`, '--input', '-'], { input: JSON.stringify({ state, context, description, target_url }) });
   }
   try {
-  assert(/^\d+$/.test(prNumber || ''), 'Usage: node scripts/sim/publish-product-flow.mjs PR_NUMBER');
-  const pr = JSON.parse(gh(['pr', 'view', prNumber, '--repo', repo, '--json', 'headRefOid,baseRefName,headRepositoryOwner,state,url,labels']));
+  assert(/^\d+$/.test(prNumber || '') || (preflight && prNumber === undefined),
+    'Usage: node scripts/sim/publish-product-flow.mjs PR_NUMBER [--preflight]');
+  const pr = JSON.parse(gh(['pr', 'view', ...(prNumber === undefined ? [] : [prNumber]), '--repo', repo, '--json', 'headRefOid,baseRefName,headRepositoryOwner,state,url,labels']));
   assert(pr.state === 'OPEN' && pr.baseRefName === 'main' && pr.headRepositoryOwner.login === 'dgmolla', 'Expected an open same-repository PR to main');
   const candidate = execute('git', ['rev-parse', 'HEAD']);
   assert(pr.headRefOid === candidate, 'Local HEAD does not match the remote PR');
   head = candidate;
-  status('pending', 'Validating local candidate evidence', pr.url);
+  if (!preflight) status('pending', 'Validating local candidate evidence', pr.url);
   assert(!execute('git', ['status', '--porcelain']), 'Commit all candidate inputs before publishing evidence');
   if (process.env.FITSY_PRODUCT_ROOT) {
     // A live externally admitted frozen comparison may use newer trusted
@@ -91,13 +108,22 @@ export async function publishProductFlow(prNumber, {
     assert(!run('git', ['status', '--porcelain'], { cwd: controls }), 'Publisher controls must be clean');
     assert(execute('git', ['ls-remote', 'origin', 'refs/heads/main']).split(/\s+/)[0] === trusted, 'Trusted main advanced; revalidate frozen comparison');
   } else {
-    execute('git', ['fetch', 'origin', 'main']);
+    if (preflight) assert(execute('git', ['ls-remote', 'origin', 'refs/heads/main']).split(/\s+/)[0] ===
+      execute('git', ['rev-parse', 'origin/main']), 'Main advanced; fetch and update the candidate before final collection');
+    else execute('git', ['fetch', 'origin', 'main']);
     execute('git', ['merge-base', '--is-ancestor', 'origin/main', 'HEAD']);
   }
   const media = validateMediaEvidence(candidate);
   const resolved = resolvePlan({ labels: (pr.labels || []).map(label => label.name) }), includeBaseline = process.argv.includes('--include-baseline');
   const plan = includeBaseline ? { ...resolved, flows: [...new Set([...(resolved.flows || []), ...baseline])].sort(), baseline } : resolved;
   const evidenceRequired = plan.required || includeBaseline;
+  if (preflight) return { status: 'ready', head, plan, mediaIntegration: media?.required ? 'required' : 'not_applicable',
+    evidenceRequired, report: '.evidence/product-flow/report.json',
+    requiredProof: evidenceRequired ? ['final-candidate report with source/app/native/JS/config/backend/store/runtime identities',
+      'selected-flow commands, screenshots and real before/after XCTest closeouts',
+      'actual primary/recovery MCP traces for each selected category',
+      'final check and private archive byte/digest readback'] : [],
+    note: 'Preflight is not product acceptance or evidence reuse; final validation and publication remain required' };
   let target = pr.url;
   if (evidenceRequired) {
     const dir = evidenceDirectory, reportFile = resolve(dir, 'report.json');
@@ -137,13 +163,17 @@ export async function publishProductFlow(prNumber, {
   return { status: 'pass', context, head, applicability: evidenceRequired ? 'required' : 'not_applicable',
     mediaIntegration: media?.required ? 'required' : 'not_applicable', url: target };
   } catch (e) {
-  if (head) { try { status('failure', 'Local evidence failed; inspect publisher output'); } catch { /* preserve original failure */ } }
+  if (head && !preflight) { try { status('failure', 'Local evidence failed; inspect publisher output'); } catch { /* preserve original failure */ } }
   throw e;
   }
 }
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
-    console.log(JSON.stringify(await publishProductFlow(process.argv[2])));
+    const flags = process.argv.slice(3);
+    assert(process.argv[2] && new Set(flags).size === flags.length &&
+      flags.every(flag => ['--preflight', '--include-baseline'].includes(flag)),
+    'Usage: node scripts/sim/publish-product-flow.mjs PR_NUMBER [--preflight] [--include-baseline]');
+    console.log(JSON.stringify(await publishProductFlow(process.argv[2], { preflight: flags.includes('--preflight') })));
   } catch (e) {
     console.error(e.message); process.exitCode = 1;
   }
