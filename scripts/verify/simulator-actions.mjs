@@ -1,14 +1,21 @@
 #!/usr/bin/env node
-// Actions' deliberately small smoke policy is separate from manual acceptance.
+// Hosted execution consumes the same source impact as local/final acceptance.
 import { appendFileSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { changedFiles, isMain } from './impact-plan.mjs';
+import { changedFiles, isMain, simulatorSelection } from './impact-plan.mjs';
 
-export function actionsSelection(files, eventName, event) {
+export function actionsSelection(files, eventName, event, options = {}) {
   if (!Array.isArray(files)) throw new Error('Cannot resolve simulator comparison; refusing a passing skip');
-  const required = files.some(path => /^(apps\/mobile\/|scripts\/(sim|verify)\/|scripts\/deploy\/native-fingerprint\.mjs$|\.github\/workflows\/simulator\.yml$)/.test(path));
-  const full = eventName === 'push' || event.pull_request?.labels?.some(label => label.name === 'full-sim');
-  return { required, scope: required ? (full ? 'full' : 'smoke') : 'none' };
+  if (!['pull_request', 'push'].includes(eventName)) throw new Error('Cannot resolve simulator event context');
+  const labels = (event.pull_request?.labels || []).map(label => label.name);
+  const plan = simulatorSelection(files, { ...options, labels, release: labels.includes('full-sim') });
+  if (plan.required) return { required: true, scope: plan.scope === 'full' ? 'full' : 'flow', flows: plan.flows, reason: plan.reason };
+  // A changed native runner still needs real execution of its setup, assertion
+  // and teardown path. It does not change every product journey on main.
+  const controls = files.some(path => /^(scripts\/(sim|verify)\/|\.github\/workflows\/simulator\.yml$)/.test(path) &&
+    !/\.(?:test\.[^/]+|md|txt)$/.test(path));
+  return { required: controls, scope: controls ? 'smoke' : 'none', flows: [],
+    reason: controls ? 'Changed simulator controls require the three maintained hosted smoke journeys' : plan.reason };
 }
 
 // Local watch/setup diagnostic, not an Actions token or a new merge gate.
@@ -49,9 +56,10 @@ if (isMain(import.meta.url)) {
     else {
       if (process.argv.length !== 2) throw new Error('Usage: simulator-actions.mjs [--preflight]');
       const event = JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8'));
-      const selection = actionsSelection(changedFiles().files, process.env.GITHUB_EVENT_NAME, event);
-      for (const [key, value] of Object.entries(selection)) appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`);
-      console.log(`Simulator: ${selection.scope}`);
+      const { files, comparison } = changedFiles();
+      const selection = actionsSelection(files, process.env.GITHUB_EVENT_NAME, event, { comparison });
+      for (const key of ['required', 'scope']) appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${selection[key]}\n`);
+      console.log(`Simulator: ${JSON.stringify(selection)}`);
     }
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }

@@ -3,8 +3,9 @@
 The `Simulator` workflow result comes from `.github/workflows/simulator.yml` on every PR and main push.
 It does not define or change protected branch requirements.
 An Ubuntu selector uses the complete Git comparison, including deletions and renames.
-Only `apps/mobile/**`, `scripts/sim/**`, `scripts/verify/**`, the native fingerprint helper or this workflow starts the Mac.
-Other changes pass on Ubuntu; failed classification, missing fixtures, failed flows, cancellation and an unexpectedly skipped Mac job never pass.
+The selector consumes the same source impact mapping as local and final acceptance, including mobile-facing API/shared dependencies.
+Mapped changes execute their affected maintained journeys on both PRs and main; the event name alone never expands coverage.
+Unrelated changes complete on Ubuntu; failed classification, missing fixtures, failed flows, cancellation and an unexpectedly skipped required Mac job never pass.
 
 ```mermaid
 flowchart LR
@@ -25,15 +26,20 @@ Keep only one runner registered with `fitsy-sim` and leave the old local publish
 Manual native work must respect the existing `scripts/sim/sim` claim; CI refuses to boot alongside another booted simulator.
 Run the media integration gate after releasing the native lane: its host-isolation test also acquires the canonical OS lock, so running it concurrently with an owned Maestro session causes a real lock timeout.
 
-Normal PRs run `cold-start-welcome`, `signin-options` and `paywall-access`, including real DEV sign-in and paid-access assertions.
-Main and PRs labeled `full-sim` retain the existing Test Store-compatible hosted selection, reporting incompatible journeys as separate `UNVERIFIED` manual acceptance rather than passing them.
+Changes limited to simulator/verification controls run `cold-start-welcome`, `signin-options` and `paywall-access` to exercise the changed setup, assertion and teardown path.
+This is control validation, separate from new product coverage.
+Mapped product changes execute the selected journeys in full, including changes that local acceptance can cover with a render checkpoint.
+The Mac recomputes the same source comparison and rejects a mismatching selector scope before installation or Maestro execution.
+Unknown product impact, native/shared inputs and explicit `full-sim` retain the full Test Store-compatible hosted selection, reporting incompatible journeys as separate `UNVERIFIED` manual acceptance rather than passing them.
+Missing comparison history fails selection; missing routing for product changes conservatively selects full coverage.
+A Discovery availability/default-only change qualifies for the three entry journeys only after the shared planner compares complete source modules; renderer, preview-guard or unknown edits retain conservative coverage.
 The `subscription-restore-expired` Apple receipt-history journey requires its genuine fixture or a separately approved release exception; Test Store cannot prove Apple history transfer.
 For the map/#746 release only, owner comment6716597294 explicitly excepts that one flow on the published PR754 head.
 The local caller accepts `--release-exception=6716597294`; the hosted caller checks the same grant for PR754 and records `EXCEPTED`, its reason, owner URL and actual source separately from passed flows.
 Changed approval text, another PR/source or changed fixture/store tags fail admission, and all other flows remain required.
 The local full selection and the release's hosted full selection contain28 flows, with27 required executions and one exception, never28 passes.
 Ordinary hosted smoke selection and unrelated releases keep their existing scope; the release grant does not create a new Apple-history gate for them.
-The label expands a relevant change's suite; it does not start a simulator for an unrelated change.
+An explicit `full-sim` label forces full hosted execution; `needs-sim` retains the shared planner's existing override behavior.
 Full runs still fail if the deadline or any fixture/flow assertion fails.
 The local full-run caller now checks31GiB free before acquiring the native lane, preserving the8GiB floor after the measured23GiB attachment-growth projection.
 This is capacity admission, not permission to delete files or weaken assertions.
@@ -92,7 +98,7 @@ The pinned actionlint version predates `queue`; `.github/actionlint.yaml` suppre
 | `SIM_E2E_FIXTURES` | JSON mapping fixture names to `email` and `password`, described below. |
 
 `SIM_E2E_FIXTURES` contains `unsubscribed-dev`, `entitled-dev`, `empty-store` and `expired-subscription`, each with a distinct disposable `@fitsy.dev` account.
-Smoke needs only `unsubscribed-dev`; full needs all four.
+Control smoke needs only `unsubscribed-dev`; affected selection requires its actual fixture tags, and full needs all four.
 Use this shape with actual credentials entered directly into GitHub: `{"unsubscribed-dev":{"email":"<disposable DEV account>","password":"<password>"},"entitled-dev":{"email":"<different DEV account>","password":"<password>"},"empty-store":{"email":"<different DEV account>","password":"<password>"},"expired-subscription":{"email":"<different DEV account>","password":"<password>"}}`.
 Provision accounts and onboarding state through the existing DEV fixture procedure in the E2E guide.
 The empty account must never have purchased; the expired account needs a genuinely expired Test Store purchase before the job starts.
@@ -106,4 +112,10 @@ Before installation, Expo regenerates public RevenueCat configuration in a dispo
 Each job starts Metro from the checked-out candidate with current fixture credentials.
 Job logs name passed or failed flows; raw Maestro output and temporary bundles are removed during cleanup rather than uploaded with credentials.
 The always-run cleanup stops owned Metro, erases and shuts down only the claimed device, and removes generated iOS/build/temp data without deleting the reusable device.
+Failed or interrupted flow attempts retain their original job directory under `fitsy-simulator-failures/<run-id>-<attempt>` beside `RUNNER_TEMP`, outside the disposable checkout and temp directory.
+Its parent must be owned by the runner with mode0700; raw Maestro receipts can contain credentials and must never be uploaded to public Actions artifacts or pasted into issue comments.
+The retained attempt binds the checked-out source, comparison, simulator, runtime app, flow and public-config hashes, and keeps raw command/debug/screenshot evidence for the existing owner to diagnose.
+The log prints only the private path and identity-receipt digest.
+Retention failure blocks cleanup and preserves the original work; an existing archived attempt is never overwritten.
+Use the existing owned-resource cleanup procedure once its diagnosis and evidence dependencies end, with the unchanged inactivity cutoff.
 If the Mac loses power, stop the runner service, reconcile its existing simulator claim, shut down that dedicated device and restart the service before rerunning the failed check.
