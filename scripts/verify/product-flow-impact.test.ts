@@ -85,6 +85,12 @@ test('real Discovery entry changes select three journeys across CLI and publicat
     expect(readFileSync(output, 'utf8')).toBe('required=true\nscope=flow\n');
     expect(JSON.parse(hosted.stdout.replace(/^Simulator: /, '')).flows).toEqual(expected);
   }
+  git('checkout', '-q', '--detach', base);
+  const historical = spawnSync(process.execPath, ['scripts/verify/impact-plan.mjs', `--base=${base}`, `--head=${head}`, '--simulator'],
+    { cwd: directory, env: env(), encoding: 'utf8' });
+  expect(historical.status).toBe(0);
+  expect(JSON.parse(historical.stdout)).toMatchObject({ scope: 'flow', flows: expected });
+  git('checkout', '-q', '--detach', head);
   for (const mutate of [
     () => writeFileSync(map, originalMap + '\nexport const newRendererBehavior = true;\n'),
     () => writeFileSync(screen, changedScreen.replace('!onboardingPreview', 'onboardingPreview')),

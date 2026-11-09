@@ -201,7 +201,8 @@ export function presentationOnly(before, after) {
 
 function sourceVersions(path, range, cwd, env) {
   return [git(['show', `${range.base}:${path}`], cwd, env),
-    env.CI || env.GITHUB_EVENT_NAME ? git(['show', `${range.head}:${path}`], cwd, env)
+    env.CI || env.GITHUB_EVENT_NAME || range.head !== git(['rev-parse', 'HEAD'], cwd, env)
+      ? git(['show', `${range.head}:${path}`], cwd, env)
       : readFileSync(resolve(cwd, path), 'utf8').trimEnd()];
 }
 
