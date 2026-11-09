@@ -127,12 +127,22 @@ Apple sandbox accounts must already have active real sandbox history; the runner
 Use a persistent `seed-%@fitsy.dev` account to preserve RevenueCat identity across DEV resets.
 Profile setup and a subscription database row alone cannot establish this prerequisite.
 
-Before an ordinary Debug Test Store walkthrough, reload the active account's public environment and reset the session with the following command.
-This restarts owned Metro with those credentials and signs into the active account even when a previous expired journey left another account in keychain.
+Keep the final run's original caller environment loaded through every Debug Test Store walkthrough and publication.
+Begin each required category with `prepare-walkthrough`; an optional executed journey selects its existing fixture, and only `entitled-dev` invokes the active-account preparer.
+Without that argument, the original caller stays active; billing verifies its genuine empty store without purchasing or renewing access.
+Never load an entitled environment over a free caller or invoke the active preparer on the free account.
 
 ```sh
-lockf -t 3600 ~/fitsy-refactor/loop/sim.lock node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs prepare-walkthrough <UDID>
+lockf -t 3600 ~/fitsy-refactor/loop/sim.lock node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs prepare-walkthrough <UDID> changed-journey map-search
+# Run actual Maestro MCP with the returned FITSY_XCTEST_CAPTURE_RECEIPT path.
+# Stop that owned MCP driver before closing its attachment observations.
+lockf -t 3600 ~/fitsy-refactor/loop/sim.lock node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs finish-walkthrough mcp/changed-journey.jsonl
 ```
+
+The existing caller records each real fixture, served bundle and Metro process transition, then restores the original configuration and exact bundle before accepting the category.
+Original observations remain immutable; finish/check/publication validate the transition chain and the actual live restored server.
+An interrupted or failed transition remains pending and blocks publication until diagnosed.
+For every native or MCP invocation, set both `TMPDIR` and `JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=<same-owned-directory>` so Java's XCTest files satisfy the existing capture guard.
 
 Install local `tesseract` with English data for evidence capture and the media integration lane.
 Every successful flow screenshot is inspected from its pixels; unreadable captures and unintended subscription-expired screens fail.

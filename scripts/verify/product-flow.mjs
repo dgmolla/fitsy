@@ -231,6 +231,79 @@ export function artifactPath(file, directory) {
 export function artifact(file, directory) {
   return readFileSync(artifactPath(file, directory));
 }
+
+// Original observations remain immutable. Only a verified, complete transition
+// may nominate the live restored caller that checkBundle must still inspect.
+export function walkthroughState(report, directory, now = Date.now()) {
+  insist(!report.walkthroughPending, 'walkthrough fixture transition is unfinished');
+  const sessions = new Map();
+  let metro = report.metro, completedAt = Date.parse(report.startedAt);
+  for (const entry of report.walkthroughSessions || []) {
+    const bytes = artifact(entry.receipt, directory);
+    insist(digest(bytes) === entry.sha256, 'changed walkthrough fixture receipt');
+    const session = JSON.parse(bytes);
+    insist(session.version === 1 && session.state === 'complete' && entry.category === session.category && !sessions.has(session.category),
+      'duplicate or invalid walkthrough fixture category');
+    for (const field of ['inputHash', 'jsHash', 'appHash', 'simulator', 'os', 'backendRevision', 'backendDeployment', 'storeMode'])
+      insist(session[field] === report[field], `walkthrough ${field} differs from the accepted run`);
+    insist(session.nativeHash === (report.nativeIdentity?.hash || report.nativeSourceHash), 'walkthrough native identity changed');
+    insist(JSON.stringify(session.callerBefore) === JSON.stringify(metro), 'walkthrough Metro transition chain changed');
+    const flow = session.flow && report.flows.find(item => item.name === session.flow);
+    insist(!session.flow || flow?.identity, 'walkthrough fixture needs an executed journey');
+    let fixture = { fixture: 'default', configHash: report.configHash };
+    if (flow) {
+      const identity = artifact(flow.identity, directory);
+      insist(digest(identity) === flow.identityHash, 'changed walkthrough journey identity');
+      fixture = JSON.parse(identity);
+    }
+    insist(session.fixture === fixture.fixture && session.configHash === fixture.configHash,
+      'walkthrough fixture configuration changed');
+    const times = ['startedAt', 'readyAt', 'completedAt', 'restoredAt'].map(key => Date.parse(session[key]));
+    insist(times.every(Number.isFinite) && times[0] >= completedAt && times.every((time, i) => !i || time >= times[i - 1]) &&
+      times.at(-1) <= now, 'invalid walkthrough transition timestamps');
+    for (const [server, config, bundle] of [[session.metro, session.configHash, session.bundleHash],
+      [session.restoredMetro, report.configHash, report.bundleHash]]) {
+      insist(Number.isInteger(server?.pid) && server.pid > 0 && server.processIdentity?.trim() &&
+        server.root === report.metro.root && server.route === report.metro.route && server.port === report.metro.port &&
+        server.jsHash === report.jsHash && server.configHash === config && server.bundleHash === bundle &&
+        /^[a-f0-9]{64}$/.test(bundle), 'invalid walkthrough Metro/configuration/bundle identity');
+    }
+    const trace = artifact(session.trace, directory);
+    insist(digest(trace) === session.traceHash, 'changed walkthrough session trace');
+    const events = trace.toString().trim().split('\n').map(line => JSON.parse(line));
+    insist(events.length && events.every(event => Date.parse(event.at) >= times[1] && Date.parse(event.at) <= times[2]),
+      'walkthrough events fall outside their fixture session');
+    insist(JSON.stringify(entry.artifacts) === JSON.stringify([
+      session.attachmentBefore, session.attachmentAfter, session.captureReceipt, session.attachmentCloseout]),
+    'walkthrough publication omits fixture evidence');
+    for (const field of ['attachmentBefore', 'attachmentAfter']) {
+      const bytes = artifact(session[field], directory);
+      insist(digest(bytes) === session[`${field}Hash`] && JSON.parse(bytes).udid === report.simulator,
+        `missing or changed walkthrough ${field}`);
+    }
+    for (const field of ['captureReceipt', 'attachmentCloseout']) {
+      const bytes = artifact(session[field], directory);
+      insist(digest(bytes) === session[`${field}Hash`], `changed walkthrough ${field}`);
+      const values = field === 'captureReceipt' ? bytes.toString().trim().split('\n').filter(Boolean).map(JSON.parse) : [JSON.parse(bytes)];
+      insist(values.length && values.every(value => value.udid === report.simulator && (field === 'captureReceipt'
+        ? value.preferredScreenCaptureFormat === 'screenshots' : value.generated?.videos === 0 && value.deleted?.length === 0)),
+      `invalid walkthrough ${field}`);
+    }
+    if (session.fixture === 'entitled-dev')
+      insist(session.entitlement?.sandbox === true && session.entitlement.storeMode === report.storeMode &&
+        /^[a-f0-9]{64}$/.test(session.entitlement.accountHash) && Date.parse(session.entitlement.expiresAt) > times[2] &&
+        Date.parse(session.entitlement.verifiedAt) >= times[0] && Date.parse(session.entitlement.verifiedAt) <= times[1],
+      'walkthrough entitlement was not active throughout the observation');
+    if (session.category === 'billing' && session.fixture === 'default')
+      insist(session.entitlement?.fixture === 'empty-store' && session.entitlement.sandbox === true &&
+        session.entitlement.storeMode === report.storeMode && /^[a-f0-9]{64}$/.test(session.entitlement.accountHash) &&
+        Date.parse(session.entitlement.verifiedAt) >= times[0] && Date.parse(session.entitlement.verifiedAt) <= times[1],
+      'free billing walkthrough lacks a verified empty store');
+    sessions.set(session.category, session);
+    metro = session.restoredMetro; completedAt = times.at(-1);
+  }
+  return { metro, sessions };
+}
 export function isPlayableVideo(file) {
   let probe;
   try {
@@ -357,6 +430,10 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
   const observations = report.exploration || [];
   insist(Array.isArray(observations) && new Set(observations.map(item => item?.category)).size === observations.length,
     'duplicate or invalid walkthrough categories');
+  const walkthroughs = walkthroughState(report, directory, time).sessions;
+  insist(!report.walkthroughProtocol || report.walkthroughProtocol === 1, 'unknown walkthrough fixture protocol');
+  insist([...walkthroughs.keys()].every(category => observations.some(item => item.category === category)),
+    'walkthrough fixture session has no verified observation');
   // Reusing a larger completed report retains its observations too. Validate
   // every retained charter even when the current plan requires fewer flows.
   for (const category of new Set([...plan.categories, ...acceptedCategories,
@@ -367,6 +444,11 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
     insist(observation.branches?.includes('primary') && observation.branches?.includes('recovery'), `walkthrough needs primary and recovery: ${category}`);
     const trace = artifact(observation.trace, directory);
     insist(digest(trace) === observation.sha256, `changed walkthrough trace: ${category}`);
+    if (report.walkthroughProtocol === 1) {
+      const session = walkthroughs.get(category);
+      insist(session?.trace === observation.trace && session.traceHash === observation.sha256 &&
+        (!observation.flow || session.flow === observation.flow), `missing or mismatched walkthrough fixture session: ${category}`);
+    }
     const events = trace.toString().trim().split('\n').map(line => JSON.parse(line));
     const observationSource = observation.flow && report.flows.find(flow => flow.name === observation.flow)?.source;
     insist(!observation.flow || observationSource, 'walkthrough expired-screen exception requires an executed maintained flow');

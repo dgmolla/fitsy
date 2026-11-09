@@ -8,7 +8,7 @@ import { resolve, relative, join, dirname, delimiter } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { isMain } from '../verify/impact-plan.mjs';
-import { root, inputHash, candidatePlan, selectedFlows, acceptanceExceptions, digest, validateAcceptance, repoEnv, publicConfigIdentity, requiredPublicConfigKeys, buildPublicConfigAcceptance, assertFlowCommands } from '../verify/product-flow.mjs';
+import { root, inputHash, candidatePlan, selectedFlows, acceptanceExceptions, digest, validateAcceptance, repoEnv, publicConfigIdentity, requiredPublicConfigKeys, buildPublicConfigAcceptance, assertFlowCommands, artifact, artifactPath, walkthroughState } from '../verify/product-flow.mjs';
 import { journeyFixture, withFixtureEnvironment, prepareJourney, assertJourneyStore } from './journey-fixtures.mjs';
 import { backendOrigin, backendRevision, maestroApiArgs } from './backend-identity.mjs';
 import { buildProfile, bundleDelegate, embeddedBundleCompatibility, embeddedArtifactPlan, fixtureLabel, metroRoute } from './build-profile.mjs';
@@ -17,7 +17,7 @@ import { appTreeHash as treeHash, sharedNativeCacheDirectory, importNativeArtifa
 import { admitDisk, appendRecordedFlowFailure, applyCapturePolicy, archiveFailureEvidence, clock, completeMaestroRun, event, latestMaestroLog, nearestFailure, needsDiagnosis, recordFlowOutcome, recordRunFailure, requireMetro, runRecordedFlow, runOwnedMaestro } from './runner-controls.mjs';
 import { classifySimulatorFailure, maestroFailure, withEnvironmentRetry } from './failure-policy.mjs';
 import { prepareActiveEntitlement, verifyInactiveEntitlement } from './active-entitlement.mjs';
-import { inspectScreenshot, inspectScreenshotDirectory, requireScreenRecognition } from './screen-guard.mjs';
+import { inspectScreenshot, inspectScreenshotDirectory, inspectWalkthrough, requireScreenRecognition } from './screen-guard.mjs';
 import { matchesFinalCandidate, readPreviousReportForReuse, runSelection } from './evidence-mode.mjs';
 export { readPreviousReportForReuse } from './evidence-mode.mjs';
 import { closeoutXCTestAttachments, snapshotXCTestAttachments } from './xctest-attachments.mjs';
@@ -127,16 +127,121 @@ export async function prepareBillingEvidence(built, udid, directory, fixture, { 
   assertFlowCommands(readFileSync(flow), parsed, `${fixture}-signin`);
   return proof;
 }
-async function prepareWalkthrough(udid) {
-  environment(); backend();
+function walkthroughCaller(udid) {
+  const report = read(join(out, 'report.json'));
   const built = receipt(udid);
-  assert(built.storeMode === 'test-store', 'Automatic walkthrough login requires a Debug Test Store build');
+  assert(report.walkthroughProtocol === 1 && report.result === 'awaiting-walkthrough' && report.simulator === udid,
+    'A current deterministic run with fixture-bound walkthroughs is required');
+  assert(built.storeMode === 'test-store' && built.buildMode === 'owned-metro-test-store', 'Walkthrough fixtures require the Debug Test Store build');
+  assert(report.inputHash === inputHash() && report.appHash === built.appHash && report.configHash === environment().configHash &&
+    report.jsHash === inputHash(root, 'js'), 'Walkthrough source, artifact or original caller configuration changed');
+  assert(report.backendDeployment === backend().backendDeployment, 'Walkthrough backend changed');
+  device(udid); installedApp(udid, built.appHash);
+  return { report, built };
+}
+function walkthroughFixture(report, flowName) {
+  if (!flowName) return { name: 'default', env: {}, stores: ['test-store'] };
+  const flow = report.flows.find(item => item.name === flowName);
+  assert(flow, 'Walkthrough fixture must come from an executed journey');
+  const source = readFileSync(join(root, flow.source), 'utf8');
+  assert(digest(source) === flow.sourceHash, 'Walkthrough journey source changed');
+  return journeyFixture(yaml.loadAll(source)[0]);
+}
+async function prepareWalkthrough(udid, category, flowName) {
+  const { report, built } = walkthroughCaller(udid);
+  assert(candidatePlan(requiredPublicConfigKeys(report, built, environment())).categories.includes(category), 'Select a required walkthrough category');
+  const current = walkthroughState(report, out);
+  assert(!current.sessions.has(category), 'This walkthrough category already has an immutable receipt');
+  const journey = walkthroughFixture(report, flowName);
+  assertJourneyStore(journey, built);
+  await checkBundle(report);
   claimDevice();
-  try {
-    device(udid); installedApp(udid, built.appHash);
-    await startMetro(built);
-    await prepareEntitledEvidence(built, udid, join(out, 'walkthrough-setup', String(Date.now())), { signIn: true });
-  } finally { releaseDevice(); }
+  const dir = join(out, 'walkthrough', category);
+  mkdirSync(dir, { recursive: true });
+  const before = join(dir, 'xctest-before.json');
+  save(before, snapshotXCTestAttachments(udid));
+  const pending = { version: 1, category, flow: flowName || null, fixture: journey.name,
+    ...Object.fromEntries(['inputHash', 'jsHash', 'appHash', 'simulator', 'os', 'backendRevision', 'backendDeployment', 'storeMode'].map(key => [key, report[key]])),
+    nativeHash: built.nativeIdentity.hash, callerBefore: current.metro, startedAt: new Date().toISOString(),
+    attachmentBefore: relative(out, before), attachmentBeforeHash: digest(readFileSync(before)),
+    captureReceipt: relative(out, join(dir, 'mcp-capture.jsonl')), state: 'preparing' };
+  // Persist the original live caller before stopping it. An interrupted switch
+  // remains explicitly pending and cannot pass finish/check/publication.
+  report.walkthroughPending = pending;
+  save(join(out, 'report.json'), report);
+  await withFixtureEnvironment(journey, async () => {
+    const session = simulatorSession(udid);
+    assert(session.built.appHash === report.appHash && session.backendDeployment === report.backendDeployment,
+      'Walkthrough fixture changed the native artifact or backend');
+    pending.configHash = session.configHash;
+    pending.metro = await startMetro(built);
+    save(join(out, 'report.json'), report);
+    if (journey.name === 'entitled-dev')
+      pending.entitlement = await prepareEntitledEvidence(built, udid, join(dir, 'active-setup'), { signIn: true });
+    else if (category === 'billing' && journey.name === 'default')
+      pending.entitlement = await verifyInactiveEntitlement({ fixture: 'empty-store', built });
+    assert(pending.metro.bundleHash === await metroBundle(pending.metro), 'Walkthrough setup changed the served bundle');
+    pending.readyAt = new Date().toISOString(); pending.state = 'ready';
+    save(join(out, 'report.json'), report);
+  });
+  console.log(JSON.stringify({ status: 'ready', category, fixture: journey.name,
+    captureReceipt: join(out, pending.captureReceipt), configHash: pending.configHash, bundleHash: pending.metro.bundleHash }));
+}
+async function finishWalkthrough(trace) {
+  const original = read(join(out, 'report.json'));
+  const { report, built } = walkthroughCaller(original.simulator);
+  const pending = report.walkthroughPending;
+  assert(pending?.state === 'ready', 'A ready walkthrough fixture is required');
+  const journey = walkthroughFixture(report, pending.flow);
+  const dir = join(out, 'walkthrough', pending.category);
+  const traceFile = artifactPath(trace, out), traceBytes = readFileSync(traceFile);
+  const events = traceBytes.toString().trim().split('\n').map(line => JSON.parse(line));
+  assert(events.length && events.every(item => Date.parse(item.at) >= Date.parse(pending.readyAt) &&
+    Date.parse(item.at) <= Date.now() && !item.result?.isError && item.result?.content?.length), 'Invalid walkthrough fixture trace');
+  assert(events.some(item => ['tap_on', 'input_text', 'back', 'launch_app'].includes(item.command?.name)) &&
+    events.some(item => item.command?.name === 'inspect_view_hierarchy'), 'Walkthrough requires real MCP interaction and observation');
+  const flow = pending.flow && report.flows.find(item => item.name === pending.flow);
+  inspectWalkthrough(events, flow ? readFileSync(join(root, flow.source)) : '');
+  claimDevice();
+  await withFixtureEnvironment(journey, async () => {
+    assert(journey.name === pending.fixture && environment().configHash === pending.configHash, 'Walkthrough fixture changed');
+    pending.bundleHash = await metroBundle(pending.metro);
+    assert(pending.bundleHash === pending.metro.bundleHash, 'Walkthrough served a different bundle');
+  });
+  const beforeBytes = artifact(pending.attachmentBefore, out);
+  assert(digest(beforeBytes) === pending.attachmentBeforeHash, 'Walkthrough before snapshot changed');
+  const before = JSON.parse(beforeBytes), after = snapshotXCTestAttachments(report.simulator);
+  const afterFile = join(dir, 'xctest-after.json'); save(afterFile, after);
+  assert(!after.entries.some(item => item.video && !before.entries.some(old =>
+    old.path === item.path && old.device === item.device && old.inode === item.inode)), 'Unexpected walkthrough video; preserve and diagnose before continuing');
+  const closeout = join(dir, 'xctest-attachment-closeout.json');
+  save(closeout, closeoutXCTestAttachments(before, after));
+  const captureBytes = artifact(pending.captureReceipt, out);
+  const captures = captureBytes.toString().trim().split('\n').filter(Boolean).map(JSON.parse);
+  assert(captures.length && captures.every(item => item.udid === report.simulator && item.preferredScreenCaptureFormat === 'screenshots'),
+    'Missing or invalid walkthrough screenshots-only XCTest capture');
+  const completed = { ...pending, state: 'complete', completedAt: new Date().toISOString(),
+    trace: relative(out, traceFile), traceHash: digest(traceBytes),
+    captureReceiptHash: digest(captureBytes),
+    attachmentAfter: relative(out, afterFile), attachmentAfterHash: digest(readFileSync(afterFile)),
+    attachmentCloseout: relative(out, closeout), attachmentCloseoutHash: digest(readFileSync(closeout)) };
+  if (pending.fixture === 'entitled-dev')
+    assert(Date.parse(pending.entitlement?.expiresAt) > Date.parse(completed.completedAt), 'Walkthrough entitlement expired during observation');
+  // withFixtureEnvironment restored the exact original caller environment.
+  // Keep its original observation and append the actual replacement identity.
+  assert(environment().configHash === report.configHash, 'Original walkthrough caller was not restored');
+  completed.restoredMetro = await startMetro(built);
+  completed.restoredAt = new Date().toISOString();
+  assert(completed.restoredMetro.bundleHash === report.bundleHash, 'Restored caller serves a different bundle');
+  const file = join(dir, 'identity.json'); save(file, completed);
+  delete report.walkthroughPending;
+  report.walkthroughSessions.push({ category: pending.category, receipt: relative(out, file), sha256: digest(readFileSync(file)),
+    artifacts: [completed.attachmentBefore, completed.attachmentAfter, completed.captureReceipt, completed.attachmentCloseout] });
+  walkthroughState(report, out);
+  await checkBundle(report);
+  save(join(out, 'report.json'), report);
+  console.log(JSON.stringify({ status: 'complete', category: pending.category, fixture: pending.fixture,
+    restoredPid: completed.restoredMetro.pid, bundleHash: completed.restoredMetro.bundleHash }));
 }
 const metroFile = join(buildDir, 'metro.json');
 const processIdentity = pid => run('ps', ['-p', String(pid), '-o', 'lstart=,command=']);
@@ -265,9 +370,10 @@ async function startMetroProcess(r, maxWorkers) {
 async function checkBundle(report) {
   if (report.buildMode === 'owned-metro-test-store') {
     const built = receipt(report.simulator);
-    assert(report.metro?.route === built.metroRoute && report.metro?.port === built.metroPort,
+    const { metro } = walkthroughState(report, out);
+    assert(metro?.route === built.metroRoute && metro?.port === built.metroPort,
       'Owned Metro route or port differs from the URL embedded in the native artifact');
-    assert(report.bundleHash === await metroBundle(report.metro), 'Metro served a different bundle after testing');
+    assert(report.bundleHash === await metroBundle(metro), 'Metro served a different bundle after testing');
   }
   else {
     const built = receipt(report.simulator);
@@ -651,7 +757,8 @@ async function execute(udid, names, mode, { approvalId, environmentRetryAllowed 
       publicConfigAcceptance: { keys: publicConfigKeys },
       result: 'running', startedAt: new Date().toISOString(),
       fixture, keychainReset: false, evidenceMode: mode.name, videoRequested: mode.recordVideo,
-      maestroVersion: run(process.env.MAESTRO_BIN || 'maestro', ['--version']), flows: [], exploration: [] };
+      maestroVersion: run(process.env.MAESTRO_BIN || 'maestro', ['--version']), flows: [], exploration: [],
+      ...(r.buildMode === 'owned-metro-test-store' ? { walkthroughProtocol: 1, walkthroughSessions: [] } : {}) };
     save(join(out, 'report.json'), report);
     if (process.env.FITSY_SIM_RESET_KEYCHAIN) {
       assert(process.env.FITSY_SIM_RESET_KEYCHAIN === udid, 'Keychain reset must explicitly name the selected disposable simulator');
@@ -868,13 +975,17 @@ try {
   }
   else if (command === 'run') { const selected = runSelection(args); await execute(selected.udid, selected.names, selected.mode, selected); }
   else if (command === 'prepare-walkthrough') {
-    assert(args.length === 1, 'prepare-walkthrough requires one owned simulator UDID');
-    await prepareWalkthrough(args[0]);
+    assert(args.length >= 2 && args.length <= 3, 'prepare-walkthrough requires UDID category [executed-flow]');
+    await prepareWalkthrough(...args);
+  }
+  else if (command === 'finish-walkthrough') {
+    assert(args.length === 1, 'finish-walkthrough requires one trace path relative to .evidence/product-flow');
+    await finishWalkthrough(args[0]);
   }
   else if (command === 'finish') await finish(args[0]);
   else if (command === 'check') await check();
   else if (command === 'stop-metro') await stopMetro();
-  else throw new Error('Usage: node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build UDID | run UDID [flow names] [--mode=development|final-candidate|requested-video] [--record-video] [--release-exception=6716597294] [--no-environment-retry] | prepare-walkthrough UDID | finish [walkthrough.json]');
+  else throw new Error('Usage: node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build UDID | run UDID [flow names] [--mode=development|final-candidate|requested-video] [--record-video] [--release-exception=6716597294] [--no-environment-retry] | prepare-walkthrough UDID category [executed-flow] | finish-walkthrough relative-trace | finish [walkthrough.json]');
 } catch (e) {
   console.error(JSON.stringify({ status: 'fail', classification: classifySimulatorFailure(e), environmentRetries: e.environmentRetries || 0, summary: e.message })); process.exitCode = 1;
 }

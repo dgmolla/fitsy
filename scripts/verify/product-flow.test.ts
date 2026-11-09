@@ -58,6 +58,86 @@ function validate(report: ReturnType<typeof fixture>, mode = 'final-candidate', 
   return evaluate(`gate.validate(JSON.parse((await import('node:fs')).readFileSync(${JSON.stringify(join(dir, 'report.json'))}, 'utf8')), {required:true, categories:['billing'], flows:['cold-start-welcome','signin-options','billing-cancel']}, 'current-inputs', ${JSON.stringify(dir)}, Date.now(), ${JSON.stringify(dir)}, 'current-inputs', ${JSON.stringify(mode)}, [], ${JSON.stringify(fixtureConfigurations)})`);
 }
 
+deterministicTest('walkthrough fixture transitions retain original proof and reject altered, incomplete or stale bindings', () => {
+  const original = fixture();
+  const start = Date.parse(original.startedAt);
+  const at = (offset: number) => new Date(start + offset).toISOString();
+  const report = { ...original, configHash: sha('free'), jsHash: sha('js'), backendDeployment: 'dev-deployment',
+    bundleHash: sha('free-bundle'), walkthroughProtocol: 1,
+    metro: { pid: 101, processIdentity: 'original-process', root: dir, port: 8099, route: '/bundle',
+      jsHash: sha('js'), configHash: sha('free'), bundleHash: sha('free-bundle') },
+    walkthroughSessions: [] as { category: string; receipt: string; sha256: string; artifacts: string[] }[] };
+  const trace = ['tap_on', 'inspect_view_hierarchy'].map(name => JSON.stringify({ at: at(4000),
+    command: { name }, result: { content: [{ type: 'text', text: 'Paywall visible' }] } })).join('\n');
+  writeFileSync(join(dir, 'trace.json'), trace);
+  report.exploration[0]!.sha256 = sha(trace);
+  const snapshot = JSON.stringify({ udid: report.simulator, files: 0, bytes: 0, videos: 0 });
+  writeFileSync(join(dir, 'before.json'), snapshot); writeFileSync(join(dir, 'after.json'), snapshot);
+  const session = { version: 1, state: 'complete', category: 'billing', flow: null as string | null, fixture: 'default',
+    ...Object.fromEntries(['inputHash', 'jsHash', 'appHash', 'simulator', 'os', 'backendRevision', 'backendDeployment', 'storeMode']
+      .map(key => [key, report[key as keyof typeof report]])),
+    nativeHash: report.nativeSourceHash, configHash: report.configHash,
+    callerBefore: report.metro, metro: report.metro, bundleHash: report.bundleHash,
+    restoredMetro: { ...report.metro, pid: 202, processIdentity: 'restored-process' },
+    startedAt: at(1000), readyAt: at(2000), completedAt: at(5000), restoredAt: at(6000),
+    entitlement: { fixture: 'empty-store', sandbox: true, storeMode: 'test-store', accountHash: sha('free-account'), verifiedAt: at(1500) },
+    trace: 'trace.json', traceHash: sha(trace),
+    attachmentBefore: 'before.json', attachmentBeforeHash: sha(snapshot), attachmentAfter: 'after.json', attachmentAfterHash: sha(snapshot),
+    captureReceipt: original.flows[0]!.captureReceipt, captureReceiptHash: original.flows[0]!.captureReceiptHash,
+    attachmentCloseout: original.flows[0]!.attachmentCloseout, attachmentCloseoutHash: original.flows[0]!.attachmentCloseoutHash };
+  const artifacts = [session.attachmentBefore, session.attachmentAfter, session.captureReceipt, session.attachmentCloseout];
+  const saveSession = (value: unknown = session) => {
+    const bytes = JSON.stringify(value); writeFileSync(join(dir, 'session.json'), bytes);
+    report.walkthroughSessions = [{ category: 'billing', receipt: 'session.json', sha256: sha(bytes), artifacts }];
+  };
+  saveSession();
+  expect(validate(report).status).toBe(0);
+  expect(report.metro.pid).toBe(101);
+  const restored = evaluate(`gate.walkthroughState(${JSON.stringify(report)}, ${JSON.stringify(dir)}).metro`);
+  expect(JSON.parse(restored.stdout).pid).toBe(202);
+  const attacks: Array<[object, RegExp]> = [
+    [{ inputHash: 'stale' }, /walkthrough inputHash/],
+    [{ appHash: 'another-app' }, /walkthrough appHash/],
+    [{ nativeHash: 'another-native' }, /walkthrough native identity/],
+    [{ backendDeployment: 'another-deployment' }, /walkthrough backendDeployment/],
+    [{ configHash: sha('entitled') }, /fixture configuration/],
+    [{ callerBefore: { ...report.metro, pid: 999 } }, /transition chain/],
+    [{ restoredMetro: { ...session.restoredMetro, configHash: sha('entitled') } }, /Metro\/configuration\/bundle/],
+    [{ restoredMetro: { ...session.restoredMetro, bundleHash: sha('other') } }, /Metro\/configuration\/bundle/],
+    [{ restoredMetro: { ...session.restoredMetro, processIdentity: '' } }, /Metro\/configuration\/bundle/],
+    [{ readyAt: at(4500) }, /outside their fixture session/],
+    [{ traceHash: sha('altered') }, /session trace/],
+    [{ attachmentBeforeHash: sha('invented') }, /attachmentBefore/],
+    [{ entitlement: null }, /verified empty store/],
+  ];
+  for (const [change, failure] of attacks) {
+    saveSession({ ...session, ...change });
+    const result = validate(report); expect(result.status).toBe(1); expect(result.stderr).toMatch(failure);
+  }
+  saveSession();
+  report.walkthroughSessions[0]!.artifacts = [];
+  expect(validate(report).stderr).toContain('publication omits fixture evidence');
+  saveSession();
+  expect(validate({ ...report, walkthroughPending: { state: 'ready' } } as typeof report).stderr).toContain('transition is unfinished');
+  report.walkthroughSessions = [];
+  expect(validate(report).stderr).toContain('missing or mismatched walkthrough fixture session');
+
+  // A different fixture is accepted only when the executed journey proves it,
+  // and its entitlement must remain active through the actual observation.
+  const flow = report.flows[2]!;
+  const identity = JSON.stringify({ fixture: 'entitled-dev', configHash: sha('entitled') });
+  writeFileSync(join(dir, 'fixture-identity.json'), identity);
+  Object.assign(flow, { identity: 'fixture-identity.json', identityHash: sha(identity) });
+  const entitled = { ...session, flow: flow.name, fixture: 'entitled-dev', configHash: sha('entitled'),
+    metro: { ...report.metro, pid: 303, processIdentity: 'entitled-process', configHash: sha('entitled'), bundleHash: sha('entitled-bundle') },
+    bundleHash: sha('entitled-bundle'), entitlement: { sandbox: true, storeMode: 'test-store', accountHash: sha('account'), verifiedAt: at(1500), expiresAt: at(9000) } };
+  saveSession(entitled);
+  const check = () => evaluate(`gate.walkthroughState(${JSON.stringify(report)}, ${JSON.stringify(dir)}).metro`);
+  expect(check().status).toBe(0);
+  saveSession({ ...entitled, entitlement: { ...entitled.entitlement, expiresAt: at(3000) } });
+  expect(check().stderr).toContain('not active throughout');
+});
+
 deterministicTest('an affected journey passes without unrelated baselines but cannot substitute another tagged journey', () => {
   const report = fixture();
   report.videoRequested = false;

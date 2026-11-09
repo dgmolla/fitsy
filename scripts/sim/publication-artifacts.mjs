@@ -10,5 +10,9 @@ export function publicationArtifacts(report, categories) {
   }
   for (const category of categories) artifacts.add(report.exploration.find(item => item.category === category).trace);
   for (const observation of report.exploration || []) artifacts.add(observation.trace);
+  for (const session of report.walkthroughSessions || []) {
+    artifacts.add(session.receipt);
+    for (const file of session.artifacts) artifacts.add(file);
+  }
   return [...artifacts];
 }

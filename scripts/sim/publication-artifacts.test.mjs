@@ -407,9 +407,13 @@ test('final candidate publishes complete non-video proof when recording was not 
       result: 'pass', finishedAt: '2026-01-01T00:00:00Z', storeMode: 'test-store',
       flows: [{ commands: 'welcome/commands.json', screenshot: 'welcome/outcome.png',
         captureReceipt: 'welcome/xctest-capture-policy.jsonl' }],
-      exploration: [{ category: 'onboarding', trace: 'mcp/onboarding.jsonl' }] };
+      exploration: [{ category: 'onboarding', trace: 'mcp/onboarding.jsonl' }],
+      walkthroughSessions: [{ category: 'onboarding', receipt: 'walkthrough/onboarding/identity.json',
+        artifacts: ['walkthrough/onboarding/before.json', 'walkthrough/onboarding/after.json',
+          'walkthrough/onboarding/capture.jsonl', 'walkthrough/onboarding/closeout.json'] }] };
     const required = ['report.json', 'welcome/commands.json', 'welcome/outcome.png',
-      'welcome/xctest-capture-policy.jsonl', 'mcp/onboarding.jsonl'];
+      'welcome/xctest-capture-policy.jsonl', 'mcp/onboarding.jsonl', 'walkthrough/onboarding/identity.json',
+      ...report.walkthroughSessions[0].artifacts];
     for (const path of required) {
       mkdirSync(join(evidenceDirectory, path, '..'), { recursive: true });
       writeFileSync(join(evidenceDirectory, path), path === 'report.json' ? JSON.stringify(report) : path);
