@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Publish an exact-head local verdict; no simulator or credential executes in CI.
 import { execFileSync, spawn } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdirSync, statSync, lstatSync, createReadStream, existsSync, realpathSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, statSync, lstatSync, createReadStream, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,7 +9,7 @@ import { root, inputHash, impact, changedPaths, validate, baseline, repoEnv, pub
 import { validateMediaReceipt } from '../verify/media-integration.mjs';
 import { publicationArtifacts } from './publication-artifacts.mjs';
 import { readPreviousReportForReuse } from './evidence-mode.mjs';
-import { comparison, simulatorContext } from '../verify/impact-plan.mjs';
+import { comparison, isMain, simulatorContext } from '../verify/impact-plan.mjs';
 const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { cwd: root, encoding: 'utf8', env: repoEnv(), maxBuffer: 16 * 1024 * 1024, ...opts })?.trim() || '';
 const assert = (ok, why) => { if (!ok) throw new Error(why); };
 async function fileDigest(file) {
@@ -178,7 +178,7 @@ export async function publishProductFlow(prNumber, {
   throw e;
   }
 }
-if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isMain(import.meta.url)) {
   try {
     const flags = process.argv.slice(3);
     assert(process.argv[2] && new Set(flags).size === flags.length &&

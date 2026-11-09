@@ -70,6 +70,23 @@ test('real Discovery entry changes select three journeys across CLI and publicat
   { cwd: directory, env: { ...env(), FITSY_PRODUCT_ROOT: directory }, encoding: 'utf8' });
   expect(published.status).toBe(0);
   expect(JSON.parse(published.stdout).simulator).toEqual(JSON.parse(final.stdout).simulator);
+  const collection = spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import {collectionPublicConfigKeys} from ${JSON.stringify(resolve(__dirname, '../sim/product-flow.mjs'))};
+     import {publicConfigIdentity,requiredPublicConfigKeys,candidatePlan} from ${JSON.stringify(modulePath)};
+     import {publicationPlan} from ${JSON.stringify(resolve(__dirname, '../sim/publish-product-flow.mjs'))};
+     import {mkdirSync,writeFileSync} from 'node:fs';
+     const dir=${JSON.stringify(join(directory, '.evidence/product-flow'))}, file=dir+'/report.json';
+     const current=publicConfigIdentity(), build={...current,appHash:'synthetic-app'};
+     const keys=collectionPublicConfigKeys(file,build,current,${final.stdout});
+     const report={...build,evidenceMode:'final-candidate',result:'awaiting-walkthrough',publicConfigAcceptance:{keys}};
+     mkdirSync(dir,{recursive:true}); writeFileSync(file,JSON.stringify(report));
+     process.stdout.write(JSON.stringify({keys,finish:candidatePlan(requiredPublicConfigKeys(report,build,current)),
+       publication:publicationPlan(dir,${JSON.stringify(join(directory, 'missing-build.json'))})}));`],
+  { cwd: directory, env: { ...env(), FITSY_PRODUCT_ROOT: directory }, encoding: 'utf8' });
+  expect(collection.status).toBe(0);
+  expect(JSON.parse(collection.stdout)).toMatchObject({ keys: [],
+    finish: { flows: expected, categories: ['auth', 'billing', 'changed-journey'] },
+    publication: { flows: expected, categories: ['auth', 'billing', 'changed-journey'] } });
   git('add', '.'); git('commit', '-qm', 'entry change');
   mkdirSync(join(directory, '.evidence'), { recursive: true });
   const event = join(directory, '.evidence/event.json'), output = join(directory, '.evidence/output');

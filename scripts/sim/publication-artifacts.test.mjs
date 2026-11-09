@@ -7,10 +7,11 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import yaml from 'js-yaml';
 import { createPublicationArchive, publicationPlan, publishProductFlow as publishWithMediaEvidence } from './publish-product-flow.mjs';
-import { artifactPath, baseline, inputHash, root, publicConfigIdentity } from '../verify/product-flow.mjs';
+import { artifactPath, baseline, inputHash, root, publicConfigIdentity, impact, requiredPublicConfigKeys, validate } from '../verify/product-flow.mjs';
 import { validateMediaReceipt, writeMediaReceipt } from '../verify/media-integration.mjs';
 import { simulatorFlows } from '../verify/impact-plan.mjs';
 import { matchesFinalCandidate } from './evidence-mode.mjs';
+import { collectionPublicConfigKeys } from './product-flow.mjs';
 
 const sha = value => createHash('sha256').update(value).digest('hex');
 const publishProductFlow = (number, options) => publishWithMediaEvidence(number,
@@ -19,6 +20,9 @@ const publishProductFlow = (number, options) => publishWithMediaEvidence(number,
 test('final collection preflights the actual child environment and publisher inputs without native work or status writes', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'fitsy-final-preflight-'));
   try {
+    const imported = spawnSync(process.execPath, ['--input-type=module', '-'], { encoding: 'utf8',
+      input: `await import(${JSON.stringify(join(root, 'scripts/sim/publish-product-flow.mjs'))});` });
+    assert.equal(imported.status, 0, imported.stderr);
     const env = { ...process.env, FITSY_PRODUCT_ROOT: dir };
     delete env.FITSY_PRODUCT_FLOW_TEST_FIXTURE;
     const collect = () => spawnSync(process.execPath,
@@ -108,6 +112,71 @@ test('publication preserves needs-sim and release overrides alongside affected s
       assert.equal(plan.required, true);
       assert.deepEqual(plan.flows, simulatorFlows());
     }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('unknown-history collection retains all walkthrough requirements through finish and publication', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'fitsy-recovery-publication-'));
+  try {
+    const evidenceDirectory = join(dir, 'evidence'), buildReceiptFile = join(dir, 'build.json');
+    const reportFile = join(evidenceDirectory, 'report.json'), source = 'apps/mobile/e2e/flows/fixture.yaml';
+    const categories = ['auth', 'billing', 'changed-journey', 'discovery', 'notifications', 'onboarding'];
+    mkdirSync(join(dir, 'apps/mobile/e2e/flows'), { recursive: true }); mkdirSync(evidenceDirectory);
+    // One synthetic flow isolates the carry-forward contract, never native acceptance.
+    const yamlSource = `appId: com.fitsy.mobile\nname: fixture\ntags: ${JSON.stringify(categories)}\n---\n- assertVisible: first\n- assertVisible: second\n`;
+    writeFileSync(join(dir, source), yamlSource);
+    const current = { configHash: 'same-config', publicConfig: {} }, build = { ...current, appHash: 'same-app' };
+    writeFileSync(buildReceiptFile, JSON.stringify(build)); writeFileSync(reportFile, '{');
+    const paths = ['apps/mobile/app/notification-settings.tsx'];
+    const preflight = publicationPlan(evidenceDirectory, buildReceiptFile, paths, current, { cwd: dir, recoverHistoricalReport: true });
+    assert.deepEqual(preflight.categories, categories);
+    const keys = collectionPublicConfigKeys(reportFile, build, current, preflight);
+    assert.equal(readFileSync(reportFile, 'utf8'), '{', 'collection planning leaves original history for archive recovery');
+    const startedAt = new Date(Date.now() - 1000).toISOString(), finishedAt = new Date().toISOString(), simulator = 'fixture-device';
+    const commands = JSON.stringify([{ command: { applyConfigurationCommand: { config: { appId: 'com.fitsy.mobile', name: 'fixture' } } },
+      metadata: { status: 'COMPLETED' } }, ...['first', 'second'].map(textRegex => ({
+      command: { assertConditionCommand: { condition: { visible: { textRegex } } } }, metadata: { status: 'COMPLETED' },
+    }))]);
+    const png = Buffer.from('89504e470d0a1a0a00000000', 'hex');
+    const capture = JSON.stringify({ udid: simulator, preferredScreenCaptureFormat: 'screenshots' });
+    const closeout = JSON.stringify({ udid: simulator, generated: { videos: 0 }, deleted: [] });
+    const trace = ['tap_on', 'inspect_view_hierarchy'].map(name => JSON.stringify({ at: startedAt,
+      command: { name }, result: { content: [{ type: 'text', text: 'Synthetic control fixture observation' }] } })).join('\n');
+    for (const [name, bytes] of Object.entries({ 'commands.json': commands, 'screen.png': png,
+      'capture.jsonl': capture, 'closeout.json': closeout, 'trace.jsonl': trace })) writeFileSync(join(evidenceDirectory, name), bytes);
+    const observation = category => ({ category, result: 'pass', expected: 'Synthetic outcome', observed: 'Synthetic observation',
+      branches: ['primary', 'recovery'], trace: 'trace.jsonl', sha256: sha(trace) });
+    const report = { version: 1, ...build, inputHash: 'source', nativeSourceHash: 'native', result: 'pass',
+      evidenceMode: 'final-candidate', videoRequested: false, publicConfigAcceptance: { keys }, startedAt, finishedAt,
+      bundleHash: 'bundle', backendRevision: 'dev', backend: 'https://dev.fitsy.org', simulator, os: 'fixture-runtime',
+      storeMode: 'test-store', fixture: 'synthetic', maestroVersion: 'fixture', exploration: [observation('notifications')],
+      flows: [{ name: 'fixture', source, sourceHash: sha(yamlSource), commands: 'commands.json', sha256: sha(commands),
+        screenshot: 'screen.png', screenshotHash: sha(png), screenCheck: { version: 1, screenshotHash: sha(png), expired: false, expectedExpired: false },
+        captureReceipt: 'capture.jsonl', captureReceiptHash: sha(capture), attachmentCloseout: 'closeout.json', attachmentCloseoutHash: sha(closeout) }] };
+    const finishPlan = impact(paths, requiredPublicConfigKeys(report, build, current), { cwd: dir });
+    const check = (value, plan, hash) => validate(value, plan, hash, evidenceDirectory, Date.now(), dir);
+    assert.throws(() => check(report, finishPlan, 'source'), /missing walkthrough outcome: auth/);
+    assert.deepEqual(keys, ['<unknown>']);
+    const states = [], head = 'a'.repeat(40);
+    const execute = (command, args, options) => {
+      if (command === 'git') return args[0] === 'rev-parse' ? head : '';
+      assert.equal(command, 'gh', 'missing walkthroughs must fail before native checks or publication');
+      if (args[0] === 'pr') return JSON.stringify({ headRefOid: head, baseRefName: 'main',
+        headRepositoryOwner: { login: 'dgmolla' }, state: 'OPEN', url: 'https://github.com/dgmolla/fitsy/pull/7' });
+      assert.equal(args[0], 'api', 'missing walkthroughs must not create or upload releases');
+      states.push(JSON.parse(options.input).state); return '';
+    };
+    const options = { execute, evidenceDirectory, buildReceiptFile, sourceHash: () => 'source', validateEvidence: check,
+      resolvePlan: () => publicationPlan(evidenceDirectory, buildReceiptFile, paths, current, { cwd: dir }) };
+    writeFileSync(reportFile, JSON.stringify(report));
+    await assert.rejects(publishProductFlow('7', options), /missing walkthrough outcome: auth/);
+    report.exploration = categories.map(observation);
+    assert.equal(check(report, finishPlan, 'source').status, 'pass');
+    report.publicConfigAcceptance.verifiedConfigHash = current.configHash;
+    report.exploration = report.exploration.filter(item => item.category !== 'auth');
+    writeFileSync(reportFile, JSON.stringify(report));
+    await assert.rejects(publishProductFlow('7', options), /missing walkthrough outcome: auth/);
+    assert.deepEqual(states, ['pending', 'failure', 'pending', 'failure']);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

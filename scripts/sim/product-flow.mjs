@@ -519,6 +519,16 @@ function cacheBuiltArtifact() {
     console.error(`Native cache publication skipped: ${error.message}`);
   }
 }
+export function collectionPublicConfigKeys(previousFile, build, current, preflightPlan) {
+  const prior = existsSync(previousFile) ? readPreviousReportForReuse(previousFile) : { report: build };
+  // Archive recovery must not erase obligations when its fresh report replaces
+  // unreadable history. Finish/check/publication consume these same keys.
+  return [...new Set([...requiredPublicConfigKeys(prior.report, build, current),
+    ...(prior.error ? ['<unknown>'] : []),
+    ...(preflightPlan?.paths || []).filter(path => path.startsWith('public-env:'))
+      .map(path => path.slice('public-env:'.length)),
+  ])].sort();
+}
 async function execute(udid, names, mode) {
   const runFlow = options => runSelectedRecordedFlow(mode, options);
   if (process.env.NODE_ENV === 'test' && process.env.FITSY_PRODUCT_FLOW_TEST_FIXTURE) {
@@ -569,8 +579,7 @@ async function execute(udid, names, mode) {
     `${embedded.reason}; use a compatible owned Metro profile or run build ${udid} --refresh-embedded-js for an explicit Release artifact`);
   const fixture = fixtureLabel(process.env.FITSY_FIXTURE, process.env.FITSY_SIM_RESET_KEYCHAIN === udid);
   const priorFile = join(out, 'report.json');
-  const prior = existsSync(priorFile) ? readPreviousReportForReuse(priorFile).report : r;
-  const publicConfigKeys = requiredPublicConfigKeys(prior, r, environment());
+  const publicConfigKeys = collectionPublicConfigKeys(priorFile, r, environment(), finalPreflight?.plan);
   const hash = inputHash(), plan = finalPreflight?.plan || candidatePlan(publicConfigKeys);
   const currentStoreMode = buildProfile(r.buildMode === 'owned-metro-test-store', process.env).storeMode;
   assert(!plan.categories.includes('billing') || currentStoreMode !== 'unconfigured', 'Billing evidence requires a configured store');
