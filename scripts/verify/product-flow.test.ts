@@ -298,8 +298,33 @@ mediaTest('accepts identified baseline and billing outcomes with matching artifa
   const result = validate(fixture()); expect(result.status).toBe(0); expect(JSON.parse(result.stdout).status).toBe('pass');
 });
 mediaTest('final walkthrough validation decodes genuine JPEG and PNG while rejecting corrupt or expired pixels', () => {
-  const report = fixture(), observation = report.exploration[0]!;
+  const report = { ...fixture(), configHash: sha('free'), jsHash: sha('js'), backendDeployment: 'dev-deployment',
+    bundleHash: sha('free-bundle'), walkthroughProtocol: 1,
+    metro: { pid: 101, processIdentity: 'original-process', root: dir, port: 8099, route: '/bundle',
+      jsHash: sha('js'), configHash: sha('free'), bundleHash: sha('free-bundle') },
+    walkthroughSessions: [] as { category: string; receipt: string; sha256: string; artifacts: string[] }[],
+    walkthroughPending: undefined as unknown };
+  const observation = report.exploration[0]!;
   const events = readFileSync(join(dir, observation.trace), 'utf8').split('\n').map(line => JSON.parse(line));
+  const snapshot = JSON.stringify({ udid: report.simulator, entries: [] });
+  writeFileSync(join(dir, 'before.json'), snapshot); writeFileSync(join(dir, 'after.json'), snapshot);
+  const session = { version: 1, state: 'complete', category: 'billing', flow: null, fixture: 'default',
+    ...Object.fromEntries(['inputHash', 'jsHash', 'appHash', 'simulator', 'os', 'backendRevision', 'backendDeployment', 'storeMode']
+      .map(key => [key, report[key as keyof typeof report]])),
+    nativeHash: report.nativeSourceHash, configHash: report.configHash, callerBefore: report.metro,
+    metro: report.metro, bundleHash: report.bundleHash,
+    restoredMetro: { ...report.metro, pid: 202, processIdentity: 'restored-process' },
+    startedAt: report.startedAt, readyAt: report.startedAt, completedAt: '', restoredAt: '',
+    entitlement: { fixture: 'empty-store', sandbox: true, storeMode: 'test-store', accountHash: sha('free-account'), verifiedAt: report.startedAt },
+    trace: observation.trace, traceHash: '', attachmentBefore: 'before.json', attachmentBeforeHash: sha(snapshot),
+    attachmentAfter: 'after.json', attachmentAfterHash: sha(snapshot),
+    captureReceipt: report.flows[0]!.captureReceipt, captureReceiptHash: report.flows[0]!.captureReceiptHash,
+    attachmentCloseout: report.flows[0]!.attachmentCloseout, attachmentCloseoutHash: report.flows[0]!.attachmentCloseoutHash };
+  const saveSession = () => {
+    const bytes = JSON.stringify(session); writeFileSync(join(dir, 'session.json'), bytes);
+    report.walkthroughSessions = [{ category: 'billing', receipt: 'session.json', sha256: sha(bytes),
+      artifacts: [session.attachmentBefore, session.attachmentAfter, session.captureReceipt, session.attachmentCloseout] }];
+  };
   const pngBytes = readFileSync(resolve(__dirname, '../sim/fixtures/active-saved-meal.png'));
   const jpeg = (name: string) => {
     const output = join(dir, `${name}.jpg`);
@@ -314,12 +339,32 @@ mediaTest('final walkthrough validation decodes genuine JPEG and PNG while rejec
       .map(event => JSON.stringify(event)).join('\n');
     writeFileSync(join(dir, observation.trace), trace); observation.sha256 = sha(trace);
     report.finishedAt = new Date().toISOString();
+    session.traceHash = observation.sha256; session.completedAt = report.finishedAt; session.restoredAt = report.finishedAt;
+    saveSession();
     return validate(report);
   };
   for (const [mime, pixels] of [['image/jpeg', activeJpeg], ['image/png', pngBytes]] as const) {
     const result = check(mime, pixels);
     expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: '' });
   }
+  expect(check('image/jpeg', activeJpeg).status).toBe(0);
+  const archive = join(dir, 'regression-only.tar.gz');
+  const archived = evaluate(`await (async () => {
+    const {createPublicationArchive} = await import(${JSON.stringify(resolve(__dirname, '../sim/publish-product-flow.mjs'))});
+    const report = JSON.parse((await import('node:fs')).readFileSync(${JSON.stringify(join(dir, 'report.json'))}, 'utf8'));
+    await createPublicationArchive(report, ['billing'], ${JSON.stringify(dir)}, ${JSON.stringify(archive)});
+    return gate.digest((await import('node:child_process')).execFileSync('tar', ['-xOf', ${JSON.stringify(archive)}, 'trace.json']));
+  })()`);
+  expect(archived.status).toBe(0); expect(JSON.parse(archived.stdout)).toBe(observation.sha256);
+  report.walkthroughPending = { state: 'ready' };
+  expect(validate(report).stderr).toContain('walkthrough fixture transition is unfinished');
+  report.walkthroughPending = undefined;
+  session.restoredMetro.configHash = sha('stale'); saveSession();
+  expect(validate(report).stderr).toContain('invalid walkthrough Metro/configuration/bundle identity');
+  session.restoredMetro.configHash = report.configHash; saveSession();
+  report.exploration = [];
+  expect(validate(report).stderr).toContain('walkthrough fixture session has no verified observation');
+  report.exploration = [observation];
   expect(check('image/png', activeJpeg).stderr).toContain('matching complete PNG or JPEG');
   expect(check('image/jpeg', activeJpeg.subarray(0, -2)).stderr).toContain('matching complete PNG or JPEG');
   expect(check('image/jpeg', Buffer.from('ffd8ff0000ffd9', 'hex')).stderr).toContain('Screenshot OCR command failed');
