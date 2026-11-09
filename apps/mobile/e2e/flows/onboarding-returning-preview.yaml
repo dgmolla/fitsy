@@ -244,12 +244,28 @@ env:
 - tapOn:
     id: coachmark-skip
     optional: true
+# The Debug Test Store uses its existing map opt-in for this returning preview.
+- openLink: com.fitsy.mobile://welcome/preview?mapDebug=1
+- tapOn:
+    text: "^Open$"
+    optional: true
 - extendedWaitUntil:
     visible:
-      id: discovery-hero
+      id: map-pin-0
     timeout: 30000
+- assertVisible:
+    id: discovery-map
+- assertVisible:
+    id: preview-back
+- assertNotVisible:
+    id: map-load-more
 - tapOn:
-    id: discovery-hero
+    id: map-pin-0
+- assertVisible:
+    id: map-preview-open
+- takeScreenshot: returning-map-preview
+- tapOn:
+    id: map-preview-open
 - extendedWaitUntil:
     visible:
       id: paywall-logo

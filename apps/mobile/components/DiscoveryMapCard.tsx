@@ -5,21 +5,22 @@ import type { RestaurantResult } from '@fitsy/shared';
 import { EDITORIAL } from '@/lib/brand';
 import { RestaurantPhoto } from './RestaurantPhoto';
 import { hero } from './DiscoveryScreen.styles';
-import { HeroMealContent, mealAccessibilitySummary } from './DiscoveryCards';
+import { HeroMealContent, mealAccessibilitySummary, previewRowLabel } from './DiscoveryCards';
 
 // Reuse Search's main-photo, gradient and editorial overlay treatment.
-export function DiscoveryMapCard({ result, locked, onPress, label, testID, style, page, pageTestID }: {
+export function DiscoveryMapCard({ result, locked, hideDishName = false, onboardingPreview = false, onPress, label, testID, style, page, pageTestID }: {
   result: RestaurantResult; locked: boolean; onPress: () => void; label: string; testID: string;
+  hideDishName?: boolean; onboardingPreview?: boolean;
   style?: StyleProp<ViewStyle>; page?: string; pageTestID?: string;
 }) {
   return <Pressable style={[s.card, style]} testID={testID} onPress={onPress}
-    accessibilityRole="button" accessibilityLabel={`${label}${mealAccessibilitySummary(result, locked)}`}>
+    accessibilityRole="button" accessibilityLabel={hideDishName ? previewRowLabel(result) : `${label}${mealAccessibilitySummary(result, locked)}`}>
     <RestaurantPhoto uri={result.photoUrl} name={result.name} style={hero.image} />
     <LinearGradient colors={['transparent', EDITORIAL.heroGrad]} style={StyleSheet.absoluteFill} />
     <View style={[hero.overlay, s.copy]}>
-      <HeroMealContent result={result} locked={locked} nameStyle={s.name} />
+      <HeroMealContent result={result} locked={locked} hideDishName={hideDishName} nameStyle={s.name} />
       <View style={s.footer}>
-        <Text style={s.link}>View menu →</Text>
+        <Text style={s.link}>{onboardingPreview ? 'See full menu with Pro →' : 'View menu →'}</Text>
         {page && <Text style={s.detail} testID={pageTestID}>{page}</Text>}
       </View>
     </View>

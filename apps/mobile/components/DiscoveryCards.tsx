@@ -101,15 +101,15 @@ export function mealAccessibilitySummary(result: RestaurantResult, locked: boole
   return `, best match: ${bm.name}, ${published ? 'Published' : 'Estimated'} nutrition, ${bm.confidence.toLowerCase()} confidence${values}`;
 }
 
-export function HeroMealContent({ result, locked, paywallPreview = false, nameStyle, dishStyle }: {
-  result: RestaurantResult; locked: boolean; paywallPreview?: boolean;
+export function HeroMealContent({ result, locked, paywallPreview = false, hideDishName = false, nameStyle, dishStyle }: {
+  result: RestaurantResult; locked: boolean; paywallPreview?: boolean; hideDishName?: boolean;
   nameStyle?: StyleProp<TextStyle>; dishStyle?: StyleProp<TextStyle>;
 }) {
   const bm = result.bestMatch;
   return <>
     <Text style={[hero.restName, paywallPreview && paywallCard.name, nameStyle]} numberOfLines={1} testID={paywallPreview ? 'paywall-restaurant-name' : undefined}>{result.name}</Text>
     {locked && <LockedDishTeaser variant="hero" />}
-    {!locked && bm && <Text style={[hero.dishName, paywallPreview && paywallCard.dish, dishStyle]} numberOfLines={1}>{bm.name}</Text>}
+    {!locked && bm && (hideDishName ? <PreviewDishName restaurantId={result.id} /> : <Text style={[hero.dishName, paywallPreview && paywallCard.dish, dishStyle]} numberOfLines={1}>{bm.name}</Text>)}
     {!locked && bm && (!paywallPreview || bm.nutritionBasis === 'published') && (
       <View style={hero.macroRow}>
         <Text style={hero.macroText}>P {bm.proteinG}g</Text>
@@ -287,7 +287,7 @@ export const RestaurantSection = React.memo(function RestaurantSection({ result,
 });
 
 
-function previewRowLabel(result: RestaurantResult): string {
+export function previewRowLabel(result: RestaurantResult): string {
   const m = result.bestMatch;
   return `${result.name}${m ? `, ${m.calories} kcal, protein ${m.proteinG}g, carbs ${m.carbsG}g, fat ${m.fatG}g` : ''}. Unlock meal name and full menu with Pro.`;
 }

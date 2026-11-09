@@ -251,6 +251,12 @@ env:
 - takeScreenshot: onboarding-widget-card
 - tapOn:
     id: welcome-continue
+# Debug retains its explicit map opt-in; production iOS needs no query flag.
+# Enter the same authenticated, bounded preview without changing its fixtures.
+- openLink: com.fitsy.mobile://welcome/preview?mapDebug=1
+- tapOn:
+    text: "^Open$"
+    optional: true
 - extendedWaitUntil:
     visible:
       id: coachmark-next
@@ -298,6 +304,34 @@ env:
 - tapOn: "Find my meal"
 - assertNotVisible:
     id: coachmark-next
+- assertVisible:
+    id: discovery-map
+- assertVisible:
+    id: preview-back
+- assertVisible:
+    id: map-card-0
+- assertVisible:
+    id: map-pin-2
+- assertNotVisible:
+    id: map-pin-3
+- assertNotVisible:
+    id: map-load-more
+- assertNotVisible:
+    id: shuffle-button
+- assertVisible:
+    id: locked-value-cta
+- takeScreenshot: onboarding-map-first-tour-complete
+# Search opens the existing list; the single Map control returns to the same map.
+- tapOn:
+    id: map-search-entry
+- assertVisible:
+    id: discovery-list
+- tapOn:
+    id: discovery-view-toggle
+- assertVisible:
+    id: discovery-map
+- tapOn:
+    id: map-search-entry
 - copyTextFrom:
     id: discovery-search
 - assertTrue: ${maestro.copiedText === 'pizza'}
