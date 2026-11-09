@@ -87,6 +87,16 @@ test('final collection preflights the actual child environment and publisher inp
       set(false);
     }
     assert.ok(calls.every(([command]) => ['gh', 'git', process.execPath].includes(command)));
+    const interrupted = join(dir, 'report.json');
+    writeFileSync(interrupted, '{');
+    const recovered = await publishWithMediaEvidence(undefined, options);
+    assert.equal(recovered.status, 'ready');
+    assert.equal(recovered.plan.simulator.scope, 'full');
+    assert.ok(recovered.plan.paths.includes('public-env:<unknown>'), 'unreadable configuration history cannot narrow fresh coverage');
+    assert.match(recovered.plan.historyWarning, /preserve.*fresh/i);
+    assert.equal(readFileSync(interrupted, 'utf8'), '{', 'preflight preserves interrupted evidence for the collector archive');
+    assert.throws(() => publicationPlan(dir, join(dir, 'no-build.json'), ['docs/guide.md'], { configHash: 'same' }), SyntaxError,
+      'ordinary publication still rejects the malformed report');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

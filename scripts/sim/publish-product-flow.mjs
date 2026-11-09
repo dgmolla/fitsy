@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { root, inputHash, impact, changedPaths, validate, baseline, repoEnv, publicConfigIdentity, requiredPublicConfigKeys } from '../verify/product-flow.mjs';
 import { validateMediaReceipt } from '../verify/media-integration.mjs';
 import { publicationArtifacts } from './publication-artifacts.mjs';
+import { readPreviousReportForReuse } from './evidence-mode.mjs';
 import { comparison, simulatorContext } from '../verify/impact-plan.mjs';
 const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { cwd: root, encoding: 'utf8', env: repoEnv(), maxBuffer: 16 * 1024 * 1024, ...opts })?.trim() || '';
 const assert = (ok, why) => { if (!ok) throw new Error(why); };
@@ -29,13 +30,20 @@ async function archivedDigest(archive, file) {
 }
 const repo = 'dgmolla/fitsy', context = 'product-flow/local';
 export function publicationPlan(evidenceDirectory, buildReceiptFile, paths = changedPaths('origin/main'), current = publicConfigIdentity(), options = {}) {
+  const { recoverHistoricalReport = false, ...impactOptions } = options;
   const readReceipt = file => existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
-  const previous = readReceipt(resolve(evidenceDirectory, 'report.json'));
+  const reportFile = resolve(evidenceDirectory, 'report.json');
+  const previous = recoverHistoricalReport && existsSync(reportFile)
+    ? readPreviousReportForReuse(reportFile) : { report: readReceipt(reportFile) };
   const build = readReceipt(buildReceiptFile);
-  return impact(paths, requiredPublicConfigKeys(previous, build, current), {
-    ...simulatorContext(process.env), ...options,
+  const keys = requiredPublicConfigKeys(previous.report, build, current);
+  if (previous.error) keys.push('<unknown>');
+  const plan = impact(paths, [...new Set(keys)].sort(), {
+    ...simulatorContext(process.env), ...impactOptions,
     comparison: comparison({ cwd: root, base: 'origin/main' }),
   });
+  return previous.error ? { ...plan,
+    historyWarning: 'Preserve unreadable historical evidence in the existing archive before fresh conservative collection' } : plan;
 }
 export async function createPublicationArchive(report, categories, dir, archive, execute = run) {
   const artifacts = publicationArtifacts(report, categories);
@@ -116,7 +124,8 @@ export async function publishProductFlow(prNumber, {
     execute('git', ['merge-base', '--is-ancestor', 'origin/main', 'HEAD']);
   }
   const media = validateMediaEvidence(candidate);
-  const resolved = resolvePlan({ labels: (pr.labels || []).map(label => label.name) }), includeBaseline = process.argv.includes('--include-baseline');
+  const resolved = resolvePlan({ labels: (pr.labels || []).map(label => label.name), recoverHistoricalReport: preflight }),
+    includeBaseline = process.argv.includes('--include-baseline');
   const plan = includeBaseline ? { ...resolved, flows: [...new Set([...(resolved.flows || []), ...baseline])].sort(), baseline } : resolved;
   const evidenceRequired = plan.required || includeBaseline;
   if (preflight) return { status: 'ready', head, plan, mediaIntegration: media?.required ? 'required' : 'not_applicable',

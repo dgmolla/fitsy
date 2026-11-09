@@ -17,7 +17,8 @@ import { admitDisk, appendRecordedFlowFailure, applyCapturePolicy, archiveFailur
 import { classifySimulatorFailure, maestroFailure, withEnvironmentRetry } from './failure-policy.mjs';
 import { prepareActiveEntitlement, verifyInactiveEntitlement } from './active-entitlement.mjs';
 import { inspectScreenshot, inspectScreenshotDirectory, requireScreenRecognition } from './screen-guard.mjs';
-import { matchesFinalCandidate, runSelection } from './evidence-mode.mjs';
+import { matchesFinalCandidate, readPreviousReportForReuse, runSelection } from './evidence-mode.mjs';
+export { readPreviousReportForReuse } from './evidence-mode.mjs';
 import { closeoutXCTestAttachments, snapshotXCTestAttachments } from './xctest-attachments.mjs';
 const yaml = createRequire(import.meta.url)('js-yaml');
 const controlDirectory = fileURLToPath(new URL('.', import.meta.url));
@@ -32,13 +33,6 @@ export const recipeIdentity = () => {
   return { hash: identityHash(inputs), inputs };
 };
 const read = file => JSON.parse(readFileSync(file, 'utf8'));
-export function readPreviousReportForReuse(file) {
-  try { return { report: read(file), error: null }; }
-  catch (error) {
-    if (!(error instanceof SyntaxError)) throw error;
-    return { report: null, error: `invalid JSON in prior report: ${error.message}` };
-  }
-}
 const save = (file, value) => writeFileSync(file, JSON.stringify(value, null, 2) + '\n');
 const assert = (ok, why) => { if (!ok) throw new Error(why); };
 const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { cwd: root, encoding: 'utf8', env: repoEnv(), maxBuffer: 32 * 1024 * 1024, ...opts })?.trim() || '';

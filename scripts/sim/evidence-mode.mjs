@@ -1,4 +1,14 @@
+import { readFileSync } from 'node:fs';
+
 export const evidenceModes = ['development', 'final-candidate', 'requested-video'];
+
+export function readPreviousReportForReuse(file) {
+  try { return { report: JSON.parse(readFileSync(file, 'utf8')), error: null }; }
+  catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+    return { report: null, error: `invalid JSON in prior report: ${error.message}` };
+  }
+}
 
 export function evidenceMode(value = 'development', requestedRecording = false) {
   if (!evidenceModes.includes(value)) throw new Error(`Unknown evidence mode ${value}; use development, final-candidate, or requested-video`);

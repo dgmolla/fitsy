@@ -166,6 +166,7 @@ The final-candidate runner calls this same preflight automatically and consumes 
 Automatic collection requires an owned branch and passes it explicitly to `gh pr view --repo`; the standalone preflight accepts an explicit PR number.
 It checks the actual child process loading `apps/mobile/.env.development.local`, matching configuration hashes, clean published source, current main ancestry and the applicable source-bound media receipt before touching a simulator or archiving a previous report.
 Each external preflight command has a 30-second timeout; unavailable or mismatched inputs fail visibly before collection.
+An unreadable historical report selects conservative fresh coverage and remains untouched for the collector's existing archive recovery; ordinary publication still rejects malformed evidence.
 For a missing canonical environment, use `npm run dev:env` against the existing `fitsy-api` project and verify the child load; do not create a cloud project to repair local setup.
 Preflight prints the selected flows, walkthrough categories and required proof, without writing a commit status, uploading an archive or claiming native acceptance.
 Recheck these inputs at final publication as usual; a successful preflight does not reserve a remote head or establish a future pass.
