@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import yaml from 'js-yaml';
 import { createPublicationArchive, publicationPlan, publishProductFlow as publishWithMediaEvidence } from './publish-product-flow.mjs';
+import { redactSecrets } from './publication-artifacts.mjs';
 import { artifactPath, baseline, inputHash, root, publicConfigIdentity, impact, requiredPublicConfigKeys, validate } from '../verify/product-flow.mjs';
 import { validateMediaReceipt, writeMediaReceipt } from '../verify/media-integration.mjs';
 import { simulatorFlows } from '../verify/impact-plan.mjs';
@@ -418,6 +419,53 @@ test('publisher detects an archive with listed video whose extracted bytes diffe
       return execFileSync('tar', args, { encoding: 'utf8' }).trim();
     };
     await assert.rejects(createPublicationArchive(report, [], evidence, archive, execute), /incomplete or changed bytes: flow\/flow-untrimmed.mp4/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('redactSecrets replaces password/token/secret-named string fields in single JSON documents, JSONL and nested structures', () => {
+  const object = { env: { EXPO_PUBLIC_DEV_LOGIN_PASSWORD: 'p1', EXPO_PUBLIC_API_URL: 'https://dev.fitsy.org' },
+    nested: [{ authToken: 'tok1', keep: 'me' }], unrelated: 'value' };
+  const redacted = JSON.parse(redactSecrets(Buffer.from(JSON.stringify(object))).toString());
+  assert.deepEqual(redacted, { env: { EXPO_PUBLIC_DEV_LOGIN_PASSWORD: '[REDACTED]', EXPO_PUBLIC_API_URL: 'https://dev.fitsy.org' },
+    nested: [{ authToken: '[REDACTED]', keep: 'me' }], unrelated: 'value' });
+
+  const jsonl = [{ secretKey: 'line1-secret', id: 1 }, { id: 2 }].map(line => JSON.stringify(line)).join('\n') + '\n';
+  const redactedJsonl = redactSecrets(Buffer.from(jsonl)).toString().trim().split('\n').map(line => JSON.parse(line));
+  assert.deepEqual(redactedJsonl, [{ secretKey: '[REDACTED]', id: 1 }, { id: 2 }]);
+
+  // Non-JSON/JSONL content (plain text, binary) passes through byte-for-byte unchanged.
+  const plain = Buffer.from('not json at all, just text with password=abc');
+  assert.deepEqual(redactSecrets(plain), plain);
+  const binary = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  assert.deepEqual(redactSecrets(binary), binary);
+});
+
+test('publication redacts a disposable dev-fixture password from Maestro command receipts without losing other content', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'fitsy-publication-redaction-'));
+  try {
+    const evidence = join(dir, 'evidence'), archive = join(dir, 'archive.tar.gz');
+    const report = { flows: [{ commands: 'flow/commands.json', screenshot: 'flow/outcome.png',
+      captureReceipt: 'flow/xctest-capture-policy.jsonl', video: 'flow/flow-untrimmed.mp4' }], exploration: [] };
+    mkdirSync(join(evidence, 'flow'), { recursive: true });
+    const secret = 'genuinely-secret-dev-password';
+    const commands = [{ command: { defineVariablesCommand: { env: {
+      EXPO_PUBLIC_DEV_LOGIN_EMAIL: 'seed-sim-active@fitsy.dev', EXPO_PUBLIC_DEV_LOGIN_PASSWORD: secret } } },
+      metadata: { status: 'COMPLETED' } }];
+    writeFileSync(join(evidence, 'flow/commands.json'), JSON.stringify(commands));
+    const capture = [{ udid: 'fixture-udid', preferredScreenCaptureFormat: 'screenshots' }];
+    writeFileSync(join(evidence, 'flow/xctest-capture-policy.jsonl'), capture.map(line => JSON.stringify(line)).join('\n') + '\n');
+    for (const path of ['report.json', 'flow/outcome.png', 'flow/flow-untrimmed.mp4']) writeFileSync(join(evidence, path), path);
+    const execute = (_command, args) => execFileSync('tar', args, { encoding: 'utf8' }).trim();
+    await createPublicationArchive(report, [], evidence, archive, execute);
+    const rawArchive = readFileSync(archive);
+    assert.equal(rawArchive.includes(secret), false, 'the secret must never reach the published archive bytes');
+    const archivedCommands = JSON.parse(execFileSync('tar', ['-xOf', archive, 'flow/commands.json'], { encoding: 'utf8' }));
+    assert.equal(archivedCommands[0].command.defineVariablesCommand.env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD, '[REDACTED]');
+    assert.equal(archivedCommands[0].command.defineVariablesCommand.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL, 'seed-sim-active@fitsy.dev');
+    assert.equal(archivedCommands[0].metadata.status, 'COMPLETED');
+    const archivedCapture = execFileSync('tar', ['-xOf', archive, 'flow/xctest-capture-policy.jsonl'], { encoding: 'utf8' });
+    assert.deepEqual(archivedCapture.trim().split('\n').map(line => JSON.parse(line)), capture);
+    assert.equal(execFileSync('tar', ['-xOf', archive, 'flow/outcome.png'], { encoding: 'utf8' }), 'flow/outcome.png');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

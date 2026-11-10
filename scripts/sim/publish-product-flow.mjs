@@ -1,15 +1,16 @@
 #!/usr/bin/env node
 // Publish an exact-head local verdict; no simulator or credential executes in CI.
 import { execFileSync, spawn } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdirSync, statSync, lstatSync, createReadStream, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync, statSync, lstatSync, createReadStream, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { root, inputHash, impact, changedPaths, validateAcceptance, baseline, repoEnv, publicConfigIdentity, requiredPublicConfigKeys, selectedFlows } from '../verify/product-flow.mjs';
 import { journeyFixture } from './journey-fixtures.mjs';
 import { validateMediaReceipt } from '../verify/media-integration.mjs';
-import { publicationArtifacts } from './publication-artifacts.mjs';
+import { publicationArtifacts, redactSecrets } from './publication-artifacts.mjs';
 import { readPreviousReportForReuse } from './evidence-mode.mjs';
 import { comparison, isMain, simulatorContext } from '../verify/impact-plan.mjs';
 const yaml = createRequire(import.meta.url)('js-yaml');
@@ -83,13 +84,26 @@ export async function createPublicationArchive(report, categories, dir, archive,
         `Published artifact must be a regular file with real parent directories: ${f}`);
     }
   }
-  execute('tar', ['-czf', archive, '-C', dir, ...artifacts]);
-  const archiveEntries = execute('tar', ['-tzf', archive]).split('\n');
-  assert(archiveEntries.length === artifacts.length && artifacts.every(file => archiveEntries.includes(file)), 'Published archive omits verified evidence');
-  for (const file of artifacts) {
-    assert(await archivedDigest(archive, file) === await fileDigest(resolve(dir, file)),
-      `Published archive has incomplete or changed bytes: ${file}`);
-  }
+  // Stage redacted copies rather than archiving the working evidence
+  // directory directly, so a disposable dev-fixture credential captured in
+  // a Maestro/XCTest receipt never reaches the published archive, while the
+  // report's own pre-redaction hashes (recorded at collection time) stay
+  // intact as the provenance record of what was actually collected.
+  const staging = mkdtempSync(join(tmpdir(), 'fitsy-publication-redacted-'));
+  try {
+    for (const f of artifacts) {
+      const staged = resolve(staging, f);
+      mkdirSync(dirname(staged), { recursive: true });
+      writeFileSync(staged, redactSecrets(readFileSync(resolve(dir, f))));
+    }
+    execute('tar', ['-czf', archive, '-C', staging, ...artifacts]);
+    const archiveEntries = execute('tar', ['-tzf', archive]).split('\n');
+    assert(archiveEntries.length === artifacts.length && artifacts.every(file => archiveEntries.includes(file)), 'Published archive omits verified evidence');
+    for (const file of artifacts) {
+      assert(await archivedDigest(archive, file) === await fileDigest(resolve(staging, file)),
+        `Published archive has incomplete or changed bytes: ${file}`);
+    }
+  } finally { rmSync(staging, { recursive: true, force: true }); }
 }
 export async function publishProductFlow(prNumber, {
   preflight = false,
