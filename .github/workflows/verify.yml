@@ -81,18 +81,27 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      # Release downloads have returned HTTP 504; reuse the pinned archives and
+      # check their SHA-256 on every run, cached or downloaded.
+      - name: Restore pinned workflow lint tool archives
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/lint-tools
+          key: lint-tools-actionlint-1.7.12-8aca8db9-shellcheck-0.11.0-8c3be12b
       - name: Install required workflow lint tools
         run: |
-          curl --fail --show-error --location --retry 3 \
+          dir="$RUNNER_TEMP/lint-tools"
+          mkdir -p "$dir"
+          [ -f "$dir/actionlint.tar.gz" ] || curl --fail --show-error --location --retry 3 \
             https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz \
-            --output "$RUNNER_TEMP/actionlint.tar.gz"
-          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $RUNNER_TEMP/actionlint.tar.gz" | sha256sum --check
-          tar xzf "$RUNNER_TEMP/actionlint.tar.gz" -C /usr/local/bin actionlint
-          curl --fail --show-error --location --retry 3 \
+            --output "$dir/actionlint.tar.gz"
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $dir/actionlint.tar.gz" | sha256sum --check
+          tar xzf "$dir/actionlint.tar.gz" -C /usr/local/bin actionlint
+          [ -f "$dir/shellcheck.tar.xz" ] || curl --fail --show-error --location --retry 3 \
             https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz \
-            --output "$RUNNER_TEMP/shellcheck.tar.xz"
-          echo "8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198  $RUNNER_TEMP/shellcheck.tar.xz" | sha256sum --check
-          tar xJf "$RUNNER_TEMP/shellcheck.tar.xz" -C /usr/local/bin --strip-components=1 shellcheck-v0.11.0/shellcheck
+            --output "$dir/shellcheck.tar.xz"
+          echo "8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198  $dir/shellcheck.tar.xz" | sha256sum --check
+          tar xJf "$dir/shellcheck.tar.xz" -C /usr/local/bin --strip-components=1 shellcheck-v0.11.0/shellcheck
           actionlint --version
           shellcheck --version
       - name: Install gitleaks
