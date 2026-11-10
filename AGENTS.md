@@ -8,6 +8,7 @@ Read the applicable [API](apps/api/AGENTS.md), [mobile](apps/mobile/AGENTS.md), 
 - Read existing code before writing; plan first with a small, pass/fail "Done when".
 - Climb the minimalism ladder: does it need to exist; reuse repo code, platform features, standard libraries, or installed dependencies; then write the minimum code.
 - One task = one branch = one PR; keep tasks small and prefer app work over process work.
+- Test scope comes from change-impact routing (#773); coupled tooling and product changes can ship together.
 - Keep task state and proof in GitHub issues and PRs, not a local process or queue.
 - Reproduce bugs through the real user journey before fixing them.
 - Add one small test where the risk is: branching logic, parsing, money, auth, or security; trivial changes stay trivial.
