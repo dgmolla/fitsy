@@ -61,11 +61,16 @@ owner = claim['owner'] if claim and claim['expires'] > time.time() else ''
 if action == 'owner':
     if owner:
         print(owner)
-elif owner and owner != args[0]:
-    raise SystemExit('simulator is claimed by ' + owner)
 elif action == 'release':
+    if owner and owner != args[0]:
+        raise SystemExit('simulator is claimed by ' + owner)
     path.unlink(missing_ok=True)
 else:
+    # A bash-side dead-holder-PID check already gated this force flag; this is
+    # the one place that actually writes the claim, so enforce it here too.
+    force = len(args) > 2 and args[2] == '1'
+    if owner and owner != args[0] and not force:
+        raise SystemExit('simulator is claimed by ' + owner)
     minutes = int(args[1])
     if minutes <= 0:
         raise SystemExit('--minutes must be a positive integer')
@@ -82,6 +87,23 @@ else:
 PYTHON
 }
 claim_owner() { claim_state owner; }
+# The lock lives beside the sim claim but is written by the coordinator, not
+# this script; consult it only to learn whether the recorded claim owner's
+# process is still alive, never to decide who legitimately holds the claim.
+SIMULATOR_LOCK="$HOME/fitsy-wt/simulator.lock"
+holder_pid_if_matching() {
+  python3 - "$SIMULATOR_LOCK" "$1" <<'PY'
+import json, sys
+path, owner = sys.argv[1:]
+try:
+    data = json.loads(open(path).read())
+except (OSError, ValueError):
+    sys.exit(0)
+pid = data.get('pid')
+if data.get('owner') == owner and isinstance(pid, int) and not isinstance(pid, bool):
+    print(pid)
+PY
+}
 require_claim_or_free() { # identity from FITSY_SIM_OWNER (defaults to "anonymous", which any claim blocks)
   local me="${FITSY_SIM_OWNER:-anonymous}"
   local owner; owner="$(claim_owner)"
@@ -114,17 +136,31 @@ case "$CMD" in screenshot|logs) require_claim_or_free ;; esac
 case "$CMD" in
   claim)
     ME="${FITSY_SIM_OWNER:?export FITSY_SIM_OWNER=<agent-name> first}"
-    MIN=30; [ "${1:-}" = "--minutes" ] && MIN="${2:-30}"
+    MIN=30; DEAD_HOLDER_OK=0
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --minutes) MIN="${2:-30}"; if [ $# -ge 2 ]; then shift 2; else shift; fi ;;
+        --dead-holder-ok) DEAD_HOLDER_OK=1; shift ;;
+        *) shift ;;
+      esac
+    done
     case "$MIN" in ''|0|*[!0-9]*)
       printf '{"name":"sim-claim","status":"fail","summary":"--minutes must be a positive integer","fix":"sim claim --minutes 30"}
 '; exit 1;; esac
     OWNER="$(claim_owner)"
+    TAKEOVER=0
     if [ -n "$OWNER" ] && [ "$OWNER" != "$ME" ]; then
-      printf '{"name":"sim-claim","status":"fail","summary":"already claimed by %s","fix":"sim status shows the expiry; coordinate or wait"}
-' "$OWNER"
-      exit 1
+      if [ "$DEAD_HOLDER_OK" = 1 ]; then
+        HOLDER_PID="$(holder_pid_if_matching "$OWNER")"
+        if [ -n "$HOLDER_PID" ] && ! kill -0 "$HOLDER_PID" 2>/dev/null; then TAKEOVER=1; fi
+      fi
+      if [ "$TAKEOVER" != 1 ]; then
+        printf '{"name":"sim-claim","status":"fail","summary":"already claimed by %s","fix":"sim status shows the expiry; coordinate, wait, or pass --dead-holder-ok once you have verified preflight is ready on this head and %s'"'"'s process is dead"}
+' "$OWNER" "$OWNER"
+        exit 1
+      fi
     fi
-    claim_state claim "$ME" "$MIN"
+    claim_state claim "$ME" "$MIN" "$TAKEOVER"
     printf '{"name":"sim-claim","status":"pass","owner":"%s","minutes":%s}
 ' "$ME" "$MIN"
     ;;

@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import yaml from 'js-yaml';
-import { evidenceStore, prepareActiveEntitlement, sandboxState, verifyInactiveEntitlement } from './active-entitlement.mjs';
+import { evidenceStore, prepareActiveEntitlement, sandboxState, verifyInactiveEntitlement, verifyRemainingLifetime } from './active-entitlement.mjs';
 import { prepareEntitledEvidence, prepareBillingEvidence } from './product-flow.mjs';
 import { classifySimulatorFailure, withEnvironmentRetry } from './failure-policy.mjs';
 
@@ -168,6 +168,26 @@ test('native fixture failures retain their command diagnosis and respect the rem
           assert.deepEqual(JSON.parse(readFileSync(join(evidence, index ? 'attempt-2' : '', setup, 'commands-fixture.json'), 'utf8')), receipt);
       } finally { fetchMock.mock.restore(); }
     }
+  }
+});
+
+test('remaining-lifetime preflight accepts ample time, and rejects expired or nearly-exhausted entitlements', async () => {
+  const soon = new Date(now() + 5 * 60 * 1000).toISOString(); // under the 10-minute margin
+  for (const [provider, allowed] of [
+    [subscriber(new Date(now() + 3600000).toISOString()), true],
+    [subscriber(soon), false],
+    [subscriber('2020-01-01T00:00:00Z'), false],
+    [{ subscriber: { entitlements: {}, subscriptions: {} } }, false],
+  ]) {
+    const b = boundary([login, provider]);
+    const check = verifyRemainingLifetime({ built, env, now, fetchImpl: b.fetchImpl });
+    if (allowed) {
+      const proof = await check;
+      assert.equal(proof.fixture, 'entitled-dev'); assert.ok(proof.remainingMs >= 10 * 60 * 1000);
+      assert.doesNotMatch(JSON.stringify(proof), /fixture-token|test-password|test_fixture|seed-sim-active/);
+    } else await assert.rejects(check, /paid lifetime/);
+    assert.equal(b.calls.length, 2);
+    assert.ok(b.calls.every(call => !/sync|purchase|register/.test(call.url)));
   }
 });
 
