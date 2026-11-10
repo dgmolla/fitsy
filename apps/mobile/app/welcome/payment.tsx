@@ -19,7 +19,7 @@ import { annualSavingPercent, purchaseTerms, savingPercent } from '@/lib/purchas
 import { defaultTrialPlan, trialPresentation, type PlanId } from '@/lib/trialPresentation';
 import { TRIAL_CATALOG_POLICY } from '../../../../packages/shared/src/contracts/trialPolicy';
 import { devTrialVisualOffer, devTrialVisualScenario } from '@/lib/devTrialVisualOffer';
-import { clearOnboardingPreviewEntry } from '@/lib/onboardingPreviewEntry';
+import { clearOnboardingPreviewEntry, consumeShowWidgetTip } from '@/lib/onboardingPreviewEntry';
 import { usePaywallDiscovery } from '@/lib/usePaywallDiscovery';
 import { paywallVariantConfig, resolvePaywallVariant, type PaywallVariant } from '@/lib/paywallVariant';
 import { supabase } from '@/lib/supabase';
@@ -180,6 +180,11 @@ export default function PaymentScreen() {
     // itself is idempotent (a re-entered paywall must not double-count).
     claim();
     await recordOnboardingComplete(discounted);
+    // Only a candidate that actually passed through the onboarding preview
+    // (welcome/preview) gets the widget tip; a returning sign-in that reaches
+    // payment directly (e.g. a never-subscribed account) skips straight to
+    // its purchased destination, same as before.
+    if (await consumeShowWidgetTip()) { router.push('/welcome/widget'); return; }
     await openPurchasedDestination(navigation);
     await clearPaymentSignInContinuation();
   }

@@ -4,16 +4,14 @@ import React, { useCallback, useRef, useState } from 'react';
 import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
-import { AnimatedPress } from '@/components/AnimatedPress';
 import { EDITORIAL, TEXT } from '@/lib/brand';
-import { getOnboardingData, saveOnboardingField, type Goal } from '@/lib/onboardingStorage';
+import { getOnboardingData, saveOnboardingField } from '@/lib/onboardingStorage';
 import { getMacroTargets, getMacroTargetSource, saveMacroTargets, type StoredMacroTargets } from '@/lib/macroStorage';
 import { calculateMacros } from '@/lib/macroCalculator';
 import { useRouteContinuation } from '@/lib/useRouteContinuation';
 import { isCompleteTarget, macroCalories, parseTarget, settleTargetEdit } from '@/lib/macroEnergy';
 
 const FIELDS = [['calories', 'Calories', 'kcal'], ['protein', 'Protein', 'g'], ['carbs', 'Carbs', 'g'], ['fat', 'Fat', 'g']] as const;
-const GOALS = [['lose_fat', 'Lose weight'], ['performance', 'Improve performance'], ['build_muscle', 'Build muscle']] as const;
 const empty: StoredMacroTargets = { calories: '', protein: '', carbs: '', fat: '' };
 const asStrings = (values: ReturnType<typeof calculateMacros>): StoredMacroTargets => ({
   calories: String(values.calories), protein: String(values.protein), carbs: String(values.carbs), fat: String(values.fat),
@@ -63,14 +61,6 @@ function PlanReadyScreen() {
   const enteredEnergy = macroCalories({ protein: entered.protein ?? 0, carbs: entered.carbs ?? 0, fat: entered.fat ?? 0 });
   const calorieShortfall = incomplete && parseTarget(targets.calories) !== null
     && enteredEnergy > Number(targets.calories);
-  async function pickGoal(goal: Goal) {
-    const next = { ...data, goal };
-    setData(next);
-    setTargets(asStrings(calculateMacros(next)));
-    hadAllocation.current = true;
-    manuallyEdited.current = false;
-    await saveOnboardingField('goal', goal);
-  }
   async function proceed() {
     if (!ready || !valid || busy) return;
     const isCurrent = begin();
@@ -108,13 +98,6 @@ function PlanReadyScreen() {
         ))}
       </View>
       {calorieShortfall && <Text style={s.note} accessibilityLiveRegion="polite">Calories must cover the macros you entered.</Text>}
-      {data.targetMode !== 'known' && <View style={s.goals}>
-        <Text style={s.note}>Your goal · Tap to change</Text>
-        {GOALS.map(([goal, label]) => <AnimatedPress key={goal} style={[s.goal, data.goal === goal && s.selected]}
-          disabled={busy} onPress={() => pickGoal(goal)} accessibilityRole="button" accessibilityState={{ selected: data.goal === goal }} testID={`meal-goal-${goal}`}>
-          <Text style={[s.goalText, data.goal === goal && s.selectedText]}>{label}</Text>
-        </AnimatedPress>)}
-      </View>}
       <Text style={s.note}>Fitsy ranks dishes against these meal targets. Nutrition estimates and portion sizes can vary.</Text>
     </WelcomeScreen>
   );
@@ -126,11 +109,6 @@ const s = StyleSheet.create({
   inputRow: { flexDirection: 'row', alignItems: 'center' },
   input: { ...TEXT.headline, fontSize: 30, flex: 1, minHeight: 52 },
   unit: { ...TEXT.bodySmall },
-  goals: { gap: 8 },
-  goal: { borderRadius: 16, padding: 14, borderWidth: 1, borderColor: EDITORIAL.border },
-  selected: { backgroundColor: EDITORIAL.green },
-  goalText: { ...TEXT.body, textAlign: 'center' },
-  selectedText: { color: EDITORIAL.cream },
   note: { ...TEXT.bodySmall, fontSize: 12, lineHeight: 18, marginTop: 24 },
 });
 

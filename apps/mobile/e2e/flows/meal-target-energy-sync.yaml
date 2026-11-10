@@ -121,14 +121,8 @@ env:
     id: welcome-continue
 - tapOn:
     id: welcome-continue
-- extendedWaitUntil:
-    visible:
-      id: onboarding-widget-card
-    timeout: 15000
-- assertVisible:
-    id: onboarding-widget-example
-- tapOn:
-    id: welcome-skip
+# The widget screen moved to the end of onboarding (after payment); continue
+# now reaches the preview directly.
 - extendedWaitUntil:
     visible:
       id: coachmark-next

@@ -14,6 +14,7 @@ import { useEntitlementMismatch } from './useEntitlementMismatch';
 import { usePurchases } from './usePurchases';
 import { saveWidgetLocation } from './widgetSync';
 import { routeToPaywall } from './teaserGate';
+import { rememberShowWidgetTip } from './onboardingPreviewEntry';
 import { getDiscoveryMacroTargetSnapshot, saveDiscoveryMacroTargets, type MacroTargetMode } from './macroStorage';
 import { queueSavedProfileToServer, deliverQueuedProfile } from './profileSync';
 import { getPreviewSetup } from './previewSetup';
@@ -124,6 +125,7 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
     try {
       await saveOnboardingField('previewArea', `${location.lat}:${location.lng}`);
       await saveOnboardingField('previewCraving', query.trim());
+      if (isOnboardingPreview) await rememberShowWidgetTip();
       await routeToPaywall({ previewReturn: true, intent: {
         action: restaurant ? 'menu' : 'discovery', restaurantId: restaurant?.id,
         menuItemId: restaurant?.bestMatch?.menuItemId, mealName: restaurant?.bestMatch?.name,
@@ -134,7 +136,7 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
         areaName: location.name, query: query.trim(),
       } });
     } catch { Alert.alert('Could not open plans', 'Please try again. Your picks are still here.'); }
-  }, [location.lat, location.lng, location.name, query, finishTour, inputs, results, loading, error]);
+  }, [location.lat, location.lng, location.name, query, finishTour, inputs, results, loading, error, isOnboardingPreview]);
   const mismatchArgsRef = useRef({ inputs, location, query, doFetch });
   mismatchArgsRef.current = { inputs, location, query, doFetch };
   const mismatchRefetch = useCallback(() => {

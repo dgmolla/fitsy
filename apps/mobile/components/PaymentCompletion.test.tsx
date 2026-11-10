@@ -7,6 +7,7 @@ import Purchases, { type CustomerInfo, type PurchasesOffering } from 'react-nati
 import { act, fireEvent, renderRouter, waitFor } from 'expo-router/testing-library';
 import { router } from 'expo-router';
 import { getPaywallIntent, rememberPaywallIntent } from '../lib/paywallIntent';
+import { rememberShowWidgetTip } from '../lib/onboardingPreviewEntry';
 import { hasPaymentSignInContinuation, rememberPaymentSignInContinuation } from '../lib/paymentSignInContinuation';
 import { ONBOARDING_COMPLETE_KEY } from '../lib/onboardingCompletion';
 import { BOOT_VERDICT_CAP_MS } from '../lib/usePurchases';
@@ -325,4 +326,22 @@ test('an already identified buyer reaches native checkout', async () => {
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   expect(Purchases.getAppUserID).toHaveBeenCalled();
   expect(Purchases.purchasePackage).toHaveBeenCalledWith(annual);
+});
+
+test('a purchase completed during the onboarding preview pass shows the widget tip before its purchased destination', async () => {
+  await rememberShowWidgetTip();
+  const screen = await openPayment();
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/widget'));
+  expect(screen.getByTestId('widget-tip-screen')).toBeTruthy();
+  // The destination from the earlier preview-set intent is still pending,
+  // not lost or opened early.
+  expect(await getPaywallIntent()).toEqual(selected);
+});
+
+test('a returning sign-in that reaches payment directly never sees the widget tip', async () => {
+  const screen = await openPayment();
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/restaurant/varilla'));
+  expect(screen.queryByTestId('widget-tip-screen')).toBeNull();
 });
