@@ -3,13 +3,15 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, statSync, lstatSync, createReadStream, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { root, inputHash, impact, changedPaths, validateAcceptance, baseline, repoEnv, publicConfigIdentity, requiredPublicConfigKeys } from '../verify/product-flow.mjs';
+import { root, inputHash, impact, changedPaths, validateAcceptance, baseline, repoEnv, publicConfigIdentity, requiredPublicConfigKeys, selectedFlows } from '../verify/product-flow.mjs';
 import { validateMediaReceipt } from '../verify/media-integration.mjs';
 import { publicationArtifacts } from './publication-artifacts.mjs';
 import { readPreviousReportForReuse } from './evidence-mode.mjs';
 import { comparison, isMain, simulatorContext } from '../verify/impact-plan.mjs';
+const yaml = createRequire(import.meta.url)('js-yaml');
 const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { cwd: root, encoding: 'utf8', env: repoEnv(), maxBuffer: 16 * 1024 * 1024, ...opts })?.trim() || '';
 const assert = (ok, why) => { if (!ok) throw new Error(why); };
 async function fileDigest(file) {
@@ -29,6 +31,19 @@ async function archivedDigest(archive, file) {
   });
 }
 const repo = 'dgmolla/fitsy', context = 'product-flow/local';
+const billingFixtureNames = new Set(['empty-store', 'expired-subscription', 'entitled-dev']);
+// The billing walkthrough category defaults to the empty-store persona when no
+// changed-journey flow overrides it (see product-flow.mjs's prepareWalkthrough).
+export function requiredBillingFixtures(plan) {
+  const fixtures = new Set(plan.categories?.includes('billing') ? ['empty-store'] : []);
+  for (const name of selectedFlows(plan)) {
+    const source = readFileSync(resolve(root, 'apps/mobile/e2e/flows', `${name}.yaml`), 'utf8');
+    const header = yaml.load(source.split(/^---\s*$/m)[0]);
+    const fixture = (header.tags || []).filter(tag => tag.startsWith('fixture:')).map(tag => tag.slice(8))[0];
+    if (billingFixtureNames.has(fixture)) fixtures.add(fixture);
+  }
+  return [...fixtures].sort();
+}
 export function publicationPlan(evidenceDirectory, buildReceiptFile, paths = changedPaths('origin/main'), current = publicConfigIdentity(), options = {}) {
   const { recoverHistoricalReport = false, ...impactOptions } = options;
   const readReceipt = file => existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
@@ -128,6 +143,28 @@ export async function publishProductFlow(prNumber, {
     includeBaseline = process.argv.includes('--include-baseline');
   const plan = includeBaseline ? { ...resolved, flows: [...new Set([...(resolved.flows || []), ...baseline])].sort(), baseline } : resolved;
   const evidenceRequired = plan.required || includeBaseline;
+  if (preflight && evidenceRequired) {
+    const fixtures = requiredBillingFixtures(plan);
+    if (fixtures.length) {
+      let results;
+      try {
+        results = JSON.parse(execute(process.execPath, ['--env-file=apps/mobile/.env.development.local', '--input-type=module', '-e',
+          `import {verifyInactiveEntitlement, verifyRemainingLifetime} from ${JSON.stringify(new URL('./active-entitlement.mjs', import.meta.url).href)};
+const built = {storeMode:'test-store', configuration:'Debug', buildMode:'owned-metro-test-store'};
+const out = {};
+for (const fixture of ${JSON.stringify(fixtures)}) {
+  try { out[fixture] = { ok: true, ...(fixture === 'entitled-dev' ? await verifyRemainingLifetime({ built }) : await verifyInactiveEntitlement({ fixture, built })) }; }
+  catch (e) { out[fixture] = { ok: false, reason: e.message }; }
+}
+console.log(JSON.stringify(out));`],
+        { stdio: ['ignore', 'pipe', 'pipe'] }));
+      } catch (e) {
+        throw new Error(`Billing persona preflight could not run: ${e.message}`);
+      }
+      const failed = Object.entries(results).filter(([, r]) => !r.ok);
+      assert(!failed.length, `Billing persona preflight failed: ${failed.map(([fixture, r]) => `${fixture}: ${r.reason}`).join('; ')}`);
+    }
+  }
   if (preflight) return { status: 'ready', head, plan, mediaIntegration: media?.required ? 'required' : 'not_applicable',
     evidenceRequired, report: '.evidence/product-flow/report.json',
     requiredProof: evidenceRequired ? ['final-candidate report with source/app/native/JS/config/backend/store/runtime identities',
