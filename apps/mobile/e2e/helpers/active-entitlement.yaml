@@ -5,13 +5,17 @@ appId: com.fitsy.mobile
 - launchApp:
     clearState: true
     clearKeychain: true
-# Observe the launch transition before XCTest reads the first Welcome element.
-- waitForAnimationToEnd:
-    timeout: 10000
-- extendedWaitUntil:
-    visible:
-      id: welcome-login
-    timeout: 60000
+# Retry only the first read when XCTest rejects a stale launch-time AX element.
+# Authentication and purchase actions remain outside this read-only retry.
+- retry:
+    maxRetries: 2
+    commands:
+      - waitForAnimationToEnd:
+          timeout: 10000
+      - extendedWaitUntil:
+          visible:
+            id: welcome-login
+          timeout: 60000
 - tapOn:
     id: welcome-login
 - extendedWaitUntil:
