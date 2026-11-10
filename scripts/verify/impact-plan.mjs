@@ -331,6 +331,10 @@ function discoveryPreviewImpact(source, configKeys, range, cwd, env) {
         replace('function previewRowLabel', 'export function previewRowLabel');
         replace('  const m = result.bestMatch;\n', "  const m = result.bestMatch;\n  const published = m?.nutritionBasis === 'published';\n");
         replace('`, ${m.calories} kcal', "`, ${published ? 'Published' : 'Estimated'} nutrition, ${m.confidence.toLowerCase()} confidence, ${published ? '' : 'approximately '}${m.calories} kcal");
+        // The preview help slot keeps its width (it renders only in the onboarding preview row).
+        replace('import { StyleSheet, Text, TouchableOpacity, View,', 'import { Pressable, StyleSheet, Text, TouchableOpacity, View,');
+        replace("import { LinearGradient } from 'expo-linear-gradient';\n", "import { LinearGradient } from 'expo-linear-gradient';\nimport { Ionicons } from '@expo/vector-icons';\n");
+        expected = expected.replace(/\n*$/, '\n\n' + "// The help slot keeps its width while results load, so the guide copy never\n// re-wraps and the search field below it does not jump under a tap.\nexport function PreviewTourButton({ ready, onPress }: { ready: boolean; onPress: () => void }) {\n  if (!ready) return <View style={s.previewTourButton} testID=\"preview-show-tour-slot\" accessibilityElementsHidden importantForAccessibility=\"no-hide-descendants\" />;\n  return <Pressable onPress={onPress} style={s.previewTourButton} accessibilityRole=\"button\" accessibilityLabel=\"Show me how Fitsy works\" accessibilityHint=\"Replay the five preview tips\" testID=\"preview-show-tour\">\n    <Ionicons name=\"help-circle-outline\" size={20} color={EDITORIAL.green} />\n  </Pressable>;\n}\n");
       } else if (path.endsWith('/DiscoveryMapCard.tsx')) {
         replace('HeroMealContent, mealAccessibilitySummary', 'HeroMealContent, mealAccessibilitySummary, previewRowLabel');
         replace('{ result, locked, onPress', '{ result, locked, hideDishName = false, onboardingPreview = false, onPress');
@@ -400,6 +404,8 @@ function discoveryPreviewImpact(source, configKeys, range, cwd, env) {
         replace('mapControl={mapEnabled ?', 'mapControl={mapEnabled && !isOnboardingPreview ?');
         replace('      <CoachMarks\n', '      </>}\n      <CoachMarks\n');
         replace('      </>}\n      <FilterPopup', '      <FilterPopup');
+        replace("import { HeroCard, RestaurantSection } from './DiscoveryCards';", "import { HeroCard, PreviewTourButton, RestaurantSection } from './DiscoveryCards';");
+        replace("    {tourReady && <Pressable onPress={startTour} style={s.previewTourButton} accessibilityRole=\"button\" accessibilityLabel=\"Show me how Fitsy works\" accessibilityHint=\"Replay the five preview tips\" testID=\"preview-show-tour\">\n      <Ionicons name=\"help-circle-outline\" size={20} color={EDITORIAL.green} />\n    </Pressable>}", '    <PreviewTourButton ready={tourReady} onPress={startTour} />');
       }
       if (before === after || expected !== after) return null;
     }
