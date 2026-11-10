@@ -73,6 +73,33 @@ export async function verifyInactiveEntitlement({ fixture, built, env = process.
     verifiedAt: new Date(now()).toISOString(), expiresAt: state.expiresAt };
 }
 
+// A billing walkthrough that starts with an entitlement already close to
+// expiry can lapse mid-observation (see finishWalkthrough's post-hoc check);
+// catch that in preflight, before the native collector, not after it.
+export const MIN_ENTITLED_REMAINING_MS = 10 * 60 * 1000;
+
+export async function verifyRemainingLifetime({ built, env = process.env, fetchImpl = fetch, now = Date.now,
+  minRemainingMs = MIN_ENTITLED_REMAINING_MS }) {
+  const store = evidenceStore(built, env), origin = backendOrigin(env.EXPO_PUBLIC_API_URL);
+  const login = await jsonRequest(fetchImpl, `${origin}/api/auth/login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: env.EXPO_PUBLIC_DEV_LOGIN_EMAIL, password: env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD }),
+  });
+  if (!uuid.test(login.user?.id || '') || typeof login.token !== 'string' || !login.token)
+    throw new Error('Evidence login returned no account identity');
+  const body = await jsonRequest(fetchImpl, `${rcOrigin}/subscribers/${encodeURIComponent(login.user.id)}`, { headers: {
+    authorization: `Bearer ${store.key}`, 'x-platform': 'ios', ...(store.testStore ? { 'x-is-sandbox': 'true' } : {}),
+  } });
+  const state = sandboxState(body, store.testStore, now());
+  const remainingMs = state.expiresAt ? Date.parse(state.expiresAt) - now() : -Infinity;
+  if (!state.active || remainingMs < minRemainingMs)
+    throw new Error(state.active
+      ? `Entitled-dev fixture has only ${Math.round(remainingMs / 60000)} min of paid lifetime remaining; renew the Test Store purchase before this run`
+      : 'Entitled-dev fixture has no active paid lifetime; renew the Test Store purchase before this run');
+  return { version: 1, fixture: 'entitled-dev', active: true, expiresAt: state.expiresAt, remainingMs,
+    accountHash: createHash('sha256').update(login.user.id).digest('hex'), verifiedAt: new Date(now()).toISOString() };
+}
+
 export async function prepareActiveEntitlement({ built, env = process.env, renew, fetchImpl = fetch, now = Date.now }) {
   const store = evidenceStore(built, env), origin = backendOrigin(env.EXPO_PUBLIC_API_URL);
   const login = await jsonRequest(fetchImpl, `${origin}/api/auth/login`, {
