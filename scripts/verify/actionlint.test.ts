@@ -60,3 +60,25 @@ test.each(["true", "shadow"])("path selection distinguishes blocking=%s for a ne
   const entry = `  - name: future-check\n    script: future.sh\n    layer: 1\n    blocking: ${blocking}\n    runs: [ci]\n    paths: ["unrelated/**"]\n`;
   expect(select(entry)).toMatchObject({ name: "future-check", status: blocking === "shadow" ? "skipped" : "pass" });
 });
+test("Verify reuses cached lint tool archives only behind the pinned checksum", () => {
+  const yaml = require("js-yaml") as { load(text: string): unknown };
+  const workflow = yaml.load(readFileSync(join(root, ".github/workflows/verify.yml"), "utf8")) as {
+    jobs: Record<string, { steps: { name?: string; run?: string; uses?: string; with?: Record<string, string> }[] }>;
+  };
+  const steps = workflow.jobs.static!.steps;
+  const cache = steps.find(step => step.uses === "actions/cache@v4" && step.with?.path === "${{ runner.temp }}/lint-tools")!;
+  const install = steps.find(step => step.name === "Install required workflow lint tools")!;
+  expect(steps.indexOf(cache)).toBeLessThan(steps.indexOf(install));
+  const lines = install.run!.split("\n");
+  const checks = lines.filter(line => line.includes("sha256sum --check"));
+  expect(checks).toHaveLength(2);
+  for (const check of checks) {
+    // A cache hit skips only the download, never the checksum before extraction.
+    expect(check.trimStart().startsWith("echo ")).toBe(true);
+    const [, sha, archive] = check.match(/"([0-9a-f]{64}) {2}(\S+)"/)! as unknown as [string, string, string];
+    expect(archive.startsWith("$dir/")).toBe(true);
+    expect(cache.with!.key).toContain(sha.slice(0, 8));
+    expect(lines.findIndex(line => line.includes("tar ") && line.includes(archive))).toBeGreaterThan(lines.indexOf(check));
+  }
+  expect(install.run).toContain('dir="$RUNNER_TEMP/lint-tools"');
+});
