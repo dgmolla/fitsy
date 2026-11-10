@@ -21,6 +21,7 @@ import { ShuffleButton } from './ShuffleButton';
 import { useMapSearchFlag } from '@/lib/useMapSearchFlag';
 import { useFloatingNavClearance } from '@/lib/floatingNav';
 import { DiscoveryViewToggle } from './DiscoveryViewToggle';
+import { PreviewTourButton } from './PreviewTourButton';
 // Load the native map only on eligible iOS entries.
 const DiscoveryMap = React.lazy(async () => require('./DiscoveryMap') as typeof import('./DiscoveryMap'));
 const FREE_RESULT_COUNT = 3;
@@ -62,9 +63,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
   const previewIntro = isOnboardingPreview && <View style={s.previewIntro} testID="preview-guide">
     <Text style={s.previewHint}>{onboardingPitch(tried).preview}</Text>
     {mapEnabled && !showMap && <DiscoveryViewToggle map={false} onPress={() => setView('map')} />}
-    {tourReady && <Pressable onPress={startTour} style={s.previewTourButton} accessibilityRole="button" accessibilityLabel="Show me how Fitsy works" accessibilityHint="Replay the five preview tips" testID="preview-show-tour">
-      <Ionicons name="help-circle-outline" size={20} color={EDITORIAL.green} />
-    </Pressable>}
+    <PreviewTourButton ready={tourReady} onPress={startTour} />
   </View>;
   const header = (
     <>
