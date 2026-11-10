@@ -7,6 +7,7 @@ import { join, resolve } from 'node:path';
 import test from 'node:test';
 import yaml from 'js-yaml';
 import { actionsSelection } from '../verify/simulator-actions.mjs';
+import { simulatorBudget, simulatorFlows } from '../verify/impact-plan.mjs';
 import { fixtureAccounts, prepareRuntimeApp, selectFlows, validateRuntime } from './actions.mjs';
 
 const root = resolve(import.meta.dirname, '../..');
@@ -35,6 +36,26 @@ test('hosted PR and main use affected journeys, retain bounded control smoke and
     assert.equal(actionsSelection(['docs/ci-simulator.md'], 'pull_request', { pull_request: { labels: [{ name: label }] } }).scope, 'full');
   assert.throws(() => actionsSelection(null, 'pull_request', {}), /comparison/);
   assert.throws(() => actionsSelection([], 'unavailable', {}), /context/);
+});
+
+test('validated selections couple short and long job budgets without changing their scope or journeys', () => {
+  const catalog = simulatorFlows(root);
+  assert(catalog.length >= 10);
+  for (const [scope, flows, minutes] of [
+    ['none', [], 30], ['smoke', [], 30], ['flow', catalog.slice(0, 1), 30],
+    ['flow', catalog.slice(0, 3), 30], ['flow', catalog.slice(0, 4), 90],
+    ['flow', catalog.slice(0, 10), 90], ['full', catalog, 90],
+  ]) {
+    const selection = { scope, flows }, before = structuredClone(selection);
+    assert.deepEqual(simulatorBudget(selection), { timeoutMinutes: minutes, workerTimeoutSeconds: minutes * 60 });
+    assert.deepEqual(selection, before);
+  }
+  for (const selection of [null, {}, { scope: 'unknown', flows: [] }, { scope: 'flow', flows: [] },
+    { scope: 'flow', flows: 'map-search' }, { scope: 'flow', flows: ['missing'] },
+    { scope: 'flow', flows: ['map-search', 'map-search'] }, { scope: 'flow', flows: [null] },
+    { scope: 'smoke', flows: ['map-search'] }, { scope: 'none', flows: ['map-search'] },
+    { scope: 'full', flows: ['missing'] }])
+    assert.throws(() => simulatorBudget(selection), /Invalid simulator budget selection/);
 });
 
 test('local runner preflight checks real CLI inventory without confusing missing capacity with denied access', t => {
@@ -84,7 +105,7 @@ test('the real selector sees a mobile deletion beyond 300 unrelated changed file
     cwd: dir, env: { ...env, CI: 'true', GITHUB_EVENT_NAME: 'pull_request', GITHUB_EVENT_PATH: event, GITHUB_OUTPUT: output }, encoding: 'utf8',
   });
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(readFileSync(output, 'utf8'), 'required=true\nscope=full\n');
+  assert.equal(readFileSync(output, 'utf8'), 'required=true\nscope=full\ntimeout_minutes=90\nworker_timeout_seconds=5400\n');
   // The real runner recomputes source impact before any native command. A
   // stale/tampered smoke output cannot hide this unknown deleted dependency.
   const work = join(dir, 'fitsy-simulator-12-1');
@@ -119,9 +140,11 @@ test('workflow isolates PR cancellation from the single Mac queue and always cle
   assert.equal(workflow.concurrency.group, 'simulator-pr-${{ github.event.pull_request.number || github.sha }}');
   assert.deepEqual(workflow.jobs.mac.concurrency, { group: 'fitsy-simulator', 'cancel-in-progress': false, queue: 'max' });
   assert.deepEqual(workflow.jobs.mac['runs-on'], ['self-hosted', 'macOS', 'fitsy-sim']);
-  assert.equal(workflow.jobs.mac['timeout-minutes'], "${{ needs.select.outputs.scope == 'full' && 90 || 30 }}");
+  assert.equal(workflow.jobs.select.outputs.timeout_minutes, '${{ steps.plan.outputs.timeout_minutes }}');
+  assert.equal(workflow.jobs.select.outputs.worker_timeout_seconds, '${{ steps.plan.outputs.worker_timeout_seconds }}');
+  assert.equal(workflow.jobs.mac['timeout-minutes'], '${{ fromJSON(needs.select.outputs.timeout_minutes) }}');
   assert.equal(workflow.jobs.mac.env.FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS,
-    "${{ needs.select.outputs.scope == 'full' && '5400' || '1800' }}");
+    '${{ needs.select.outputs.worker_timeout_seconds }}');
   assert.match(workflow.jobs.mac.steps.at(-1).if, /always\(\)/);
   assert.match(workflow.jobs.simulator.if, /always\(\)/);
   assert.equal(workflow.on.pull_request.paths, undefined);
@@ -196,7 +219,12 @@ test('Expo regenerates runtime RevenueCat config without changing the cached app
   assert.equal(signed, true);
 });
 
-for (const [workerSeconds, leaseMinutes] of [[1800, 35], [5400, 95]]) test(`CLI boot claims the ${leaseMinutes}-minute worker lease and cleans up only its device on failure`, t => {
+for (const [name, selection, leaseMinutes] of [
+  ['short', actionsSelection(['apps/mobile/app/notification-settings.tsx'], 'push', {}), 35],
+  ['ten', { scope: 'flow', flows: simulatorFlows(root).slice(0, 10) }, 95],
+  ['full', actionsSelection(['apps/mobile/new-unmapped.ts'], 'push', {}), 95],
+]) test(`CLI boot consumes the ${name} selection's ${leaseMinutes}-minute lease and cleans up only its device on failure`, t => {
+  const { workerTimeoutSeconds: workerSeconds } = simulatorBudget(selection);
   const dir = temporary(t), bin = join(dir, 'bin'), work = join(dir, 'fitsy-simulator-12-1'), log = join(dir, 'calls');
   mkdirSync(bin); mkdirSync(join(dir, 'apps/mobile'), { recursive: true });
   const udid = '11111111-1111-1111-1111-111111111111';

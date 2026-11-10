@@ -1,4 +1,4 @@
-import { act, deferred, ExpoLocation, fireEvent, installPurchasedAccount, renderJourney, response, routes, SecureStore, waitFor, withAccountProfile } from './OnboardingNavigationHarness';
+import { act, deferred, ExpoLocation, fireEvent, getPaywallIntent, installPurchasedAccount, renderJourney, response, routes, saveOnboardingField, SecureStore, waitFor, withAccountProfile } from './OnboardingNavigationHarness';
 import React from 'react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -6,10 +6,12 @@ import { runInNewContext } from 'node:vm';
 import { Platform, ScrollView, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { within } from '@testing-library/react-native';
 import PostHog from 'posthog-react-native';
+import Purchases, { type CustomerInfo } from 'react-native-purchases';
 import type { RestaurantResult } from '@fitsy/shared';
 import Search from '../app/(tabs)/search';
 import Restaurant from '../app/restaurant/[id]';
-import { DiscoveryScreen } from './DiscoveryScreen';
+import Preview from '../app/welcome/preview';
+import { markPreviewTourSeen } from '../lib/teaserGate';
 import { saveDiscoveryMacroTargets } from '../lib/macroStorage';
 import { FALLBACK_LAT, FALLBACK_LNG, MANUAL_LOCATION_KEY } from '../lib/useLocation';
 import { __resetForTesting } from '../lib/analytics';
@@ -551,11 +553,71 @@ it('offers the list and a real photo placeholder when provider map data is incom
   await screen.findByText('Green Kitchen');
 });
 
-it('keeps the guided onboarding preview on its existing list even with local opt-in', async () => {
-  const screen = renderJourney('/welcome/preview?mapDebug=1', { ...routes, 'welcome/preview': () => <DiscoveryScreen onboardingPreview /> });
-  await screen.findByTestId('discovery-search');
-  expect(screen.queryByTestId('discovery-map')).toBeNull();
-  expect(screen.queryByTestId('discovery-view-toggle')).toBeNull();
+it('recovers the production map preview, preserves sample disclosure, and carries the selected pick to plans', async () => {
+  Object.defineProperty(globalThis, '__DEV__', { value: false, configurable: true });
+  flag = false;
+  const info = { entitlements: { active: {}, all: {} } } as unknown as CustomerInfo;
+  jest.mocked(Purchases.getCustomerInfo).mockResolvedValue(info);
+  jest.mocked(Purchases.logIn).mockResolvedValue({ customerInfo: info, created: false });
+  await saveOnboardingField('goal', 'lose_fat');
+  await saveOnboardingField('area', { lat: 34.04, lng: -118.24, name: 'DTLA', source: 'manual' });
+  markPreviewTourSeen();
+  rows = restaurants.slice(0, 3).map((row, index) => ({ ...row, bestMatch: {
+    menuItemId: `sample-${index}`, name: `Meal ${index}`, calories: index === 1 ? 531 : 600 + index,
+    proteinG: 40, carbsG: 60, fatG: 20, confidence: index === 1 ? 'LOW' : 'HIGH', matchScore: index,
+    nutritionBasis: index === 1 ? 'estimated' : 'published',
+  } }));
+  let offline = true;
+  global.fetch = jest.fn(withAccountProfile(async input => {
+    const url = new URL(input);
+    requests.push(url);
+    if (url.pathname === '/api/restaurants/preview') {
+      if (offline) throw new TypeError('Offline');
+      return response({ data: rows, meta: { nearbyDishCount: 12, radiusMiles: 3 } });
+    }
+    return response({ active: false, verdict: 'never_subscribed', synced: true, stale: false, lastRcVerifiedAt: new Date().toISOString() });
+  }));
+  const screen = renderJourney('/welcome/preview', { ...routes, 'welcome/preview': () => <Preview /> });
+  await screen.findByTestId('preview-retry');
+  expect(screen.getByTestId('discovery-map')).toBeTruthy();
+  expect(screen.getByTestId('preview-back')).toBeTruthy();
+  expect(screen.getByLabelText('Onboarding progress').props.accessibilityValue.now).toBe(75);
+  offline = false;
+  await act(async () => fireEvent.press(screen.getByTestId('preview-retry')));
+  await screen.findByTestId('map-card-2');
+  expect(screen.queryByTestId('map-card-3')).toBeNull();
+  expect(screen.queryByTestId('map-load-more')).toBeNull();
+  expect(screen.queryByTestId('shuffle-button')).toBeNull();
+  expect(screen.getByText('Meal 0')).toBeTruthy();
+  expect(screen.queryByText('Meal 1')).toBeNull();
+  expect(screen.getByTestId('map-card-1').props.accessibilityLabel).not.toContain('Meal 1');
+  expect(screen.getByTestId('map-card-1').props.accessibilityLabel).toContain('Estimated nutrition, low confidence');
+  expect(screen.getByTestId('map-card-1').props.accessibilityLabel).toContain('approximately 531 kcal');
+  expect(screen.getByTestId('map-card-2').props.accessibilityLabel).toContain('Published nutrition, high confidence');
+  expect(screen.getByTestId('map-card-2').props.accessibilityLabel).not.toContain('approximately');
+  expect(screen.getByTestId('preview-hidden-dish-spot-1', { includeHiddenElements: true })).toBeTruthy();
+  expect(screen.getByTestId('locked-value-cta')).toBeTruthy();
+  await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
+  await screen.findByTestId('discovery-list');
+  expect(screen.getByTestId('discovery-location')).toBeTruthy();
+  expect(screen.getByTestId('preview-pick-2').props.accessibilityLabel).toContain('Estimated nutrition, low confidence, approximately 531 kcal');
+  expect(screen.getByTestId('preview-pick-2').props.accessibilityLabel).not.toContain('Meal 1');
+  expect(screen.getAllByTestId('discovery-view-toggle')).toHaveLength(1);
+  await act(async () => fireEvent.press(screen.getByTestId('discovery-view-toggle')));
+  await screen.findByTestId('map-pin-1');
+  await act(async () => fireEvent.press(screen.getByTestId('map-pin-1')));
+  await act(async () => fireEvent.press(screen.getByTestId('map-preview-open')));
+  await screen.findByText('Payment plans');
+  expect(await getPaywallIntent()).toMatchObject({ action: 'menu', restaurantId: 'spot-1', menuItemId: 'sample-1',
+    area: { lat: 34.04, lng: -118.24 }, targets: values });
+  expect(screen.getPathname()).toBe('/welcome/payment');
+  expect(searchRequests()).toHaveLength(0);
+  const previewRequests = requests.filter(url => url.pathname === '/api/restaurants/preview');
+  expect(previewRequests.length).toBeGreaterThan(0);
+  for (const url of previewRequests) {
+    expect(Object.fromEntries(url.searchParams)).toMatchObject({ guided: '1', lat: '34.04', lng: '-118.24' });
+    expect(url.searchParams.has('cursor')).toBe(false);
+  }
 });
 
 it.each([undefined, false, 'true', 'control'])('fails closed for a non-boolean map flag (%s)', async value => {
@@ -566,16 +628,14 @@ it.each([undefined, false, 'true', 'control'])('fails closed for a non-boolean m
   expect(screen.queryByTestId('discovery-view-toggle')).toBeNull();
 });
 
-it.each(['', '&mapDebug=1&shuffleDebug=1'])('offers production iOS map and Shuffle from the list without remote opt-ins (%s)', async link => {
+it.each(['', '&mapDebug=1&shuffleDebug=1'])('opens production iOS on the map with Shuffle and list access without remote opt-ins (%s)', async link => {
   flag = false;
   shuffleFlag = false;
   Object.defineProperty(globalThis, '__DEV__', { value: false, configurable: true });
   const screen = open(`/search?query=meal${link}`);
-  await screen.findByTestId('discovery-hero');
-  expect(screen.queryByTestId('discovery-map')).toBeNull();
-  expect(screen.getByTestId('shuffle-button').props.accessibilityState.disabled).toBe(false);
-  await act(async () => fireEvent.press(screen.getByTestId('discovery-view-toggle')));
   await screen.findByTestId('map-pin-0');
+  expect(screen.queryByTestId('discovery-list')).toBeNull();
+  expect(screen.getByTestId('shuffle-button').props.accessibilityState.disabled).toBe(false);
   expect(screen.getByLabelText('Search: meal')).toBeTruthy();
   expect(within(screen.getByTestId('map-goals')).getByText('Macros')).toBeTruthy();
   const beforeShuffle = searchRequests().length;
@@ -586,6 +646,8 @@ it.each(['', '&mapDebug=1&shuffleDebug=1'])('offers production iOS map and Shuff
   await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
   expect(screen.getByTestId('discovery-search').props.value).toBe('meal');
   expect(screen.getByTestId('shuffle-button')).toBeTruthy();
+  await act(async () => fireEvent.press(screen.getByTestId('discovery-view-toggle')));
+  await screen.findByTestId('map-pin-0');
 });
 
 it.each([false, true])('keeps Android on the list, including debug links (dev=%s)', async dev => {
