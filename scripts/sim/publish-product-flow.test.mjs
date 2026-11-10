@@ -1,20 +1,51 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { requiredBillingFixtures } from './publish-product-flow.mjs';
 
-test('billing category defaults to the empty-store persona with no selected flows', () => {
-  assert.deepEqual(requiredBillingFixtures({ categories: ['billing'], flows: [] }), ['empty-store']);
+// journeyFixture requires FITSY_E2E_FIXTURES for any selected flow carrying a
+// fixture tag (every real selected flow does), so build one real config per
+// test with its own account per persona, matching what an operator sets up.
+function withFixtures(t, entries) {
+  const dir = mkdtempSync(join(tmpdir(), 'fitsy-billing-fixtures-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const fixtures = {};
+  for (const [name, { email, password }] of Object.entries(entries)) {
+    const envFile = join(dir, `${name}.env`);
+    writeFileSync(envFile, `EXPO_PUBLIC_DEV_LOGIN_EMAIL=${email}\nEXPO_PUBLIC_DEV_LOGIN_PASSWORD=${password}\n`);
+    fixtures[name] = { prepare: ['/bin/true'], envFile };
+  }
+  const configFile = join(dir, 'fixtures.json');
+  writeFileSync(configFile, JSON.stringify({ version: 1, fixtures }));
+  const previous = process.env.FITSY_E2E_FIXTURES;
+  process.env.FITSY_E2E_FIXTURES = configFile;
+  t.after(() => { if (previous === undefined) delete process.env.FITSY_E2E_FIXTURES; else process.env.FITSY_E2E_FIXTURES = previous; });
+}
+
+test('billing category defaults to the empty-store persona with no env override and no fixture config needed', () => {
+  assert.deepEqual(requiredBillingFixtures({ categories: ['billing'], flows: [] }), [{ name: 'empty-store', env: {} }]);
 });
 
-test('a selected flow tagged fixture:entitled-dev is included even without the billing category', () => {
-  assert.deepEqual(requiredBillingFixtures({ categories: ['discovery'], flows: ['log-meal'] }), ['entitled-dev']);
+test('a selected flow tagged fixture:entitled-dev resolves its own configured account, not the canonical login', t => {
+  withFixtures(t, { 'entitled-dev': { email: 'entitled@fitsy.dev', password: 'entitled-pw' } });
+  assert.deepEqual(requiredBillingFixtures({ categories: ['discovery'], flows: ['log-meal'] }),
+    [{ name: 'entitled-dev', env: { EXPO_PUBLIC_DEV_LOGIN_EMAIL: 'entitled@fitsy.dev', EXPO_PUBLIC_DEV_LOGIN_PASSWORD: 'entitled-pw' } }]);
 });
 
-test('a selected flow without a billing-relevant fixture tag contributes nothing', () => {
+test('a selected flow tagged with a non-billing fixture contributes nothing and never requires that fixture to be configured', () => {
   assert.deepEqual(requiredBillingFixtures({ categories: ['discovery'], flows: ['onboarding-search-highlight'] }), []);
 });
 
-test('billing category plus an entitled-dev flow reports both personas, deduplicated and sorted', () => {
-  assert.deepEqual(requiredBillingFixtures({ categories: ['billing', 'discovery'], flows: ['log-meal', 'map-search'] }),
-    ['empty-store', 'entitled-dev']);
+test('billing category plus an entitled-dev flow reports both personas, each with its own distinct account', t => {
+  withFixtures(t, { 'entitled-dev': { email: 'entitled@fitsy.dev', password: 'entitled-pw' } });
+  const result = requiredBillingFixtures({ categories: ['billing', 'discovery'], flows: ['log-meal', 'map-search'] });
+  assert.deepEqual(result, [
+    { name: 'empty-store', env: {} },
+    { name: 'entitled-dev', env: { EXPO_PUBLIC_DEV_LOGIN_EMAIL: 'entitled@fitsy.dev', EXPO_PUBLIC_DEV_LOGIN_PASSWORD: 'entitled-pw' } },
+  ]);
+  // The regression this guards: empty-store and entitled-dev cannot be the
+  // same account, so their resolved overrides must differ.
+  assert.notDeepEqual(result[0].env, result[1].env);
 });

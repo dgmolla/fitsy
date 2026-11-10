@@ -7,6 +7,7 @@ import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { root, inputHash, impact, changedPaths, validateAcceptance, baseline, repoEnv, publicConfigIdentity, requiredPublicConfigKeys, selectedFlows } from '../verify/product-flow.mjs';
+import { journeyFixture } from './journey-fixtures.mjs';
 import { validateMediaReceipt } from '../verify/media-integration.mjs';
 import { publicationArtifacts } from './publication-artifacts.mjs';
 import { readPreviousReportForReuse } from './evidence-mode.mjs';
@@ -32,17 +33,20 @@ async function archivedDigest(archive, file) {
 }
 const repo = 'dgmolla/fitsy', context = 'product-flow/local';
 const billingFixtureNames = new Set(['empty-store', 'expired-subscription', 'entitled-dev']);
-// The billing walkthrough category defaults to the empty-store persona when no
-// changed-journey flow overrides it (see product-flow.mjs's prepareWalkthrough).
+// The billing walkthrough category defaults to the empty-store persona, with
+// the same empty env override as prepareWalkthrough's own 'default' journey,
+// when no changed-journey flow overrides it (see product-flow.mjs).
 export function requiredBillingFixtures(plan) {
-  const fixtures = new Set(plan.categories?.includes('billing') ? ['empty-store'] : []);
+  const fixtures = new Map(plan.categories?.includes('billing') ? [['empty-store', {}]] : []);
   for (const name of selectedFlows(plan)) {
     const source = readFileSync(resolve(root, 'apps/mobile/e2e/flows', `${name}.yaml`), 'utf8');
-    const header = yaml.load(source.split(/^---\s*$/m)[0]);
-    const fixture = (header.tags || []).filter(tag => tag.startsWith('fixture:')).map(tag => tag.slice(8))[0];
-    if (billingFixtureNames.has(fixture)) fixtures.add(fixture);
+    const tags = yaml.load(source.split(/^---\s*$/m)[0]).tags || [];
+    // Only resolve (and require FITSY_E2E_FIXTURES for) a fixture this check
+    // actually cares about; an unrelated persona's own config stays optional.
+    const fixtureName = tags.filter(tag => tag.startsWith('fixture:')).map(tag => tag.slice(8))[0];
+    if (billingFixtureNames.has(fixtureName)) fixtures.set(fixtureName, journeyFixture({ tags }).env);
   }
-  return [...fixtures].sort();
+  return [...fixtures.entries()].map(([name, env]) => ({ name, env })).sort((a, b) => a.name.localeCompare(b.name));
 }
 export function publicationPlan(evidenceDirectory, buildReceiptFile, paths = changedPaths('origin/main'), current = publicConfigIdentity(), options = {}) {
   const { recoverHistoricalReport = false, ...impactOptions } = options;
@@ -152,9 +156,10 @@ export async function publishProductFlow(prNumber, {
           `import {verifyInactiveEntitlement, verifyRemainingLifetime} from ${JSON.stringify(new URL('./active-entitlement.mjs', import.meta.url).href)};
 const built = {storeMode:'test-store', configuration:'Debug', buildMode:'owned-metro-test-store'};
 const out = {};
-for (const fixture of ${JSON.stringify(fixtures)}) {
-  try { out[fixture] = { ok: true, ...(fixture === 'entitled-dev' ? await verifyRemainingLifetime({ built }) : await verifyInactiveEntitlement({ fixture, built })) }; }
-  catch (e) { out[fixture] = { ok: false, reason: e.message }; }
+for (const {name, env: override} of ${JSON.stringify(fixtures)}) {
+  const env = { ...process.env, ...override };
+  try { out[name] = { ok: true, ...(name === 'entitled-dev' ? await verifyRemainingLifetime({ built, env }) : await verifyInactiveEntitlement({ fixture: name, built, env })) }; }
+  catch (e) { out[name] = { ok: false, reason: e.message }; }
 }
 console.log(JSON.stringify(out));`],
         { stdio: ['ignore', 'pipe', 'pipe'] }));
