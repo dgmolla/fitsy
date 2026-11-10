@@ -228,6 +228,9 @@ export async function main(action) {
     writeFileSync(marker, JSON.stringify({ udid }));
     command('xcrun', ['simctl', 'boot', udid]);
     command('xcrun', ['simctl', 'bootstatus', udid, '-b']);
+    // iOS's one-time "slide to type" sheet steals the first keystrokes typed
+    // into any text field; pre-dismiss it so Maestro inputText is never lost.
+    command('xcrun', ['simctl', 'spawn', udid, 'defaults', 'write', 'com.apple.keyboard.preferences', 'DidShowContinuousPathIntroduction', '-bool', 'true']);
     return;
   }
   if (!existsSync(marker)) throw new Error('Simulator has not been claimed by this job');

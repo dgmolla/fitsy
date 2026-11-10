@@ -247,6 +247,27 @@ if(args.includes('boot')) process.exit(1);\n`;
   assert.equal(calls.some(args => args.includes('all') || args.includes('delete')), false);
 });
 
+test('CLI boot pre-dismisses the iOS slide-to-type sheet after the device is ready', t => {
+  const dir = temporary(t), bin = join(dir, 'bin'), log = join(dir, 'calls');
+  mkdirSync(bin); mkdirSync(join(dir, 'apps/mobile'), { recursive: true });
+  const udid = '11111111-1111-1111-1111-111111111111';
+  const executable = `#!${process.execPath}\nconst fs=require('node:fs'); const args=process.argv.slice(2); fs.appendFileSync(${JSON.stringify(log)},JSON.stringify(args)+'\\n');
+if(args.includes('list')) console.log(JSON.stringify({devices:{ios:[{udid:${JSON.stringify(udid)},state:'Shutdown',deviceTypeIdentifier:'com.apple.CoreSimulator.SimDeviceType.iPhone-15'}]}}));\n`;
+  for (const name of ['bash', 'xcrun']) writeFileSync(join(bin, name), executable, { mode: 0o755 });
+  const result = spawnSync(process.execPath, [join(root, 'scripts/sim/actions.mjs'), 'boot'], { cwd: dir, encoding: 'utf8',
+    env: { ...env, PATH: `${bin}:${env.PATH}`, FITSY_PRODUCT_ROOT: dir, GITHUB_WORKSPACE: dir, GITHUB_ACTIONS: 'true', RUNNER_OS: 'macOS',
+      RUNNER_TEMP: dir, GITHUB_RUN_ID: '13', GITHUB_RUN_ATTEMPT: '1', FITSY_XCTEST_SIM_UDID: udid,
+      FITSY_SIM_OWNER: 'actions-13-1', FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS: '1800' } });
+  assert.equal(result.status, 0, result.stderr);
+  const calls = readFileSync(log, 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  const bootIndex = calls.findIndex(args => args.join(' ') === `simctl boot ${udid}`);
+  const statusIndex = calls.findIndex(args => args.join(' ') === `simctl bootstatus ${udid} -b`);
+  const defaultsIndex = calls.findIndex(args =>
+    args.join(' ') === `simctl spawn ${udid} defaults write com.apple.keyboard.preferences DidShowContinuousPathIntroduction -bool true`);
+  assert(bootIndex >= 0 && statusIndex >= 0 && defaultsIndex >= 0, JSON.stringify(calls));
+  assert(bootIndex < statusIndex && statusIndex < defaultsIndex, 'the keyboard default must be written only after the device reports fully booted');
+});
+
 test('real cleanup retains failed Maestro bytes privately and fails closed when retention is unavailable', t => {
   const dir = temporary(t), checkout = join(dir, 'checkout'), temp = join(dir, 'runner-temp');
   mkdirSync(checkout); mkdirSync(temp);

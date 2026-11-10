@@ -187,6 +187,10 @@ case "$CMD" in
       xcrun simctl boot "$UDID"
       open -a Simulator --background || true
     fi
+    # iOS's one-time "slide to type" sheet steals the first keystrokes typed
+    # into any text field; pre-dismiss it so Maestro inputText is never lost.
+    # Idempotent: writing the same default twice is a no-op the second time.
+    xcrun simctl spawn "$UDID" defaults write com.apple.keyboard.preferences DidShowContinuousPathIntroduction -bool true
     printf '{"name":"sim-boot","status":"pass","udid":"%s"}\n' "$UDID"
     ;;
   install)
