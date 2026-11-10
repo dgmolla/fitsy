@@ -24,8 +24,14 @@ function withFixtures(t, entries) {
   t.after(() => { if (previous === undefined) delete process.env.FITSY_E2E_FIXTURES; else process.env.FITSY_E2E_FIXTURES = previous; });
 }
 
-test('billing category defaults to the empty-store persona with no env override and no fixture config needed', () => {
+test('billing category checks the configured caller when no fixtures file exists at all', () => {
   assert.deepEqual(requiredBillingFixtures({ categories: ['billing'], flows: [] }), [{ name: 'empty-store', env: {} }]);
+});
+
+test('billing category prefers a configured fixtures file\'s own empty-store account over the (likely entitled) caller', t => {
+  withFixtures(t, { 'empty-store': { email: 'empty@fitsy.dev', password: 'empty-pw' } });
+  assert.deepEqual(requiredBillingFixtures({ categories: ['billing'], flows: [] }),
+    [{ name: 'empty-store', env: { EXPO_PUBLIC_DEV_LOGIN_EMAIL: 'empty@fitsy.dev', EXPO_PUBLIC_DEV_LOGIN_PASSWORD: 'empty-pw' } }]);
 });
 
 test('a selected flow tagged fixture:entitled-dev resolves its own configured account, not the canonical login', t => {
@@ -39,10 +45,13 @@ test('a selected flow tagged with a non-billing fixture contributes nothing and 
 });
 
 test('billing category plus an entitled-dev flow reports both personas, each with its own distinct account', t => {
-  withFixtures(t, { 'entitled-dev': { email: 'entitled@fitsy.dev', password: 'entitled-pw' } });
+  withFixtures(t, {
+    'entitled-dev': { email: 'entitled@fitsy.dev', password: 'entitled-pw' },
+    'empty-store': { email: 'empty@fitsy.dev', password: 'empty-pw' },
+  });
   const result = requiredBillingFixtures({ categories: ['billing', 'discovery'], flows: ['log-meal', 'map-search'] });
   assert.deepEqual(result, [
-    { name: 'empty-store', env: {} },
+    { name: 'empty-store', env: { EXPO_PUBLIC_DEV_LOGIN_EMAIL: 'empty@fitsy.dev', EXPO_PUBLIC_DEV_LOGIN_PASSWORD: 'empty-pw' } },
     { name: 'entitled-dev', env: { EXPO_PUBLIC_DEV_LOGIN_EMAIL: 'entitled@fitsy.dev', EXPO_PUBLIC_DEV_LOGIN_PASSWORD: 'entitled-pw' } },
   ]);
   // The regression this guards: empty-store and entitled-dev cannot be the
