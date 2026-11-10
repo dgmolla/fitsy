@@ -33,11 +33,17 @@ async function archivedDigest(archive, file) {
 }
 const repo = 'dgmolla/fitsy', context = 'product-flow/local';
 const billingFixtureNames = new Set(['empty-store', 'expired-subscription', 'entitled-dev']);
-// The billing walkthrough category defaults to the empty-store persona, with
-// the same empty env override as prepareWalkthrough's own 'default' journey,
-// when no changed-journey flow overrides it (see product-flow.mjs).
+// The billing walkthrough category defaults to the empty-store persona when
+// no changed-journey flow overrides it (see product-flow.mjs). An operator
+// with a real fixtures file almost always has its own empty-store entry
+// (a genuinely empty account); prefer that over the configured caller, which
+// is typically entitled and can never satisfy an empty-history assertion.
+// With no fixtures file configured at all, keep checking the caller, exactly
+// as prepareWalkthrough's own 'default' journey (env: {}) does today.
 export function requiredBillingFixtures(plan) {
-  const fixtures = new Map(plan.categories?.includes('billing') ? [['empty-store', {}]] : []);
+  const fixtures = new Map();
+  if (plan.categories?.includes('billing'))
+    fixtures.set('empty-store', process.env.FITSY_E2E_FIXTURES ? journeyFixture({ tags: ['fixture:empty-store'] }).env : {});
   for (const name of selectedFlows(plan)) {
     const source = readFileSync(resolve(root, 'apps/mobile/e2e/flows', `${name}.yaml`), 'utf8');
     const tags = yaml.load(source.split(/^---\s*$/m)[0]).tags || [];
