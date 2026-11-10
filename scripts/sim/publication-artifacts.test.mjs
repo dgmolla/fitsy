@@ -19,6 +19,23 @@ const publishProductFlow = (number, options) => publishWithMediaEvidence(number,
 
 test('final collection preflights the actual child environment and publisher inputs without native work or status writes', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'fitsy-final-preflight-'));
+  // The full-scope plan this test exercises selects real entitled-dev flows;
+  // requiredBillingFixtures resolves their configured fixture like the real
+  // collector does, so it needs one here too.
+  const entitledEnvFile = join(dir, 'entitled-dev.env');
+  writeFileSync(entitledEnvFile, 'EXPO_PUBLIC_DEV_LOGIN_EMAIL=entitled@fitsy.dev\nEXPO_PUBLIC_DEV_LOGIN_PASSWORD=entitled-pw\n');
+  const expiredEnvFile = join(dir, 'expired-subscription.env');
+  writeFileSync(expiredEnvFile, 'EXPO_PUBLIC_DEV_LOGIN_EMAIL=expired@fitsy.dev\nEXPO_PUBLIC_DEV_LOGIN_PASSWORD=expired-pw\n');
+  const emptyStoreEnvFile = join(dir, 'empty-store.env');
+  writeFileSync(emptyStoreEnvFile, 'EXPO_PUBLIC_DEV_LOGIN_EMAIL=empty@fitsy.dev\nEXPO_PUBLIC_DEV_LOGIN_PASSWORD=empty-pw\n');
+  const fixturesFile = join(dir, 'fixtures.json');
+  writeFileSync(fixturesFile, JSON.stringify({ version: 1, fixtures: {
+    'entitled-dev': { prepare: ['/bin/true'], envFile: entitledEnvFile },
+    'expired-subscription': { prepare: ['/bin/true'], envFile: expiredEnvFile },
+    'empty-store': { prepare: ['/bin/true'], envFile: emptyStoreEnvFile },
+  } }));
+  const previousFixtures = process.env.FITSY_E2E_FIXTURES;
+  process.env.FITSY_E2E_FIXTURES = fixturesFile;
   try {
     const imported = spawnSync(process.execPath, ['--input-type=module', '-'], { encoding: 'utf8',
       input: `await import(${JSON.stringify(join(root, 'scripts/sim/publish-product-flow.mjs'))});` });
@@ -103,7 +120,10 @@ test('final collection preflights the actual child environment and publisher inp
     assert.equal(readFileSync(interrupted, 'utf8'), '{', 'preflight preserves interrupted evidence for the collector archive');
     assert.throws(() => publicationPlan(dir, join(dir, 'no-build.json'), ['docs/guide.md'], { configHash: 'same' }), SyntaxError,
       'ordinary publication still rejects the malformed report');
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    if (previousFixtures === undefined) delete process.env.FITSY_E2E_FIXTURES; else process.env.FITSY_E2E_FIXTURES = previousFixtures;
+  }
 });
 
 test('publication preserves needs-sim and release overrides alongside affected selection', () => {
