@@ -1,11 +1,9 @@
-jest.unmock('react-native');
-
+import './OnboardingNavigationHarness';
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
-import { PreviewTourButton } from './PreviewTourButton';
+import { PreviewTourButton } from './DiscoveryCards';
 
-jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 
 // #761: unmounting the help button while results load re-wrapped the guide copy
 // and moved the search field 13pt under a tap. The slot must keep its width.

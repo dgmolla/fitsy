@@ -1,6 +1,7 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, type ViewStyle, type ImageRequireSource, type StyleProp, type TextStyle } from 'react-native';
+import { Pressable, StyleSheet, Text, TouchableOpacity, View, type ViewStyle, type ImageRequireSource, type StyleProp, type TextStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import type { RestaurantResult } from '@fitsy/shared';
 import { EDITORIAL } from '@/lib/brand';
@@ -291,4 +292,13 @@ export function previewRowLabel(result: RestaurantResult): string {
   const m = result.bestMatch;
   const published = m?.nutritionBasis === 'published';
   return `${result.name}${m ? `, ${published ? 'Published' : 'Estimated'} nutrition, ${m.confidence.toLowerCase()} confidence, ${published ? '' : 'approximately '}${m.calories} kcal, protein ${m.proteinG}g, carbs ${m.carbsG}g, fat ${m.fatG}g` : ''}. Unlock meal name and full menu with Pro.`;
+}
+
+// The help slot keeps its width while results load, so the guide copy never
+// re-wraps and the search field below it does not jump under a tap.
+export function PreviewTourButton({ ready, onPress }: { ready: boolean; onPress: () => void }) {
+  if (!ready) return <View style={s.previewTourButton} testID="preview-show-tour-slot" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" />;
+  return <Pressable onPress={onPress} style={s.previewTourButton} accessibilityRole="button" accessibilityLabel="Show me how Fitsy works" accessibilityHint="Replay the five preview tips" testID="preview-show-tour">
+    <Ionicons name="help-circle-outline" size={20} color={EDITORIAL.green} />
+  </Pressable>;
 }

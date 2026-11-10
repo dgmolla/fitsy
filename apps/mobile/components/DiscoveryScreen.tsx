@@ -16,12 +16,11 @@ import { trackOnboardingScreenView } from '@/lib/analytics';
 import { useDiscoveryState } from '@/lib/useDiscoveryState';
 import { s } from './DiscoveryScreen.styles';
 import { Masthead, MacroStrip, SearchBar } from './DiscoveryChrome';
-import { HeroCard, RestaurantSection } from './DiscoveryCards';
+import { HeroCard, PreviewTourButton, RestaurantSection } from './DiscoveryCards';
 import { ShuffleButton } from './ShuffleButton';
 import { useMapSearchFlag } from '@/lib/useMapSearchFlag';
 import { useFloatingNavClearance } from '@/lib/floatingNav';
 import { DiscoveryViewToggle } from './DiscoveryViewToggle';
-import { PreviewTourButton } from './PreviewTourButton';
 // Load the native map only on eligible iOS entries.
 const DiscoveryMap = React.lazy(async () => require('./DiscoveryMap') as typeof import('./DiscoveryMap'));
 const FREE_RESULT_COUNT = 3;
