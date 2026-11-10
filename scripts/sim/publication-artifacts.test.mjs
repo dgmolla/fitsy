@@ -48,6 +48,8 @@ test('final collection preflights the actual child environment and publisher inp
       assert.equal(options.timeout, 30000);
       if (command === process.execPath) {
         assert.equal(args[0], '--env-file=apps/mobile/.env.development.local');
+        if (args[3]?.includes('verifyInactiveEntitlement'))
+          return JSON.stringify({ 'empty-store': { ok: true }, 'expired-subscription': { ok: true }, 'entitled-dev': { ok: true } });
         return JSON.stringify({ configHash: staleConfig ? 'stale' : publicConfigIdentity().configHash });
       }
       if (command === 'git') {
