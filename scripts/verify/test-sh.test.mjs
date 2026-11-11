@@ -26,6 +26,11 @@ if (outputFile) fs.writeFileSync(outputFile.slice('--outputFile='.length), JSON.
   return bin;
 }
 
+const workspaceFlag = { api: 'apps/api', scripts: '@fitsy/scripts', mobile: '@fitsy/mobile' };
+// The scripts shard also runs the real, unstubbed non-grouped side suites
+// (simple-review, github, performance, database-roles) unconditionally, same
+// as the unsharded path; only its own `npm test` call is faked here.
+const shardTimeoutMs = { api: 90000, scripts: 360000, mobile: 90000 };
 for (const shard of ['api', 'scripts', 'mobile']) {
   test(`test.sh --scope=all runs only the ${shard} shard's own workspace (plus shared), not the others`, () => {
     const dir = mkdtempSync(join(tmpdir(), `fitsy-test-sh-${shard}-`));
@@ -34,12 +39,12 @@ for (const shard of ['api', 'scripts', 'mobile']) {
     try {
       const bin = fakeNpmBin(dir, calls);
       const result = spawnSync('bash', [join(root, 'scripts/verify/test.sh'), '--scope=all'], {
-        cwd: root, encoding: "utf8", timeout: 90000,
+        cwd: root, encoding: "utf8", timeout: shardTimeoutMs[shard],
         env: { ...cleanEnv, PATH: `${bin}:${process.env.PATH}`, FITSY_VERIFY_TEST_GROUP: shard, GITHUB_EVENT_NAME: '' },
       });
       assert.equal(result.status, 0, result.stderr);
       const invokedWorkspaces = readFileSync(calls, 'utf8').trim().split('\n').filter(Boolean);
-      assert.deepEqual(new Set(invokedWorkspaces), new Set([`--workspace=@fitsy/${shard}`, '--workspace=@fitsy/shared']));
+      assert.deepEqual(new Set(invokedWorkspaces), new Set([`--workspace=${workspaceFlag[shard]}`, '--workspace=@fitsy/shared']));
       const parsed = JSON.parse(result.stdout.trim().split('\n').at(-1));
       assert.equal(parsed.status, 'pass');
       assert.equal(parsed.summary, `whole test groups passed: ${shard}`);
@@ -71,11 +76,11 @@ test('with no FITSY_VERIFY_TEST_GROUP set (unsharded/local), every workspace sti
     // Also runs the scripts group's own non-sharded side suites for real
     // (unstubbed); slower than the single-shard cases above.
     const result = spawnSync('bash', [join(root, 'scripts/verify/test.sh'), '--scope=all'], {
-      cwd: root, encoding: 'utf8', timeout: 180000,
+      cwd: root, encoding: 'utf8', timeout: 360000,
       env: { ...cleanEnv, PATH: `${bin}:${process.env.PATH}`, GITHUB_EVENT_NAME: '' },
     });
     assert.equal(result.status, 0, result.stderr);
     const invokedWorkspaces = new Set(readFileSync(calls, 'utf8').trim().split('\n').filter(Boolean));
-    assert.deepEqual(invokedWorkspaces, new Set(['--workspace=@fitsy/api', '--workspace=@fitsy/scripts', '--workspace=@fitsy/mobile', '--workspace=@fitsy/shared']));
+    assert.deepEqual(invokedWorkspaces, new Set(['--workspace=apps/api', '--workspace=@fitsy/scripts', '--workspace=@fitsy/mobile', '--workspace=@fitsy/shared']));
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
