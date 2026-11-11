@@ -213,6 +213,27 @@ test('preview and older main clients share target ranking and retain context-bou
   } finally { await prisma.restaurant.deleteMany({ where: { id: { in: ids } } }); }
 });
 
+test('a fourth nearby restaurant surfaces as a named, redacted locked teaser; absent below four', async () => {
+  const prefix = randomUUID();
+  const ids = ['a', 'b', 'c', 'd'].map(suffix => `${prefix}-${suffix}`);
+  await prisma.$transaction(ids.map((id, i) => prisma.restaurant.create({ data: {
+    id, storeUuid: id, name: `Teaser fixture ${i}`, address: 'Synthetic endpoint fixture', source: 'test',
+    lat: 45, lng: 45, cuisineTags: [], photoUrl: `https://example.test/${i}.jpg`,
+    menuItems: { create: meal(`${id}-meal`, `Meal ${i}`, 600 + i) },
+  } })));
+  try {
+    const four = await guided(targets);
+    assert.deepEqual(four.data.map(row => row.id), [ids[0], ids[1], ids[2]]);
+    assert.ok(four.data.every(row => row.bestMatch !== null));
+    assert.deepEqual(four.meta.lockedTeaser, { id: ids[3], name: 'Teaser fixture 3', address: 'Synthetic endpoint fixture',
+      lat: 45, lng: 45, distanceMiles: 0, cuisineTags: [], chainFlag: false, photoUrl: 'https://example.test/3.jpg', bestMatch: null });
+    await prisma.restaurant.delete({ where: { id: ids[3]! } });
+    const three = await guided(targets);
+    assert.deepEqual(three.data.map(row => row.id), [ids[0], ids[1], ids[2]]);
+    assert.equal(three.meta.lockedTeaser, null);
+  } finally { await prisma.restaurant.deleteMany({ where: { id: { in: ids } } }); }
+});
+
 test('a craving never falls back inside a name-only restaurant when another restaurant has that dish', async () => {
   const a = randomUUID(), b = randomUUID();
   await prisma.$transaction([

@@ -10,6 +10,7 @@ export const s = StyleSheet.create({
   previewHint: { flex: 1, fontFamily: FONTS.nunitoSans, fontSize: 13, lineHeight: 19, color: EDITORIAL.textMid },
   previewLink: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 13, lineHeight: 20, color: EDITORIAL.green },
   previewBack: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingHorizontal: 18 },
+  previewMapBack: { width: 32, height: 44, marginLeft: -12, alignItems: 'center', justifyContent: 'center' },
   masthead: {
     backgroundColor: EDITORIAL.cream,
     paddingHorizontal: 20,
