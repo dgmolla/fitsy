@@ -1,21 +1,28 @@
 #!/usr/bin/env python3
 """Render the fitsy Reels content-ethos board and phone-frame mockups.
 
-Usage: python3 docs/gtm/claude-content-ethos/render.py
+Usage: python3 docs/gtm/claude-content-ethos/render.py              # geometric placeholders + board
+       python3 docs/gtm/claude-content-ethos/render.py --real-photos # real-photo variants A and B
 
-Dependencies: Python 3, Pillow (dimension check only), and a local Chrome
+Dependencies: Python 3, Pillow (dimension check, photo crops and cutout), and a local Chrome
 (Google Chrome.app or the Playwright chromium headless shell). Inter 400/600
 is embedded from the repo's installed Prisma assets when node_modules exists;
 otherwise the system sans-serif fallback is used and a warning is printed.
 
-Everything drawn here is an original geometric placeholder. No food was filmed
-and no live-app value was verified; numbers are the draft placeholders from
-docs/gtm/silver-lake-reel-scripts.md and are always labeled as fitsy's AI estimate.
+The default run draws original geometric placeholder plates. `--real-photos`
+renders two variants of the same three beats from one Google Maps owner-upload
+photo of the actual dish (source-photos/michelangelo-ristorante/photo-02.jpg):
+variant A full-bleed cover crops, variant B an elliptical cutout of the plate on
+the ethos table field. Those frames are internal mockups only; the Maps photo is
+not cleared for posting. No live-app value was verified; numbers are the draft
+placeholders from docs/gtm/silver-lake-reel-scripts.md and are always labeled
+as fitsy's AI estimate.
 """
 from __future__ import annotations
 
 import base64
 import glob
+import io
 import os
 import shutil
 import subprocess
@@ -61,6 +68,14 @@ PALETTE = {
 }
 
 SAFE = {"x0": 90, "x1": 900, "y0": 250, "y1": 1450}
+
+# Real photo for the --real-photos variants: Google Maps owner upload, see
+# source-photos/README.md and source-photos/michelangelo-ristorante/manifest.json.
+PHOTO = HERE / "source-photos" / "michelangelo-ristorante" / "photo-02.jpg"
+PHOTO_CREDIT = "Photo: Michelangelo Ristorante via Google Maps"
+REAL_DIR = HERE / "real-photo-variants"
+# Outer plate edge in 1600 x 1600 photo pixels (center x, center y, radius x, radius y).
+PLATE_ELLIPSE = (800, 1048, 796, 450)
 
 
 def font_css() -> tuple[str, bool]:
@@ -189,6 +204,27 @@ html,body{{margin:0;padding:0;width:1080px;height:1920px;overflow:hidden;backgro
 .tag b{{font-weight:600;color:#fff;}}
 """
 
+
+REAL_CSS = f"""
+.photo{{position:absolute;left:0;top:0;width:1080px;height:1920px;display:block;}}
+.shade-top.soft{{background:linear-gradient(180deg,rgba(0,0,0,.35) 0%,rgba(0,0,0,0) 100%);}}
+.table{{position:absolute;left:0;top:0;width:1080px;height:1920px;background:radial-gradient(75% 75% at 50% 45%,#3A2C22 0%,#140F0C 100%);}}
+.table svg{{position:absolute;left:0;top:0;}}
+.cutout{{position:absolute;left:0;top:0;transform-origin:0 0;display:block;filter:drop-shadow(0 36px 44px rgba(0,0,0,.62));}}
+.credit{{position:absolute;right:{1080 - SAFE['x1']}px;top:{SAFE['y0']}px;max-width:360px;text-align:right;font-size:22px;line-height:26px;font-weight:400;color:rgba(255,255,255,.88);background:rgba(20,24,26,.62);border-radius:10px;padding:6px 12px;}}
+.hook.tight{{top:330px;}}
+.stack{{position:absolute;left:{SAFE['x0']}px;max-width:810px;}}
+.stack .who{{font-size:34px;line-height:42px;color:{PALETTE['cream']};margin-bottom:10px;}}
+.stack .label{{font-size:34px;line-height:42px;color:{PALETTE['cream']};}}
+.stack .num{{font-size:48px;line-height:58px;margin:4px 0 6px;letter-spacing:-0.01em;white-space:nowrap;}}
+.stack .caveat{{font-size:34px;line-height:42px;color:{PALETTE['muted']};font-weight:400;}}
+.stack.big .card{{padding:30px 36px;}}
+.stack.big .who,.stack.big .label{{font-size:36px;line-height:44px;}}
+.stack.big .num{{font-size:64px;line-height:76px;margin:6px 0 8px;}}
+.stack.big .caveat{{font-size:36px;line-height:44px;}}
+.save.tight{{top:326px;}}
+"""
+
 BOOKMARK = """<svg width="52" height="64" viewBox="0 0 26 32" fill="none" stroke="#FFFFFF" stroke-width="2.4" stroke-linejoin="round"><path d="M4 2h18v28l-9-7-9 7z"/></svg>"""
 
 
@@ -265,6 +301,149 @@ def frame_end() -> str:
   {tag('10-12s save end card · draft placeholder numbers')}
 </div>"""
     return frame_doc(body)
+
+
+
+# ---------------------------------------------------------------- real photo
+def data_uri(im, fmt: str) -> str:
+    buf = io.BytesIO()
+    if fmt == "JPEG":
+        im.save(buf, "JPEG", quality=92, optimize=True)
+        return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+    im.save(buf, "PNG", optimize=True)
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+def load_photo():
+    from PIL import Image
+
+    im = Image.open(PHOTO).convert("RGB")
+    if im.size != (1600, 1600):
+        sys.exit(f"{PHOTO.name}: expected 1600x1600, got {im.size}")
+    return im
+
+
+def cover_crop(im, left: int, top: int, width: int) -> str:
+    """Cover-crop a 9:16 window (photo pixels) and resample it to 1080x1920."""
+    from PIL import Image
+
+    height = round(width * 16 / 9)
+    if left < 0 or top < 0 or left + width > im.width or top + height > im.height:
+        sys.exit(f"crop {left},{top},{width}x{height} leaves the {im.width}x{im.height} photo")
+    out = im.crop((left, top, left + width, top + height)).resize((1080, 1920), Image.LANCZOS)
+    return data_uri(out, "JPEG")
+
+
+def plate_cutout(im) -> str:
+    """Cut the plate out of the photo along its outer edge with a 3 px feather."""
+    from PIL import Image, ImageDraw, ImageFilter
+
+    cx, cy, rx, ry = PLATE_ELLIPSE
+    mask = Image.new("L", im.size, 0)
+    ImageDraw.Draw(mask).ellipse((cx - rx, cy - ry, cx + rx, cy + ry), fill=255)
+    mask = mask.filter(ImageFilter.GaussianBlur(3))
+    rgba = im.convert("RGBA")
+    rgba.putalpha(mask)
+    return data_uri(rgba.crop((0, cy - ry - 8, 1600, cy + ry + 8)), "PNG")
+
+
+def credit() -> str:
+    return f'<div class="credit">{PHOTO_CREDIT.replace(" via ", "<br>via ")}</div>'
+
+
+def real_tag(label: str) -> str:
+    return f'<div class="tag"><b>INTERNAL MOCKUP</b> · Maps photo not cleared for posting · {label}</div>'
+
+
+def stack(top: int, big: bool = False) -> str:
+    return f"""
+<div class="stack{' big' if big else ''}" style="top:{top}px"><div class="card">
+  <div class="who">{EPISODE['dish']} · {EPISODE['venue']}</div>
+  <div class="label">{EPISODE['estimate_label']}</div>
+  <div class="num">{EPISODE['protein']} · {EPISODE['kcal']}</div>
+  <div class="caveat">{EPISODE['caveat']}</div>
+</div></div>"""
+
+
+def save_card(tight: bool) -> str:
+    return f"""
+<div class="save{' tight' if tight else ''}"><div class="card">
+  <div class="series">{EPISODE['series']} #{EPISODE['number']}</div>
+  <div class="cta">{BOOKMARK}<div>{EPISODE['save']}</div></div>
+</div></div>"""
+
+
+# Variant A: the photo fills the frame. The square source only allows a 900 px
+# wide 9:16 window, which puts the fillet in the lower band, so every card sits
+# in the dark background and napkin band above the vegetables.
+def frame_a(beat: str, photo_uri: str) -> str:
+    if beat == "hook":
+        text = f'<div class="hook tight"><div class="card">{EPISODE["hook"]}</div></div>' + stack(546)
+        label = "0-1s hook · draft numbers"
+    elif beat == "reveal":
+        text = stack(384, big=True)
+        label = "7-10s estimate reveal · draft numbers"
+    else:
+        text = save_card(True) + stack(578)
+        label = "10-12s save end card · draft numbers"
+    body = f"""<div class="frame">
+  <img class="photo" src="{photo_uri}" alt="">
+  <div class="shade-top soft"></div><div class="shade-bottom"></div>
+  {bug()}{credit()}
+  {text}
+  {real_tag(label)}
+</div>"""
+    return frame_doc(body, REAL_CSS)
+
+
+# Variant B: the same plate cut out along its edge and set on the ethos table
+# field, so the cards keep the original top-third / lower-third positions.
+def frame_b(beat: str, cutout_uri: str) -> str:
+    cy, ry = PLATE_ELLIPSE[1], PLATE_ELLIPSE[3]
+    crop_top = cy - ry - 8  # cutout image row 0 in photo pixels
+    if beat == "hook":
+        scale, left, plate_top = 0.80, -100, 520
+        text = f'<div class="hook"><div class="card">{EPISODE["hook"]}</div></div>' + stack(1180)
+        label = "0-1s hook · draft numbers"
+    else:
+        scale, left, plate_top = 0.62, 44, 580
+        if beat == "reveal":
+            text = stack(1150, big=True)
+            label = "7-10s estimate reveal · draft numbers"
+        else:
+            text = save_card(False) + stack(1170)
+            label = "10-12s save end card · draft numbers"
+    top = plate_top - round((cy - ry - crop_top) * scale)
+    body = f"""<div class="frame">
+  <div class="table"><svg width="1080" height="1920" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg">
+    <g opacity="0.10" stroke="#000" stroke-width="2">
+      <line x1="0" y1="300" x2="1080" y2="420"/><line x1="0" y1="640" x2="1080" y2="760"/>
+      <line x1="0" y1="980" x2="1080" y2="1100"/><line x1="0" y1="1320" x2="1080" y2="1440"/>
+      <line x1="0" y1="1660" x2="1080" y2="1780"/>
+    </g></svg></div>
+  <img class="cutout" src="{cutout_uri}" alt="" style="transform:translate({left}px,{top}px) scale({scale})">
+  <div class="shade-top"></div><div class="shade-bottom"></div>
+  {bug()}{credit()}
+  {text}
+  {real_tag(label)}
+</div>"""
+    return frame_doc(body, REAL_CSS)
+
+
+def real_frames() -> dict[str, str]:
+    photo = load_photo()
+    # Hook: slightly tighter window on the fillet; reveal and end: the widest full-plate window.
+    hook_uri = cover_crop(photo, 190, 60, 820)
+    plate_uri = cover_crop(photo, 350, 0, 900)
+    cutout_uri = plate_cutout(photo)
+    return {
+        "a-01-hook.png": frame_a("hook", hook_uri),
+        "a-02-reveal.png": frame_a("reveal", plate_uri),
+        "a-03-end.png": frame_a("end", plate_uri),
+        "b-01-hook.png": frame_b("hook", cutout_uri),
+        "b-02-reveal.png": frame_b("reveal", cutout_uri),
+        "b-03-end.png": frame_b("end", cutout_uri),
+    }
 
 
 # ---------------------------------------------------------------- ethos board
@@ -449,10 +628,27 @@ def verify(path: Path, w: int, h: int) -> None:
     print(f"ok {path.relative_to(REPO)} {w}x{h} {path.stat().st_size:,} bytes")
 
 
+def render_real_photos(chrome: str) -> None:
+    REAL_DIR.mkdir(exist_ok=True)
+    frames = real_frames()
+    with tempfile.TemporaryDirectory() as tmp:
+        tmpdir = Path(tmp)
+        profile = tmpdir / "profile"
+        for name, html in frames.items():
+            src = tmpdir / name.replace(".png", ".html")
+            src.write_text(html, encoding="utf-8")
+            screenshot(chrome, src, REAL_DIR / name, 1080, 1920, profile)
+            verify(REAL_DIR / name, 1080, 1920)
+    print(f"rendered {len(frames)} PNGs into", REAL_DIR.relative_to(REPO))
+
+
 def main() -> None:
     chrome = find_chrome()
     if not HAVE_INTER:
         print("warning: Inter not found under node_modules; rendering with the system sans-serif fallback")
+    if "--real-photos" in sys.argv[1:]:
+        render_real_photos(chrome)
+        return
     frames = {
         "mockup-01-hook.png": (frame_hook(), "0-1 s hook over close-up"),
         "mockup-02-name.png": (frame_name(), "1-2 s dish and restaurant"),

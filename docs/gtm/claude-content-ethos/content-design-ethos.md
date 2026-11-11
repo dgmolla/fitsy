@@ -4,7 +4,8 @@
 
 > **Status:** draft for Dawit's review, an alternative visual take to [PR #744](https://github.com/dgmolla/fitsy/pull/744) · **Last verified:** 2026-11-10 · **Owner:** Fitsy Marketing
 > Nothing here authorizes publication, filming, outreach or spending.
-> Every number is a draft placeholder from the [Silver Lake scripts](../silver-lake-reel-scripts.md), and every plate is an original unfilmed geometric placeholder.
+> Every number is a draft placeholder from the [Silver Lake scripts](../silver-lake-reel-scripts.md).
+> The first draft used unfilmed geometric placeholder plates; the newer real-photo variants below use one Google Maps owner-upload photo for internal mockups only, not cleared for posting.
 
 ![Ethos board](ethos-board.png)
 
@@ -97,8 +98,42 @@ Treat the choice as a hook test, with no winner assumed in advance.
 | "Save this Silver Lake order" plus the series number | Dense ingredient stacks or two cards at once |
 | Exact dish and venue names, real addresses | Faces, mirrors, hidden sides or sauces |
 
-## Mockups: Silver Lake orders #4
+## Real-photo variants: Silver Lake orders #4
 
+Dawit asked for the #4 frames redone on a real Google Maps photo of the dish instead of the geometric placeholder, in two treatments.
+The photo is [`source-photos/michelangelo-ristorante/photo-02.jpg`](source-photos/michelangelo-ristorante/photo-02.jpg): a white-plate fish fillet with capers, lemon, carrots, broccoli and potatoes.
+The [manifest](source-photos/michelangelo-ristorante/manifest.json) records the contributor as Michelangelo Ristorante, type owner; the [contact sheet](source-photos/contact-sheet.png) shows every downloaded Maps photo for the six scripted venues.
+The other Michelangelo photos (storefront with diners, sliced steak, pizzas) are not this dish and were not used; no other restaurant's dish was composited in.
+
+Every frame carries the credit line "Photo: Michelangelo Ristorante via Google Maps" at 22 px inside the safe area, top right beside the series bug, plus the dashed internal-mockup tag below the safe area.
+The chrome is unchanged from the first draft: Inter semibold, 90% charcoal cards at 20 px radius, mint series bug, cream and muted secondary text, every number labeled as fitsy's AI estimate, no ticks, no app screen, no install CTA.
+
+**Rights caveat.** These are internal mockups only.
+An owner upload to Google Maps is not a posting license: it grants nothing to fitsy for Reels, ads or any public use.
+Do not publish, post or share any of these frames outside the team without written permission from Michelangelo Ristorante, and see [`source-photos/README.md`](source-photos/README.md).
+
+### Variant A, full-bleed real photo
+
+The photo cover-crops the whole 9:16 frame with no letterbox, the research-aligned direction (high performers use real food footage or photos under white-outlined or card overlays, not cutout graphics).
+Because the source is square, the widest 9:16 window is 900 of its 1600 px, which puts the fillet in the lower band; the cards therefore stack in the dark background and napkin band above the vegetables and never touch the fish.
+The hook uses a slightly tighter window on the fillet than the reveal and end frames.
+
+| 0-1 s hook | 7-10 s estimate reveal | 10-12 s save end card |
+| --- | --- | --- |
+| ![A hook](real-photo-variants/a-01-hook.png) | ![A reveal](real-photo-variants/a-02-reveal.png) | ![A end](real-photo-variants/a-03-end.png) |
+
+### Variant B, cutout of the same real photo
+
+The same plate is cut out of the photo along its outer rim (a feathered ellipse, no other dish or element added) and set on the ethos dark table field with a soft shadow.
+This keeps the first draft's "cut out of the image" idea and its original top-third hook and lower-third estimate positions, with a larger plate for the hook and the full plate for the reveal and end.
+
+| 0-1 s hook | 7-10 s estimate reveal | 10-12 s save end card |
+| --- | --- | --- |
+| ![B hook](real-photo-variants/b-01-hook.png) | ![B reveal](real-photo-variants/b-02-reveal.png) | ![B end](real-photo-variants/b-03-end.png) |
+
+## Previous draft: geometric-placeholder mockups
+
+These four frames are the first draft, kept for comparison; the plates are original geometric placeholders rendered in code, not photographs.
 Draft placeholder from the scripts: fitsy's AI estimate ~48g protein · ~475 kcal, exact app item and filmed serving unconfirmed.
 
 | 0-1 s hook | 1-2 s dish and restaurant | 7-10 s estimate reveal | 10-12 s save end card |
@@ -107,7 +142,7 @@ Draft placeholder from the scripts: fitsy's AI estimate ~48g protein · ~475 kca
 
 ## Limitations
 
-- The plates are original geometric placeholders rendered in code; no food was filmed and no photo was used.
+- The previous-draft plates are original geometric placeholders rendered in code; the real-photo variants use one Google Maps owner-upload photo that is not cleared for posting, and no food was filmed.
 - The numbers are draft fitsy AI estimates from Dawit's November 5 snapshot via the scripts, not restaurant nutrition facts and not live-app-verified values.
 - The frames prove layout, hierarchy and chrome only; performance, exact item match and portion remain untested.
 - The research sample is 115 inspected examples, 35 short of its original target, and it cannot prove that any pattern causes results.
@@ -115,7 +150,9 @@ Draft placeholder from the scripts: fitsy's AI estimate ~48g protein · ~475 kca
 ## Regenerate
 
 ```sh
-python3 docs/gtm/claude-content-ethos/render.py
+python3 docs/gtm/claude-content-ethos/render.py               # placeholder mockups and the board
+python3 docs/gtm/claude-content-ethos/render.py --real-photos # variants A and B from the Maps photo
 ```
 
 The script needs Python 3, Pillow and a local Chrome; it embeds Inter from the repo's installed dependencies when `node_modules` exists.
+The real-photo run builds the cover crops and the plate cutout with Pillow and writes six frames to `real-photo-variants/`.
