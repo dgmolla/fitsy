@@ -10,7 +10,10 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: (k: string) => getItem(k), setItem: (k: string, v: string) => setItem(k, v), removeItem: (k: string) => removeItem(k), multiRemove: (k: string[]) => removeItem(k as unknown as string) },
 }));
 jest.mock('expo-router', () => ({ router: { push: jest.fn(), replace: jest.fn() } }));
-jest.mock('./supabase', () => ({ supabase: { auth: { getSession: jest.fn() } } }));
+jest.mock('./supabase', () => ({ supabase: { auth: { getSession: jest.fn() } },
+  isRealAccountSession: (session: { user: { is_anonymous?: boolean } } | null | undefined) =>
+    !!session && !session.user.is_anonymous,
+}));
 
 // Fresh module per test so the in-memory mirror starts empty. resetModules
 // also re-instantiates the expo-router / supabase mocks, so the handles the

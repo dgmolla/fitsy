@@ -8,6 +8,7 @@ import * as Google from 'expo-auth-session/providers/google';
 import { appleSignIn, completeGoogleSignIn, devLogin } from '@/lib/authClient';
 import { rememberAccountOnboarding } from '@/lib/accountHistory';
 import { requireProfileFromServer } from '@/lib/profileSync';
+import { claimAnonymousOnboardingData } from '@/lib/onboardingStorage';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { OnboardingAccountSummary } from '@/components/OnboardingAccountSummary';
 import { WelcomeAuthActions } from '@/components/WelcomeAuthActions';
@@ -176,7 +177,12 @@ export default function SignInScreen() {
       else await Promise.all([clearPaywallIntent(), clearPendingMealClaim()]);
     } else await claimPaywallIntent(r.user.id);
     if (!isCurrent()) return;
-    if (outOfArea !== '1' && isCurrent()) await requireProfileFromServer();
+    if (outOfArea === '1') {
+      // The waitlist area was saved anonymously (#801) before this sign-in;
+      // claim it onto the real account the same way onboarding data already
+      // is, so the waitlist submission has an area to use.
+      await claimAnonymousOnboardingData(r.user.id);
+    } else if (isCurrent()) await requireProfileFromServer();
     if (!isCurrent()) return;
     if (!isCurrent()) return;
     await navigateAfterAuth(r.isNewUser, r.user.id, ownedCheckout, isCurrent);

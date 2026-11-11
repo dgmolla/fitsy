@@ -91,6 +91,8 @@ jest.mock('./supabase', () => ({
       },
     },
   },
+  isRealAccountSession: (session: { user: { is_anonymous?: boolean } } | null | undefined) =>
+    !!session && !session.user.is_anonymous,
 }));
 
 export const mockAnalytics = {
