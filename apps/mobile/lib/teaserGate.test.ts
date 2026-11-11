@@ -162,6 +162,16 @@ describe('routeToPaywall', () => {
     expect(store.get('@fitsy/paymentSignInContinuation')).toBe('1');
   });
 
+  it('sends a real anonymous Supabase session (#801) to sign-in, same as no session at all', async () => {
+    const g = await load();
+    g.getSession.mockResolvedValue({ data: { session: { user: { id: 'anon-device-1', is_anonymous: true } } } });
+    await g.routeToPaywall();
+    expect(g.push).toHaveBeenCalledWith('/welcome/signin');
+    // Never treated as "signed in" - no subscription-verdict sync for a
+    // throwaway identity that isn't a real account.
+    expect(g.syncPaywallVerdict).not.toHaveBeenCalled();
+  });
+
   it('saves a meal claim for first-time anonymous sign-in without selecting payment', async () => {
     const g = await load();
     g.getSession.mockResolvedValue({ data: { session: null } });

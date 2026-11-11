@@ -6,7 +6,7 @@ import { guidedPreviewResponseSchema, restaurantsResponseSchema } from '@fitsy/s
 import { GET as preview } from '../../app/api/restaurants/preview/route';
 import { GET as search } from '../../app/api/restaurants/route';
 import { prisma } from '../../lib/restaurantService';
-import { token, freeToken } from './authenticated-route.fixture';
+import { token, freeToken, anonymousToken } from './authenticated-route.fixture';
 after(() => prisma.$disconnect());
 
 const targets = 'calories=600&protein=40&carbs=60&fat=20';
@@ -236,4 +236,22 @@ test('a craving never falls back inside a name-only restaurant when another rest
     assert.deepEqual((await guided(exact)).data.map(row => row.id), expected);
     assert.deepEqual((await standard(`${exact}&goalMatched=1`)).data.map(row => row.id), expected);
   } finally { await prisma.restaurant.deleteMany({ where: { id: { in: [a, b] } } }); }
+});
+
+test('a real anonymous Supabase session can reach the guided tour, but not the plain preview or main search (#801)', async () => {
+  const id = randomUUID();
+  await prisma.restaurant.create({ data: { id, storeUuid: id, name: 'Anon fixture', address: 'Synthetic',
+    source: 'test', lat: 45, lng: 45, cuisineTags: [], menuItems: { create: meal(`${id}-meal`, 'Ramen') } } });
+  try {
+    const anonRequest = (path: string, query: string) => new NextRequest(`http://localhost/api/restaurants${path}?${query}`,
+      { headers: { authorization: `Bearer ${anonymousToken}`, 'x-vercel-forwarded-for': `192.0.2.${++requestNumber}` } });
+
+    const guidedResponse = await preview(anonRequest('/preview', `${at}&guided=1&${targets}&q=ramen`));
+    assert.equal(guidedResponse.status, 200);
+    const guidedBody = guidedPreviewResponseSchema.parse(await guidedResponse.json());
+    assert.deepEqual(guidedBody.data.map(row => row.id), [id]);
+
+    assert.equal((await preview(anonRequest('/preview', `${at}&${targets}`))).status, 401);
+    assert.equal((await search(anonRequest('', `${at}&${targets}`))).status, 401);
+  } finally { await prisma.restaurant.delete({ where: { id } }); }
 });

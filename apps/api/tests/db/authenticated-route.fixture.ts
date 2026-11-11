@@ -12,7 +12,10 @@ const keys = createServer();
 export const userId = randomUUID();
 export let token: string;
 export let freeToken: string;
+/** A real anonymous Supabase session's JWT - no email claim, no User row (#801). */
+export let anonymousToken: string;
 const freeId = randomUUID();
+const anonymousId = randomUUID();
 const originalEnv = { ...process.env };
 const originalFetch = global.fetch;
 before(async () => {
@@ -47,6 +50,10 @@ before(async () => {
   await prisma.user.create({ data: { id: freeId, email: freeEmail } });
   freeToken = await new SignJWT({ email: freeEmail, role: 'authenticated', is_anonymous: false }).setIssuedAt()
     .setProtectedHeader({ alg: 'ES256', kid: 'fixture' }).setSubject(freeId)
+    .setIssuer(`${process.env['SUPABASE_URL']}/auth/v1`).setAudience('authenticated').setExpirationTime('5m').sign(privateKey);
+  // No prisma.user row - a real anonymous Supabase session never has one.
+  anonymousToken = await new SignJWT({ role: 'authenticated', is_anonymous: true }).setIssuedAt()
+    .setProtectedHeader({ alg: 'ES256', kid: 'fixture' }).setSubject(anonymousId)
     .setIssuer(`${process.env['SUPABASE_URL']}/auth/v1`).setAudience('authenticated').setExpirationTime('5m').sign(privateKey);
 });
 after(async () => {

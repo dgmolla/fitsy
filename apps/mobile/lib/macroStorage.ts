@@ -14,9 +14,12 @@ async function searchKey(): Promise<string> {
   const userId = await currentUserId();
   return userId ? `${SEARCH_MACRO_TARGETS_KEY}:${userId}` : SEARCH_MACRO_TARGETS_KEY;
 }
+// Anonymous sessions (#801) keep macro targets unowned, same as
+// onboardingStorage.ts's currentOwner - the existing unowned -> real-account
+// claim path (getAnonymousCompleteTarget) already expects `_owner === null`.
 async function currentUserId(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
-  return data.session?.user?.id ?? null;
+  return data.session && !data.session.user.is_anonymous ? data.session.user.id : null;
 }
 export interface StoredMacroTargets {
   protein: string;
