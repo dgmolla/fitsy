@@ -265,12 +265,34 @@ test.each([
   expect(expression(build.if!, { ...needs, classify: { ...needs.classify, result: 'failure' } })).toBe(false);
 });
 
-test('label additions and removals rerun classification, and the final Verify job is byte-for-byte unchanged', () => {
+// Pinned literal baseline for the final Verify job: a human must deliberately
+// update this string (not just the workflow file) to change the required-check
+// aggregation, so a silent edit to the job graph fails this test instead of
+// slipping through unreviewed. Last reviewed when test-other was added (#778).
+const EXPECTED_VERIFY_JOB = `    name: Verify
+    needs: [classify, static, domain-check, test, test-other, build]
+    if: \${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every applicable job
+        env:
+          NEEDS_JSON: \${{ toJSON(needs) }}
+        run: |
+          jq -e --arg event "$GITHUB_EVENT_NAME" '
+            def expected($flag):
+              if $flag == "true" then "success"
+              elif $flag == "false" then "skipped" else "invalid" end;
+            .classify.result == "success" and
+            .static.result == expected(.classify.outputs.code) and
+            .test.result == expected(.classify.outputs.tests) and
+            ."test-other".result == expected(.classify.outputs.tests) and
+            .build.result == expected(.classify.outputs.build) and
+            ."domain-check".result == (if $event == "pull_request" then "success" else "skipped" end)
+          ' <<<"$NEEDS_JSON"
+`;
+test('label additions and removals rerun classification, and the final Verify job matches its reviewed baseline', () => {
   expect(workflow.on.pull_request.types).toEqual(expect.arrayContaining(['opened', 'synchronize', 'reopened', 'labeled', 'unlabeled']));
-  const original = execFileSync('git', ['show', 'HEAD:.github/workflows/verify.yml'], { cwd: root, env, encoding: 'utf8' });
-  expect(workflowText.split('\n  verify:\n')[1]).toBe(original.split('\n  verify:\n')[1]);
-  const main = execFileSync('git', ['show', 'origin/main:.github/workflows/verify.yml'], { cwd: root, env, encoding: 'utf8' });
-  expect(workflowText.split('\n  verify:\n')[1]).toBe(main.split('\n  verify:\n')[1]);
+  expect(workflowText.split('\n  verify:\n')[1]).toBe(EXPECTED_VERIFY_JOB);
 });
 
 test.each(['success', 'failure', 'skipped', 'cancelled'])(
