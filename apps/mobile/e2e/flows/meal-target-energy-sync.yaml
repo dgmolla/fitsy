@@ -121,20 +121,23 @@ env:
     id: welcome-continue
 - tapOn:
     id: welcome-continue
-- extendedWaitUntil:
-    visible:
-      id: onboarding-widget-card
-    timeout: 15000
-- assertVisible:
-    id: onboarding-widget-example
-- tapOn:
-    id: welcome-skip
+# The widget screen moved to the end of onboarding (after payment); continue
+# now reaches the preview directly.
 - extendedWaitUntil:
     visible:
       id: coachmark-next
     timeout: 30000
 - tapOn:
     id: coachmark-skip
+# Preview is map-first; switch to list so the applied-calories assertion
+# below has a macro strip to show against (the map toolbar's own Macros
+# button opens the same editor but never displays the numbers themselves).
+- extendedWaitUntil:
+    visible:
+      id: map-search-entry
+    timeout: 30000
+- tapOn:
+    id: map-search-entry
 - extendedWaitUntil:
     visible:
       id: preview-edit-targets

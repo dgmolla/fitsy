@@ -31,7 +31,9 @@ interface PreviewResponse {
  *
  * Returns only name + cuisine info. bestMatch / meal details are intentionally
  * omitted for legacy clients. guided=1 explicitly exposes three meal summaries
- * for the onboarding tour, with separate coverage and goal-qualified counts.
+ * for the onboarding tour, with separate coverage and goal-qualified counts,
+ * plus `meta.lockedTeaser`: one more real, named nearby restaurant with no
+ * dish match, for the tour's locked-fourth-option affordance.
  * Full menus and continued discovery remain subscription features.
  */
 async function handleGET(

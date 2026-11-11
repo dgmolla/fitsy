@@ -234,7 +234,7 @@ test('no craving matches preserve coverage count; genuinely uncovered areas retu
     'http://localhost/api/restaurants/preview?lat=-40&lng=60&guided=1',
     { headers: { authorization: `Bearer ${freeToken}` } },
   ))).json());
-  assert.deepEqual(uncovered, { data: [], meta: { nearbyDishCount: 0, radiusMiles: 3, goalMatch: null } });
+  assert.deepEqual(uncovered, { data: [], meta: { nearbyDishCount: 0, radiusMiles: 3, goalMatch: null, lockedTeaser: null } });
 });
 
 test('local count excludes dishes without complete nutrition', async () => {
