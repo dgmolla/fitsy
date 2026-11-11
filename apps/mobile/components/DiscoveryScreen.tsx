@@ -61,8 +61,14 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
   }), [showMap]);
   const closeTour = () => { finishTour(); listRef.current?.scrollToOffset({ offset: 0, animated: false }); };
   const renderSearchBar = (action?: React.ReactNode) => <SearchBar value={query} onChangeText={setQuery} onClear={handleClearQuery} containerRef={tourSearchRef} action={action} frosted={mapEnabled} />;
-  const previewNav = isOnboardingPreview && <WelcomeNav progress={0.75} backTestID="preview-back" onBack={onPreviewBack ?? (navigation.canGoBack() ? () => router.back() : undefined)} />;
+  const previewGoBack = onPreviewBack ?? (navigation.canGoBack() ? () => router.back() : undefined);
+  // The map preview is the real map screen, not an onboarding step: no
+  // progress-bar chrome there, just a small back control inline with the tip.
+  const previewNav = isOnboardingPreview && !showMap && <WelcomeNav progress={0.75} backTestID="preview-back" onBack={previewGoBack} />;
   const previewIntro = isOnboardingPreview && <View style={s.previewIntro} testID="preview-guide">
+    {showMap && previewGoBack && <Pressable onPress={previewGoBack} style={s.previewMapBack} accessibilityRole="button" accessibilityLabel="Go back" testID="preview-back">
+      <Ionicons name="chevron-back" size={20} color={EDITORIAL.textMid} />
+    </Pressable>}
     <Text style={s.previewHint}>{onboardingPitch(tried).preview}</Text>
     {mapEnabled && !showMap && <DiscoveryViewToggle map={false} onPress={() => setView('map')} />}
     <PreviewTourButton ready={tourReady} onPress={startTour} />

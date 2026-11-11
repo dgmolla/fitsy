@@ -67,7 +67,7 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
   const canSearch = (hasInputs || hasQuery || isOnboardingPreview) && previewReady;
   const [targetsLoaded, setTargetsLoaded] = useState(false);
   const discovery = useDiscoveryResults({ inputs, query, location, canSearch, targetsLoaded, previewReady, isOnboardingPreview });
-  const { results, nextCursor, loading, loadingMore, refreshing, error, locked, fetchSeq, outOfArea, nearbyDishCount, doFetch, handleRefresh, handleEndReached, canShuffle, handleShuffle } = discovery;
+  const { results, nextCursor, loading, loadingMore, refreshing, error, locked, fetchSeq, outOfArea, nearbyDishCount, lockedTeaser, doFetch, handleRefresh, handleEndReached, canShuffle, handleShuffle } = discovery;
   const tourEnabled = isOnboardingPreview && locked === true && !filterVisible && !locationPickerVisible;
   const tourReady = previewTourReady({ preview: isOnboardingPreview, locked, loading, error, outOfArea, fetchSeq });
   const [emptyTour, setEmptyTour] = useState(false);
@@ -214,7 +214,7 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
     ]; }, [tried, results, demo.typing, loading, error, emptyTour]);
 
   return { navigation, isOnboardingPreview, tried, inputs, filterMode, query, setQuery: demo.editQuery, canSearch, hasQuery, location,
-    locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea, nearbyDishCount,
+    locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea, nearbyDishCount, lockedTeaser,
     filterVisible, setFilterVisible, locationPickerVisible, setLocationPickerVisible, tourReady, tourVisible: tour.visible, startTour: tour.start,
     tourEditRef, tourSearchRef, tourHeroRef, tourLocationRef, tourMoreRef, tourSteps, finishTour, tourStepShown: demo.showStep, cancelTourTyping: demo.cancel, handleClearQuery, handleApplyFilters,
     handleJoinWaitlist, handleOpenLocationPicker, handlePickLocation, handleUseCurrentLocation, unlockPreview,

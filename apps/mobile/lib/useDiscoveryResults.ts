@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { randomUUID } from 'expo-crypto';
-import type { RestaurantResult } from '@fitsy/shared';
+import type { GuidedPreviewResponse, RestaurantResult } from '@fitsy/shared';
 import { SHUFFLE_EXCLUSION_MAX_ENCODED_LENGTH } from '@fitsy/shared/contracts/search';
 import type { MacroValues } from './macroPresets';
 import type { UseLocationResult, LocationState } from './useLocation';
@@ -27,6 +27,7 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
   const [fetchSeq, setFetchSeq] = useState(0);
   const [outOfArea, setOutOfArea] = useState(false);
   const [nearbyDishCount, setNearbyDishCount] = useState<number>();
+  const [lockedTeaser, setLockedTeaser] = useState<GuidedPreviewResponse['meta']['lockedTeaser']>(null);
   // Invalidate on the rendered context, before the debounce starts another request.
   // Otherwise an older response can repaint results for text the user already replaced.
   const contextKey = JSON.stringify([inputs.protein, inputs.carbs, inputs.fat, inputs.calories, location.lat, location.lng, query.trim(), isOnboardingPreview]);
@@ -107,7 +108,10 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
         if (!isCurrent()) return;
         if (previewResponse) {
           setNearbyDishCount(previewResponse.meta.nearbyDishCount);
+          setLockedTeaser(previewResponse.meta.lockedTeaser ?? null);
           void saveOnboardingField('previewArea', `${lat}:${lng}`).then(() => saveOnboardingField('previewCraving', q.trim())).catch(() => undefined);
+        } else {
+          setLockedTeaser(null);
         }
         if (networkError) {
           if (!shuffle) { setResults([]); setNextCursor(null); }
@@ -314,5 +318,6 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
   }, [canShuffle, doFetch, inputs, location.lat, location.lng, location.source, query]);
   return { results, nextCursor, loading: canSearch && (loading || pending), loadingMore, refreshing,
     error: pending ? null : error, locked, fetchSeq, outOfArea: !pending && outOfArea,
-    nearbyDishCount: pending ? undefined : nearbyDishCount, doFetch, handleRefresh, handleEndReached, canShuffle, handleShuffle };
+    nearbyDishCount: pending ? undefined : nearbyDishCount, lockedTeaser: pending ? null : lockedTeaser,
+    doFetch, handleRefresh, handleEndReached, canShuffle, handleShuffle };
 }
