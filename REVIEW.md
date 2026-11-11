@@ -56,6 +56,7 @@ End with exactly one fenced JSON block:
 ```json
 {
   "domains": {"correctness": "pass", "<other required domain>": "pass"},
+  "rationale": {"correctness": ["what you checked", "the main risk you considered and why it's fine"]},
   "verdict": "pass" | "fail",
   "findings": [
     {"domains": ["correctness"], "severity": "CONFIRMED|PLAUSIBLE|NIT", "priority": "P0|P1|P2|P3", "impact": "user outcome, realistic trigger, scope, evidence and contract", "file": "path", "line": 0, "summary": "one sentence", "scenario": "input/state -> wrong outcome", "fix": "what to change, citing the pattern file to copy"}
@@ -68,6 +69,7 @@ Each domain verdict is `fail` only when a CONFIRMED finding is attributed to it.
 The overall `verdict` is `fail` only when at least one CONFIRMED finding exists.
 Consolidate duplicate behavior findings once and include all applicable domains.
 Missing domain results, inconsistent verdicts, or incomplete output cannot publish a passing status.
+Every domain that passes needs a `rationale` entry: 1-4 short bullets (what you actually checked for that domain, the main risk you considered, why it's fine) - not a restatement of "pass". A failing domain's findings already explain it; `rationale` for it is optional. This is not an invitation to pad: say what you checked, not everything you could have checked.
 
 ## Convergence
 
