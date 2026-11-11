@@ -18,7 +18,7 @@ function HowItWorksScreen() {
   useEffect(() => { trackOnboardingScreenView('how_it_works'); }, []);
   const { height } = useWindowDimensions();
   const compact = height < 780;
-  return <WelcomeScreen progress={0.61} title={"Two data\nsources."}
+  return <WelcomeScreen progress={0.61} title={"Where we get\nthe numbers."}
     canContinue onContinue={() => { void rememberOnboardingPreviewEntry()
       .then(() => router.push('/welcome/preview'))
       .catch(() => Alert.alert('Could not open preview', 'Please try again.')); }}>

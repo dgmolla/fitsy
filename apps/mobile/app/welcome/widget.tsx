@@ -21,7 +21,7 @@ function WidgetCardScreen() {
   // This is the last onboarding screen; finish exactly as a direct purchase
   // without a widget tip already does.
   const finish = () => { void openPurchasedDestination(navigation).then(() => clearPaymentSignInContinuation()); };
-  return <WelcomeScreen progress={0.95} title={"A meal at\na glance."}
+  return <WelcomeScreen progress={0.95} title={"Add a\nwidget."}
     subtitle="Meals that fit your macros near you. Shuffles and updates automatically."
     canContinue onContinue={finish} onSkip={finish} continueLabel="Start exploring" showBack={false}>
     {/* Matches fitsy.org's hero phone: a plain dark bezel (padding = frame
