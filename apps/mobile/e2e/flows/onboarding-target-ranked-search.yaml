@@ -181,20 +181,8 @@ env:
 - assertVisible: "A little context.*A better choice.*"
 - tapOn:
     id: welcome-continue
-- extendedWaitUntil:
-    visible:
-      id: onboarding-widget-card
-    timeout: 15000
-- assertVisible:
-    id: onboarding-widget-example
-- assertVisible: "1. Long-press your Home Screen."
-- assertVisible: "2. Tap \\+ \\(or Edit → Add Widget\\)."
-- assertVisible: "3. Search fitsy and add the widget."
-- assertVisible:
-    id: welcome-skip
-- takeScreenshot: onboarding-widget-card
-- tapOn:
-    id: welcome-skip
+# The widget screen moved to the end of onboarding (after payment); continue
+# now reaches the preview directly.
 - extendedWaitUntil:
     visible:
       id: coachmark-next
@@ -203,6 +191,15 @@ env:
 - assertVisible: "Your meal targets"
 - tapOn:
     id: coachmark-skip
+# Preview is map-first; switch to list for the rest of this flow's search/hero
+# assertions. Nothing below navigates away from preview, so this one toggle
+# covers the replay tour and every list interaction further down too.
+- extendedWaitUntil:
+    visible:
+      id: map-search-entry
+    timeout: 30000
+- tapOn:
+    id: map-search-entry
 - extendedWaitUntil:
     visible:
       id: discovery-hero

@@ -1,54 +1,56 @@
 import React from 'react';
-import { ImageBackground, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Image, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { useNavigation } from 'expo-router';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
-import { EDITORIAL, TEXT } from '@/lib/brand';
+import { TEXT } from '@/lib/brand';
 import { requireWelcomeGoal } from '@/lib/requireWelcomeGoal';
-import { RESUBSCRIBE_SAMPLE, RESUBSCRIBE_SAMPLE_IMAGE } from '@/lib/resubscribeSample';
+import { openPurchasedDestination } from '@/lib/paywallJourney';
+import { clearPaymentSignInContinuation } from '@/lib/paymentSignInContinuation';
 
-// This bundled, fixed sample always includes its published dish.
-const dish = RESUBSCRIBE_SAMPLE.bestMatch!;
 const steps = ['Long-press your Home Screen.', 'Tap + (or Edit → Add Widget).', 'Search fitsy and add the widget.'];
 
 function WidgetCardScreen() {
-  // Replace this optional tip so Preview's Back still returns to nutrition context.
-  const continueToPreview = () => router.replace('/welcome/preview');
-  return <WelcomeScreen progress={0.64} title={"A meal at\na glance."}
-    subtitle="Add Fitsy to your Home Screen."
-    canContinue onContinue={continueToPreview} onSkip={continueToPreview} continueLabel="Explore restaurants">
-    <View style={s.card} testID="onboarding-widget-card">
-      {/* Medium MealWidgetView layout, using the existing display-only menu sample. */}
-      <ImageBackground source={RESUBSCRIBE_SAMPLE_IMAGE} style={s.example} imageStyle={s.image}
-        accessible accessibilityRole="image" testID="onboarding-widget-example"
-        accessibilityLabel={`Example Fitsy widget: ${dish.name}, ${dish.proteinG} grams protein, ${dish.carbsG} grams carbs, ${dish.fatG} grams fat, ${dish.calories} calories.`}>
-        <LinearGradient colors={['rgba(0,0,0,0.62)', 'rgba(0,0,0,0.76)', 'rgba(0,0,0,0.94)']} style={s.widget}>
-          <Text style={s.dish}>{dish.name}</Text>
-          <View style={s.macros}>
-            <Text style={s.macro}>P {dish.proteinG}g</Text><Text style={s.macro}>C {dish.carbsG}g</Text>
-            <Text style={s.macro}>F {dish.fatG}g</Text><Text style={s.macro}>{dish.calories} kcal</Text>
-          </View>
-        </LinearGradient>
-      </ImageBackground>
-      <Text style={s.caption}>Example widget · Included with Fitsy Pro</Text>
-      <View style={s.steps}>
-        {steps.map((step, index) => <Text key={step} style={s.step} testID={`onboarding-widget-step-${index + 1}`}>{index + 1}. {step}</Text>)}
+  const navigation = useNavigation();
+  // Match WelcomeScreen's own compact breakpoint so the phone shrinks on
+  // shorter devices (iPhone SE) rather than pushing the steps under the footer.
+  const { height, fontScale } = useWindowDimensions();
+  const compact = height < 780 && fontScale <= 1.2;
+  const phoneWidth = compact ? 100 : 130;
+  const bezel = compact ? 4 : 5;
+  const outerRadius = compact ? 22 : 28;
+  // This is the last onboarding screen; finish exactly as a direct purchase
+  // without a widget tip already does.
+  const finish = () => { void openPurchasedDestination(navigation).then(() => clearPaymentSignInContinuation()); };
+  return <WelcomeScreen progress={0.95} title={"Add a\nwidget."}
+    subtitle="Meals that fit your macros near you. Shuffles and updates automatically."
+    canContinue onContinue={finish} onSkip={finish} continueLabel="Start exploring" showBack={false}>
+    {/* Matches fitsy.org's hero phone: a plain dark bezel (padding = frame
+      * thickness) around a clipped, cover-fit screenshot - no drawn phone
+      * mockup to keep in proportion, so the real screenshot always fills
+      * the frame edge to edge with no gaps or cropped content. */}
+    <View style={[s.phone, { width: phoneWidth, aspectRatio: 9 / 19.5, borderRadius: outerRadius, padding: bezel, marginBottom: compact ? 12 : 20 }]} testID="onboarding-widget-card">
+      <View style={[s.notch, { top: bezel + 4 }]} />
+      <View style={[s.screen, { borderRadius: outerRadius - bezel }]}>
+        <Image source={require('../../assets/widget-homescreen.png')} resizeMode="cover" style={s.screenshot}
+          accessible accessibilityRole="image" testID="onboarding-widget-example"
+          accessibilityLabel="Example Fitsy widget on a Home Screen, showing a real meal with its protein, carbs, fat and calories." />
       </View>
+    </View>
+    <View style={[s.steps, compact && s.stepsCompact]}>
+      {steps.map((step, index) => <Text key={step} style={[s.step, compact && s.stepCompact]} testID={`onboarding-widget-step-${index + 1}`}>{index + 1}. {step}</Text>)}
     </View>
   </WelcomeScreen>;
 }
 
 const s = StyleSheet.create({
-  card: { padding: 20, borderRadius: 24, backgroundColor: EDITORIAL.creamCard, gap: 16 },
-  example: { height: 158, borderRadius: 22, overflow: 'hidden', backgroundColor: '#121a17' },
-  image: { borderRadius: 22 },
-  widget: { flex: 1, padding: 14, justifyContent: 'flex-end', gap: 10 },
-  dish: { fontFamily: 'Georgia', fontSize: 20, fontWeight: '600', color: '#fff' },
-  macros: { flexDirection: 'row', gap: 4 },
-  macro: { flex: 1, fontSize: 13, fontWeight: '600', color: '#fff' },
-  caption: { ...TEXT.bodySmall, fontSize: 12, textAlign: 'center', color: EDITORIAL.textMid },
-  steps: { gap: 14 },
+  phone: { alignSelf: 'center', backgroundColor: '#1a1a1a' },
+  screen: { flex: 1, overflow: 'hidden' },
+  screenshot: { width: '100%', height: '100%' },
+  notch: { position: 'absolute', left: '50%', marginLeft: -16, width: 32, height: 8, borderRadius: 4, backgroundColor: '#000', zIndex: 1 },
+  steps: { gap: 10 },
+  stepsCompact: { gap: 6 },
   step: { ...TEXT.body, fontSize: 15, lineHeight: 22 },
+  stepCompact: { fontSize: 13, lineHeight: 18 },
 });
 
 export default requireWelcomeGoal(WidgetCardScreen, '/welcome/target-setup');

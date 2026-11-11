@@ -73,8 +73,12 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
   const controlsBottom = insets.top + 8 + topHeight;
   const maxTrayHeight = Math.max(160, layoutHeight - controlsBottom - bottomClearance - 96);
   // Match the list's free-result boundary and preserve rows without coordinates.
-  const cards = useMemo(() => d.canSearch && !d.loading ? (d.locked || d.isOnboardingPreview ? d.results.slice(0, 3) : d.results) : [],
-    [d.canSearch, d.loading, d.locked, d.isOnboardingPreview, d.results]);
+  // The preview appends one real, locked card teasing the paid tier, when the
+  // area has a fourth nearby restaurant to show (lockedTeaser is null otherwise).
+  const cards = useMemo(() => d.canSearch && !d.loading
+    ? (d.isOnboardingPreview ? (d.lockedTeaser ? [...d.results.slice(0, 3), d.lockedTeaser] : d.results.slice(0, 3))
+      : d.locked ? d.results.slice(0, 3) : d.results) : [],
+    [d.canSearch, d.loading, d.locked, d.isOnboardingPreview, d.results, d.lockedTeaser]);
   const pins = useMemo(() => cards.filter(hasMapCoordinate), [cards]);
   const index = cards.findIndex(result => result.id === selectedId);
   const fallback = !d.location.loading && d.location.source.startsWith('fallback-');
@@ -237,7 +241,7 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
             if (result) select(result, false);
           }}>
           {cards.map((result, position) => <View key={result.id} ref={position === 0 ? d.tourHeroRef : undefined} collapsable={false} testID={result.id === selectedId ? 'map-preview' : undefined}>
-            <DiscoveryMapCard result={result} locked={d.locked === true && !d.isOnboardingPreview}
+            <DiscoveryMapCard result={result} locked={(d.locked === true && !d.isOnboardingPreview) || result.id === d.lockedTeaser?.id}
               onboardingPreview={d.isOnboardingPreview} hideDishName={d.isOnboardingPreview && position > 0}
               style={{ width: cardWidth, height: compact ? 174 : 210 }}
               testID={result.id === selectedId ? 'map-preview-open' : `map-card-${position}`} onPress={() => open(result)}

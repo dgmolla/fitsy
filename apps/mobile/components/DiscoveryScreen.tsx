@@ -27,7 +27,10 @@ const FREE_RESULT_COUNT = 3;
 export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { onboardingPreview?: boolean; onPreviewBack?: () => void }) {
   const tabBarClearance = useFloatingNavClearance();
   const { mapDebug } = useLocalSearchParams<{ mapDebug?: string }>();
-  const mapEnabled = useMapSearchFlag(mapDebug === '1');
+  // The onboarding preview is map-first by product requirement, not by experiment
+  // rollout: it must not wait on the async remote flag a Debug/test-store build
+  // may never resolve before the real "Continue" navigation lands here.
+  const mapEnabled = useMapSearchFlag(mapDebug === '1' || onboardingPreview);
   const [view, setView] = useState<'map' | 'list'>('map');
   const showMap = mapEnabled && view === 'map';
   const discovery = useDiscoveryState({ onboardingPreview });
@@ -58,8 +61,14 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
   }), [showMap]);
   const closeTour = () => { finishTour(); listRef.current?.scrollToOffset({ offset: 0, animated: false }); };
   const renderSearchBar = (action?: React.ReactNode) => <SearchBar value={query} onChangeText={setQuery} onClear={handleClearQuery} containerRef={tourSearchRef} action={action} frosted={mapEnabled} />;
-  const previewNav = isOnboardingPreview && <WelcomeNav progress={0.75} backTestID="preview-back" onBack={onPreviewBack ?? (navigation.canGoBack() ? () => router.back() : undefined)} />;
+  const previewGoBack = onPreviewBack ?? (navigation.canGoBack() ? () => router.back() : undefined);
+  // The map preview is the real map screen, not an onboarding step: no
+  // progress-bar chrome there, just a small back control inline with the tip.
+  const previewNav = isOnboardingPreview && !showMap && <WelcomeNav progress={0.75} backTestID="preview-back" onBack={previewGoBack} />;
   const previewIntro = isOnboardingPreview && <View style={s.previewIntro} testID="preview-guide">
+    {showMap && previewGoBack && <Pressable onPress={previewGoBack} style={s.previewMapBack} accessibilityRole="button" accessibilityLabel="Go back" testID="preview-back">
+      <Ionicons name="chevron-back" size={20} color={EDITORIAL.textMid} />
+    </Pressable>}
     <Text style={s.previewHint}>{onboardingPitch(tried).preview}</Text>
     {mapEnabled && !showMap && <DiscoveryViewToggle map={false} onPress={() => setView('map')} />}
     <PreviewTourButton ready={tourReady} onPress={startTour} />
