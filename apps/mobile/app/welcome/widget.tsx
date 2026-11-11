@@ -22,7 +22,7 @@ function WidgetCardScreen() {
   // without a widget tip already does.
   const finish = () => { void openPurchasedDestination(navigation).then(() => clearPaymentSignInContinuation()); };
   return <WelcomeScreen progress={0.95} title={"A meal at\na glance."}
-    subtitle="Add Fitsy to your Home Screen to see it like this."
+    subtitle="Meals that fit your macros near you. Shuffles and updates automatically."
     canContinue onContinue={finish} onSkip={finish} continueLabel="Start exploring" showBack={false}>
     {/* Matches fitsy.org's hero phone: a plain dark bezel (padding = frame
       * thickness) around a clipped, cover-fit screenshot - no drawn phone
