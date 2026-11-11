@@ -14,6 +14,20 @@ import Problem from '../app/welcome/problem';
 import { getOnboardingData } from '../lib/onboardingStorage';
 import { supabase } from '../lib/supabase';
 
+// Preview is map-first now, so this flow renders the real DiscoveryMap.
+jest.mock('react-native-maps', () => {
+  const React = require('react');
+  const { View, Pressable } = require('react-native');
+  return { __esModule: true,
+    default: React.forwardRef((props: object, ref: React.Ref<unknown>) => {
+      React.useImperativeHandle(ref, () => ({ animateToRegion: jest.fn(), animateCamera: jest.fn(), fitToCoordinates: jest.fn() }));
+      return <View {...props} />;
+    }),
+    Marker: ({ onPress, ...props }: { onPress: (event: unknown) => void }) =>
+      <Pressable testID="native-marker" {...props} onPress={() => onPress({ stopPropagation() {} })} />,
+  };
+});
+
 const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
 type Step = {
   openLink?: string;
@@ -159,8 +173,10 @@ test.each([
     const purchase = jest.spyOn(Purchases, 'purchasePackage');
     if (screen.queryByTestId('coachmark-skip'))
       await act(async () => { fireEvent.press(screen.getByTestId('coachmark-skip')); });
-    await screen.findByTestId('discovery-hero');
-    await act(async () => { fireEvent.press(screen.getByTestId('discovery-hero')); });
+    await screen.findByTestId('map-pin-0');
+    await act(async () => { fireEvent.press(screen.getByTestId('map-pin-0')); });
+    await screen.findByTestId('map-preview-open');
+    await act(async () => { fireEvent.press(screen.getByTestId('map-preview-open')); });
     await screen.findByTestId('paywall-offer-paid');
     // The saved native journey exercises the edge swipe here; UIKit is not
     // simulated by this rendered regression. Preserve the real history for Back.

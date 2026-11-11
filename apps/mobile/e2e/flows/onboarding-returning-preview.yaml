@@ -232,11 +232,8 @@ env:
 - tapOn:
     id: coachmark-skip
     optional: true
-# The Debug Test Store uses its existing map opt-in for this returning preview.
-- openLink: com.fitsy.mobile://welcome/preview?mapDebug=1
-- tapOn:
-    text: "^Open$"
-    optional: true
+# Preview is map-first by product requirement, not the search tab's experiment
+# flag: the real "Continue" navigation above must land in map mode on its own.
 - extendedWaitUntil:
     visible:
       id: map-pin-0

@@ -27,7 +27,10 @@ const FREE_RESULT_COUNT = 3;
 export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { onboardingPreview?: boolean; onPreviewBack?: () => void }) {
   const tabBarClearance = useFloatingNavClearance();
   const { mapDebug } = useLocalSearchParams<{ mapDebug?: string }>();
-  const mapEnabled = useMapSearchFlag(mapDebug === '1');
+  // The onboarding preview is map-first by product requirement, not by experiment
+  // rollout: it must not wait on the async remote flag a Debug/test-store build
+  // may never resolve before the real "Continue" navigation lands here.
+  const mapEnabled = useMapSearchFlag(mapDebug === '1' || onboardingPreview);
   const [view, setView] = useState<'map' | 'list'>('map');
   const showMap = mapEnabled && view === 'map';
   const discovery = useDiscoveryState({ onboardingPreview });
