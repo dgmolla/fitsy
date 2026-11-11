@@ -19,6 +19,34 @@ const profile = { configuration: 'Debug', storeMode: 'test-store', buildMode: 'o
 const smoke = ['cold-start-welcome', 'signin-options', 'paywall-access'];
 const command = (binary, args) => execFileSync(binary, args, { cwd: repository, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 120000 }).trim();
 const devices = () => Object.values(JSON.parse(command('xcrun', ['simctl', 'list', 'devices', 'available', '--json'])).devices).flat();
+// Mirrors scripts/sim/sim's own claim_owner(): same file, same expiry rule.
+// Reading it directly avoids a second `bash .../sim` subprocess just to ask.
+const claimFile = join(process.env.HOME || '', '.fitsy-sim-claim.json');
+const claimOwner = () => {
+  let claim;
+  try { claim = JSON.parse(readFileSync(claimFile, 'utf8')); } catch { return ''; }
+  return claim && typeof claim.owner === 'string' && claim.expires > Date.now() / 1000 ? claim.owner : '';
+};
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+// The hosted boot step shares one Mac with local interactive lanes. Rather than
+// fail the instant a foreign claim or booted simulator is seen, wait (bounded
+// by the job's own worker timeout) for it to clear naturally: the local lane's
+// claim expires or is released, or its device is shut down. Neither lane
+// preempts the other; the hosted side is just patient up to its own deadline.
+export async function waitForClaimableSimulator(deadlineMs, { checkOwner = claimOwner, checkBooted = () => devices().some(item => item.state === 'Booted'),
+  pollMs = 15000, now = Date.now, wait = sleep } = {}) {
+  for (;;) {
+    const owner = checkOwner();
+    const booted = checkBooted();
+    if (!owner && !booted) return;
+    if (now() >= deadlineMs) {
+      throw new Error(owner
+        ? `Timed out waiting for simulator claim held by ${owner} to be released`
+        : 'Timed out waiting for a foreign booted simulator to be released');
+    }
+    await wait(Math.min(pollMs, Math.max(0, deadlineMs - now())));
+  }
+}
 
 export function selectFlows(scope, catalog, exceptions = [], affected = []) {
   if (!['smoke', 'flow', 'full'].includes(scope)) throw new Error('Simulator scope must be smoke, flow or full');
@@ -218,10 +246,10 @@ export async function main(action) {
   const udid = process.env.FITSY_XCTEST_SIM_UDID;
   if (!/^[A-F0-9-]{36}$/i.test(udid || '')) throw new Error('Set FITSY_SIM_UDID to the dedicated iPhone 15');
   if (action === 'boot') {
-    const inventory = devices();
-    const device = inventory.find(item => item.udid === udid);
+    const device = devices().find(item => item.udid === udid);
     if (device?.deviceTypeIdentifier !== 'com.apple.CoreSimulator.SimDeviceType.iPhone-15') throw new Error('FITSY_SIM_UDID must select an available iPhone 15');
-    if (inventory.some(item => item.state === 'Booted')) throw new Error('A simulator is already booted; release its current owner first');
+    const workerSeconds = Number(process.env.FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS || 90 * 60);
+    await waitForClaimableSimulator(Date.now() + workerSeconds * 1000);
     mkdirSync(work, { recursive: true, mode: 0o700 });
     const { claimDevice } = await import('./product-flow.mjs');
     claimDevice();

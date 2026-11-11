@@ -8,7 +8,7 @@ import test from 'node:test';
 import yaml from 'js-yaml';
 import { actionsSelection } from '../verify/simulator-actions.mjs';
 import { simulatorBudget, simulatorFlows } from '../verify/impact-plan.mjs';
-import { fixtureAccounts, prepareRuntimeApp, selectFlows, validateRuntime } from './actions.mjs';
+import { fixtureAccounts, prepareRuntimeApp, selectFlows, validateRuntime, waitForClaimableSimulator } from './actions.mjs';
 
 const root = resolve(import.meta.dirname, '../..');
 const workflow = yaml.load(readFileSync(join(root, '.github/workflows/simulator.yml'), 'utf8'));
@@ -255,7 +255,7 @@ test('CLI boot pre-dismisses the iOS slide-to-type sheet after the device is rea
 if(args.includes('list')) console.log(JSON.stringify({devices:{ios:[{udid:${JSON.stringify(udid)},state:'Shutdown',deviceTypeIdentifier:'com.apple.CoreSimulator.SimDeviceType.iPhone-15'}]}}));\n`;
   for (const name of ['bash', 'xcrun']) writeFileSync(join(bin, name), executable, { mode: 0o755 });
   const result = spawnSync(process.execPath, [join(root, 'scripts/sim/actions.mjs'), 'boot'], { cwd: dir, encoding: 'utf8',
-    env: { ...env, PATH: `${bin}:${env.PATH}`, FITSY_PRODUCT_ROOT: dir, GITHUB_WORKSPACE: dir, GITHUB_ACTIONS: 'true', RUNNER_OS: 'macOS',
+    env: { ...env, PATH: `${bin}:${env.PATH}`, HOME: dir, FITSY_PRODUCT_ROOT: dir, GITHUB_WORKSPACE: dir, GITHUB_ACTIONS: 'true', RUNNER_OS: 'macOS',
       RUNNER_TEMP: dir, GITHUB_RUN_ID: '13', GITHUB_RUN_ATTEMPT: '1', FITSY_XCTEST_SIM_UDID: udid,
       FITSY_SIM_OWNER: 'actions-13-1', FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS: '1800' } });
   assert.equal(result.status, 0, result.stderr);
@@ -331,4 +331,38 @@ test('CLI cleanup fails and retains ownership when an owned Metro ignores SIGTER
     child.kill('SIGKILL');
     await ended;
   }
+});
+
+function fakeClock(startMs = 0) {
+  let elapsed = startMs;
+  return { now: () => elapsed, wait: async ms => { elapsed += ms; } };
+}
+
+test('hosted boot waits out a foreign claim released before the deadline, then proceeds', async () => {
+  const owners = ['someone-else', 'someone-else', ''];
+  const { now, wait } = fakeClock();
+  let calls = 0;
+  await waitForClaimableSimulator(60000, { checkOwner: () => { calls++; return owners[Math.min(calls - 1, owners.length - 1)]; },
+    checkBooted: () => false, pollMs: 15000, now, wait });
+  assert.equal(calls, owners.length);
+});
+
+test('hosted boot fails clearly instead of hanging when a foreign claim outlasts the deadline', async () => {
+  const { now, wait } = fakeClock();
+  await assert.rejects(
+    waitForClaimableSimulator(30000, { checkOwner: () => 'stuck-local-lane', checkBooted: () => false, pollMs: 15000, now, wait }),
+    /Timed out waiting for simulator claim held by stuck-local-lane to be released/);
+});
+
+test('hosted boot fails clearly when a foreign booted simulator (no claim owner) outlasts the deadline', async () => {
+  const { now, wait } = fakeClock();
+  await assert.rejects(
+    waitForClaimableSimulator(30000, { checkOwner: () => '', checkBooted: () => true, pollMs: 15000, now, wait }),
+    /Timed out waiting for a foreign booted simulator to be released/);
+});
+
+test('an already-clear claim (none held, or expired) lets the hosted boot proceed without waiting', async () => {
+  let waited = false;
+  await waitForClaimableSimulator(60000, { checkOwner: () => '', checkBooted: () => false, wait: async () => { waited = true; } });
+  assert.equal(waited, false);
 });
