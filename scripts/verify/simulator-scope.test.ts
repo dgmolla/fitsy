@@ -277,7 +277,7 @@ test.each(['success', 'failure', 'skipped', 'cancelled'])(
   'actual final Verify requires success from the selected Build job (Build=%s)', buildResult => {
   const needs = {
     classify: { result: 'success', outputs: { code: 'true', tests: 'true', build: 'true' } },
-    static: { result: 'success' }, test: { result: 'success' },
+    static: { result: 'success' }, test: { result: 'success' }, 'test-other': { result: 'success' },
     'domain-check': { result: 'success' }, build: { result: buildResult },
   };
   const command = workflow.jobs.verify!.steps.find(step => step.name === 'Require every applicable job')!.run!;

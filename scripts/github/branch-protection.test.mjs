@@ -16,7 +16,9 @@ test('Verify covers every job and rejects failed, cancelled, missing or unexpect
   for (const event of ['pull_request', 'push']) for (const flags of [['true', 'true', 'true'], ['true', 'true', 'false'], ['false', 'false', 'false']]) {
     const needs = Object.fromEntries(names.map(name => [name, { result: 'success' }]));
     needs.classify.outputs = Object.fromEntries(['code', 'tests', 'build'].map((key, i) => [key, flags[i]]));
-    ['static', 'test', 'build'].forEach((name, i) => { needs[name].result = flags[i] === 'true' ? 'success' : 'skipped'; });
+    const flagKeys = { static: 'code', test: 'tests', 'test-other': 'tests', build: 'build' };
+    for (const name of ['static', 'test', 'test-other', 'build'])
+      needs[name].result = needs.classify.outputs[flagKeys[name]] === 'true' ? 'success' : 'skipped';
     needs['domain-check'].result = event === 'pull_request' ? 'success' : 'skipped';
     assert.equal(run(needs, event), 0);
     for (const name of names) for (const result of ['failure', 'cancelled', 'skipped', undefined]) {
