@@ -218,6 +218,11 @@ env:
     id: coachmark-next
 - assertNotVisible:
     id: coachmark-ring
+# Preview is map-first; switch to list for the search/hero assertions below.
+# Replay+Skip further down reopens the tour on this same list view, with no
+# extra navigation, so it does not need its own toggle back to list.
+- tapOn:
+    id: map-search-entry
 - copyTextFrom:
     id: discovery-search
 - assertTrue: ${maestro.copiedText === 'pizza'}

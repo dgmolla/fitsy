@@ -184,7 +184,10 @@ export default function PaymentScreen() {
     // (welcome/preview) gets the widget tip; a returning sign-in that reaches
     // payment directly (e.g. a never-subscribed account) skips straight to
     // its purchased destination, same as before.
-    if (await consumeShowWidgetTip()) { router.push('/welcome/widget'); return; }
+    // A reset, not a push: Back/swipe must not reach this spent payment screen,
+    // which renders nothing for an already-entitled user and cannot redirect
+    // again once claim() has fired.
+    if (await consumeShowWidgetTip()) { resetWelcomeJourney(navigation, 'widget'); return; }
     await openPurchasedDestination(navigation);
     await clearPaymentSignInContinuation();
   }

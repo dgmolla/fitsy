@@ -16,7 +16,7 @@ function WidgetCardScreen() {
   const finish = () => { void openPurchasedDestination(navigation).then(() => clearPaymentSignInContinuation()); };
   return <WelcomeScreen progress={0.95} title={"A meal at\na glance."}
     subtitle="Add Fitsy to your Home Screen to see it like this."
-    canContinue onContinue={finish} onSkip={finish} continueLabel="Start exploring">
+    canContinue onContinue={finish} onSkip={finish} continueLabel="Start exploring" showBack={false}>
     <View style={s.phone} testID="onboarding-widget-card">
       <Image source={require('../../assets/widget-homescreen.png')} resizeMode="contain" style={s.screenshot}
         accessible accessibilityRole="image" testID="onboarding-widget-example"

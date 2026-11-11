@@ -191,6 +191,15 @@ env:
 - assertVisible: "Your meal targets"
 - tapOn:
     id: coachmark-skip
+# Preview is map-first; switch to list for the rest of this flow's search/hero
+# assertions. Nothing below navigates away from preview, so this one toggle
+# covers the replay tour and every list interaction further down too.
+- extendedWaitUntil:
+    visible:
+      id: map-search-entry
+    timeout: 30000
+- tapOn:
+    id: map-search-entry
 - extendedWaitUntil:
     visible:
       id: discovery-hero

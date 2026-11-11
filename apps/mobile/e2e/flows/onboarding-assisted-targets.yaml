@@ -204,6 +204,9 @@ env:
     id: coachmark-next
 - assertVisible: "5 OF 5"
 - tapOn: "Find my meal"
+# Preview is map-first; switch to list for the search/hero assertions below.
+- tapOn:
+    id: map-search-entry
 - copyTextFrom:
     id: discovery-search
 - assertTrue: ${maestro.copiedText === 'pizza'}
@@ -245,7 +248,14 @@ env:
 - tapOn:
     id: welcome-continue
 # The widget screen moved to the end of onboarding (after payment); continue
-# now reaches the preview directly.
+# now reaches the preview directly. The tour is already seen from the first
+# visit, so this lands straight on the map; switch to list for the assertion.
+- extendedWaitUntil:
+    visible:
+      id: map-search-entry
+    timeout: 30000
+- tapOn:
+    id: map-search-entry
 - extendedWaitUntil:
     visible:
       id: discovery-hero

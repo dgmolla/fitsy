@@ -14,6 +14,8 @@ import { BOOT_VERDICT_CAP_MS } from '../lib/usePurchases';
 import { saveReminderPreferences } from '../lib/notificationSchedule';
 import { paymentCompletionRoutes } from './paymentCompletionRoutes';
 import { installHardwareBackFixture } from './hardwareBackHarness';
+import { saveOnboardingField } from '../lib/onboardingStorage';
+import WidgetCard from '../app/welcome/widget';
 
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
@@ -337,6 +339,25 @@ test('a purchase completed during the onboarding preview pass shows the widget t
   // The destination from the earlier preview-set intent is still pending,
   // not lost or opened early.
   expect(await getPaywallIntent()).toEqual(selected);
+});
+
+test('the widget tip has no visible Back and hardware Back cannot land on the spent payment screen', async () => {
+  const back = installHardwareBackFixture();
+  await rememberShowWidgetTip();
+  await saveOnboardingField('goal', 'lose_fat');
+  const now = Date.now();
+  const screen = renderRouter({ ...routes, 'welcome/widget': () => <WidgetCard /> }, { initialUrl: '/welcome/payment' });
+  jest.setSystemTime(now);
+  await waitFor(() => expect(screen.getByTestId('paywall-price-yearly').props.children).toBe('$59.99'));
+  await act(async () => {});
+  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
+  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/widget'));
+  // A reset, not a push, put the widget tip here: payment is no longer in
+  // history, so it can never render null and strand a newly entitled buyer.
+  expect(screen.queryByTestId('welcome-back')).toBeNull();
+  await act(async () => { back(); });
+  expect(screen.getPathname()).toBe('/welcome/widget');
+  expect(screen.getByTestId('onboarding-widget-card')).toBeTruthy();
 });
 
 test('a returning sign-in that reaches payment directly never sees the widget tip', async () => {
