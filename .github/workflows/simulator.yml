@@ -55,6 +55,8 @@ jobs:
       FITSY_SIM_OWNER: actions-${{ github.run_id }}-${{ github.run_attempt }}
       FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS: ${{ needs.select.outputs.worker_timeout_seconds }}
     steps:
+      - name: Record job start so the worker's own timeout margin is measured from it, not from after setup
+        run: echo "FITSY_JOB_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0

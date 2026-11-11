@@ -261,12 +261,16 @@ export async function main(action) {
     if (device?.deviceTypeIdentifier !== 'com.apple.CoreSimulator.SimDeviceType.iPhone-15') throw new Error('FITSY_SIM_UDID must select an available iPhone 15');
     const workerSeconds = Number(process.env.FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS || 90 * 60);
     // FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS is the same budget as the job's own
-    // timeout-minutes. Without margin, an exhausted wait races GitHub's own
-    // SIGTERM and reliably loses, so the job dies with a bare "cancelled" and
-    // no reason instead of this function's own named error. 60s is enough for
-    // this one check-and-throw; it does not meaningfully shrink the time left
-    // for the real build/flows afterward when the claim frees up promptly.
-    await waitForClaimableSimulator(Date.now() + workerSeconds * 1000 - 60000);
+    // timeout-minutes, which is measured from job start, not from this step.
+    // checkout/setup-node/npm ci/fingerprint/cache-restore already spend real
+    // time before this line runs, so the deadline must be anchored to the
+    // job's own start (FITSY_JOB_STARTED_AT, set by this job's first step),
+    // not to "now" here - otherwise the 60s margin is silently eaten by that
+    // setup time and GitHub's own SIGTERM still wins the race, with the job
+    // dying as a bare "cancelled" instead of this function's named error.
+    const jobStartedAt = Number(process.env.FITSY_JOB_STARTED_AT);
+    const budgetStart = Number.isFinite(jobStartedAt) && jobStartedAt > 0 ? jobStartedAt * 1000 : Date.now();
+    await waitForClaimableSimulator(budgetStart + workerSeconds * 1000 - 60000);
     mkdirSync(work, { recursive: true, mode: 0o700 });
     const { claimDevice } = await import('./product-flow.mjs');
     claimDevice();
