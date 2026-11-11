@@ -8,7 +8,7 @@ import test from 'node:test';
 import yaml from 'js-yaml';
 import { actionsSelection } from '../verify/simulator-actions.mjs';
 import { simulatorBudget, simulatorFlows } from '../verify/impact-plan.mjs';
-import { fixtureAccounts, prepareRuntimeApp, selectFlows, validateRuntime, waitForClaimableSimulator } from './actions.mjs';
+import { awaitCommandReport, fixtureAccounts, prepareRuntimeApp, selectFlows, validateRuntime, waitForClaimableSimulator } from './actions.mjs';
 
 const root = resolve(import.meta.dirname, '../..');
 const workflow = yaml.load(readFileSync(join(root, '.github/workflows/simulator.yml'), 'utf8'));
@@ -435,4 +435,33 @@ test('waitForClaimableSimulator logs again immediately when the owner changes, e
     'Waiting for simulator claim held by first-owner to be released (60s left)',
     'Waiting for simulator claim held by second-owner to be released (30s left)',
   ]);
+});
+
+test('awaitCommandReport returns immediately when the report is already there', async () => {
+  let waited = 0;
+  const report = await awaitCommandReport('unused', { readdir: () => ['commands-chain-menu-serving.json'], wait: async ms => { waited += ms; } });
+  assert.equal(report, 'commands-chain-menu-serving.json');
+  assert.equal(waited, 0);
+});
+
+test('awaitCommandReport tolerates the driver child still flushing the report after the command exits', async () => {
+  let call = 0;
+  const entries = [[], [], ['commands-chain-menu-serving.json']];
+  const report = await awaitCommandReport('unused', { readdir: () => entries[Math.min(call++, entries.length - 1)], pollMs: 250, maxWaitMs: 3000 });
+  assert.equal(report, 'commands-chain-menu-serving.json');
+  assert.equal(call, 3);
+});
+
+test('awaitCommandReport gives up after its bounded grace window and names what it actually found', async () => {
+  await assert.rejects(
+    awaitCommandReport('unused', { readdir: () => ['timeline.jsonl'], wait: async () => {}, pollMs: 250, maxWaitMs: 1000 }),
+    /found 0 of 1 entries: \[\]/);
+});
+
+test('awaitCommandReport does not wait out an unexpected extra match; that fails immediately with full diagnostics', async () => {
+  let waited = false;
+  await assert.rejects(
+    awaitCommandReport('unused', { readdir: () => ['commands-a.json', 'commands-b.json'], wait: async () => { waited = true; } }),
+    /found 2 of 2 entries: \["commands-a\.json","commands-b\.json"\]/);
+  assert.equal(waited, false);
 });
