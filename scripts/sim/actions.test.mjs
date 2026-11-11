@@ -21,11 +21,17 @@ const temporary = t => {
 
 test('hosted PR and main use affected journeys, retain bounded control smoke and fail closed on unknown impact', () => {
   for (const event of ['pull_request', 'push']) {
-    for (const path of ['scripts/sim/ci.mjs', 'scripts/verify/impact-plan.mjs', '.github/workflows/simulator.yml'])
+    for (const path of ['scripts/sim/ci.mjs', 'scripts/verify/impact-plan.mjs', 'scripts/verify/simulator-actions.mjs',
+      'scripts/verify/product-flow.mjs', 'scripts/verify/media-integration.mjs', '.github/workflows/simulator.yml'])
       assert.equal(actionsSelection([path], event, {}).scope, 'smoke');
     for (const path of ['apps/mobile/app/index.tsx', 'apps/mobile/new-unmapped.ts', 'package-lock.json'])
       assert.equal(actionsSelection([path], event, {}).scope, 'full');
-    for (const path of ['apps/mobile/README.md', 'scripts/sim/actions.test.mjs', 'docs/ci-simulator.md'])
+    // #805's real shape: tooling-only scripts/verify/ changes outside the files
+    // the hosted Maestro job's own execution path actually depends on - never
+    // touches how journeys run, so it must not force hosted smoke coverage.
+    for (const path of ['apps/mobile/README.md', 'scripts/sim/actions.test.mjs', 'docs/ci-simulator.md',
+      'scripts/verify/test.sh', 'scripts/verify/impact-plan.test.ts', 'scripts/verify/simulator-actions.test.mjs',
+      '.github/workflows/verify.yml'])
       assert.equal(actionsSelection([path], event, {}).scope, 'none');
     const selected = actionsSelection(['apps/mobile/app/notification-settings.tsx'], event, {});
     assert.equal(selected.scope, 'flow');
