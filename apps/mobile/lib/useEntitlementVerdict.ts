@@ -167,11 +167,13 @@ export function useEntitlementVerdict({
   const syncEntitlement = useCallback(
     async (reason: EntitlementSyncReason): Promise<boolean | null> => {
       try {
-        // No session: nothing to be entitled as. Also keeps the anonymous
-        // teaser from firing an authenticated request that a 401 would turn
-        // into a "session expired" bounce.
+        // No session: nothing to be entitled as. An anonymous session (#801)
+        // counts the same way - it's the exact "anonymous teaser" case this
+        // guard exists for, just no longer expressed as session === null.
+        // Letting it through would fire an authenticated request that a 401
+        // turns into a "session expired" bounce back to the welcome screen.
         const { data } = await supabase.auth.getSession();
-        if (!data.session) {
+        if (!data.session || data.session.user.is_anonymous) {
           // Inside the grace window the store just confirmed Pro; a session
           // auth-js dropped meanwhile must not bounce the charged user (the
           // paywall refuses to start a purchase without one, so this is the
