@@ -8,7 +8,7 @@ import test from 'node:test';
 import yaml from 'js-yaml';
 import { actionsSelection } from '../verify/simulator-actions.mjs';
 import { simulatorBudget, simulatorFlows } from '../verify/impact-plan.mjs';
-import { fixtureAccounts, prepareRuntimeApp, selectFlows, validateRuntime } from './actions.mjs';
+import { fixtureAccounts, prepareRuntimeApp, selectFlows, validateRuntime, waitForClaimableSimulator } from './actions.mjs';
 
 const root = resolve(import.meta.dirname, '../..');
 const workflow = yaml.load(readFileSync(join(root, '.github/workflows/simulator.yml'), 'utf8'));
@@ -21,11 +21,17 @@ const temporary = t => {
 
 test('hosted PR and main use affected journeys, retain bounded control smoke and fail closed on unknown impact', () => {
   for (const event of ['pull_request', 'push']) {
-    for (const path of ['scripts/sim/ci.mjs', 'scripts/verify/impact-plan.mjs', '.github/workflows/simulator.yml'])
+    for (const path of ['scripts/sim/ci.mjs', 'scripts/verify/impact-plan.mjs', 'scripts/verify/simulator-actions.mjs',
+      'scripts/verify/product-flow.mjs', 'scripts/verify/media-integration.mjs', '.github/workflows/simulator.yml'])
       assert.equal(actionsSelection([path], event, {}).scope, 'smoke');
     for (const path of ['apps/mobile/app/index.tsx', 'apps/mobile/new-unmapped.ts', 'package-lock.json'])
       assert.equal(actionsSelection([path], event, {}).scope, 'full');
-    for (const path of ['apps/mobile/README.md', 'scripts/sim/actions.test.mjs', 'docs/ci-simulator.md'])
+    // #805's real shape: tooling-only scripts/verify/ changes outside the files
+    // the hosted Maestro job's own execution path actually depends on - never
+    // touches how journeys run, so it must not force hosted smoke coverage.
+    for (const path of ['apps/mobile/README.md', 'scripts/sim/actions.test.mjs', 'docs/ci-simulator.md',
+      'scripts/verify/test.sh', 'scripts/verify/impact-plan.test.ts', 'scripts/verify/simulator-actions.test.mjs',
+      '.github/workflows/verify.yml'])
       assert.equal(actionsSelection([path], event, {}).scope, 'none');
     const selected = actionsSelection(['apps/mobile/app/notification-settings.tsx'], event, {});
     assert.equal(selected.scope, 'flow');
@@ -145,6 +151,8 @@ test('workflow isolates PR cancellation from the single Mac queue and always cle
   assert.equal(workflow.jobs.mac['timeout-minutes'], '${{ fromJSON(needs.select.outputs.timeout_minutes) }}');
   assert.equal(workflow.jobs.mac.env.FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS,
     '${{ needs.select.outputs.worker_timeout_seconds }}');
+  assert.match(workflow.jobs.mac.steps[0].run, /FITSY_JOB_STARTED_AT=\$\(date \+%s\)/);
+  assert.equal(workflow.jobs.mac.steps[1].uses, 'actions/checkout@v4');
   assert.match(workflow.jobs.mac.steps.at(-1).if, /always\(\)/);
   assert.match(workflow.jobs.simulator.if, /always\(\)/);
   assert.equal(workflow.on.pull_request.paths, undefined);
@@ -255,7 +263,7 @@ test('CLI boot pre-dismisses the iOS slide-to-type sheet after the device is rea
 if(args.includes('list')) console.log(JSON.stringify({devices:{ios:[{udid:${JSON.stringify(udid)},state:'Shutdown',deviceTypeIdentifier:'com.apple.CoreSimulator.SimDeviceType.iPhone-15'}]}}));\n`;
   for (const name of ['bash', 'xcrun']) writeFileSync(join(bin, name), executable, { mode: 0o755 });
   const result = spawnSync(process.execPath, [join(root, 'scripts/sim/actions.mjs'), 'boot'], { cwd: dir, encoding: 'utf8',
-    env: { ...env, PATH: `${bin}:${env.PATH}`, FITSY_PRODUCT_ROOT: dir, GITHUB_WORKSPACE: dir, GITHUB_ACTIONS: 'true', RUNNER_OS: 'macOS',
+    env: { ...env, PATH: `${bin}:${env.PATH}`, HOME: dir, FITSY_PRODUCT_ROOT: dir, GITHUB_WORKSPACE: dir, GITHUB_ACTIONS: 'true', RUNNER_OS: 'macOS',
       RUNNER_TEMP: dir, GITHUB_RUN_ID: '13', GITHUB_RUN_ATTEMPT: '1', FITSY_XCTEST_SIM_UDID: udid,
       FITSY_SIM_OWNER: 'actions-13-1', FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS: '1800' } });
   assert.equal(result.status, 0, result.stderr);
@@ -266,6 +274,43 @@ if(args.includes('list')) console.log(JSON.stringify({devices:{ios:[{udid:${JSON
     args.join(' ') === `simctl spawn ${udid} defaults write com.apple.keyboard.preferences DidShowContinuousPathIntroduction -bool true`);
   assert(bootIndex >= 0 && statusIndex >= 0 && defaultsIndex >= 0, JSON.stringify(calls));
   assert(bootIndex < statusIndex && statusIndex < defaultsIndex, 'the keyboard default must be written only after the device reports fully booted');
+});
+
+test('CLI boot anchors its timeout margin to the job\'s own start, not to this step, so setup time cannot eat the margin', t => {
+  const dir = temporary(t), bin = join(dir, 'bin'), log = join(dir, 'calls');
+  mkdirSync(bin); mkdirSync(join(dir, 'apps/mobile'), { recursive: true });
+  const udid = '11111111-1111-1111-1111-111111111111';
+  const executable = `#!${process.execPath}\nconst fs=require('node:fs'); const args=process.argv.slice(2); fs.appendFileSync(${JSON.stringify(log)},JSON.stringify(args)+'\\n');
+if(args.includes('list')) console.log(JSON.stringify({devices:{ios:[{udid:${JSON.stringify(udid)},state:'Shutdown',deviceTypeIdentifier:'com.apple.CoreSimulator.SimDeviceType.iPhone-15'}]}}));\n`;
+  for (const name of ['bash', 'xcrun']) writeFileSync(join(bin, name), executable, { mode: 0o755 });
+  writeFileSync(join(dir, '.fitsy-sim-claim.json'), JSON.stringify({ owner: 'other-lane', expires: Math.floor(Date.now() / 1000) + 3600 }));
+  // Simulate ~29.5 minutes already spent on checkout/setup-node/npm ci/fingerprint/cache-restore
+  // before this boot step runs, against a 30-minute (1800s) job budget. Anchored to job start,
+  // the deadline (minus the 60s margin) is already in the past, so this must fail immediately
+  // instead of computing a fresh ~29-minute wait from "now".
+  const jobStartedAt = Math.floor(Date.now() / 1000) - 1770;
+  const result = spawnSync(process.execPath, [join(root, 'scripts/sim/actions.mjs'), 'boot'], { cwd: dir, encoding: 'utf8', timeout: 10000,
+    env: { ...env, PATH: `${bin}:${env.PATH}`, HOME: dir, FITSY_PRODUCT_ROOT: dir, GITHUB_WORKSPACE: dir, GITHUB_ACTIONS: 'true', RUNNER_OS: 'macOS',
+      RUNNER_TEMP: dir, GITHUB_RUN_ID: '14', GITHUB_RUN_ATTEMPT: '1', FITSY_XCTEST_SIM_UDID: udid, FITSY_SIM_OWNER: 'actions-14-1',
+      FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS: '1800', FITSY_JOB_STARTED_AT: String(jobStartedAt) } });
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stderr, /Timed out waiting for simulator claim held by other-lane to be released/);
+});
+
+test('CLI boot falls back to this step\'s own start when FITSY_JOB_STARTED_AT is absent', t => {
+  const dir = temporary(t), bin = join(dir, 'bin'), log = join(dir, 'calls');
+  mkdirSync(bin); mkdirSync(join(dir, 'apps/mobile'), { recursive: true });
+  const udid = '11111111-1111-1111-1111-111111111111';
+  const executable = `#!${process.execPath}\nconst fs=require('node:fs'); const args=process.argv.slice(2); fs.appendFileSync(${JSON.stringify(log)},JSON.stringify(args)+'\\n');
+if(args.includes('list')) console.log(JSON.stringify({devices:{ios:[{udid:${JSON.stringify(udid)},state:'Shutdown',deviceTypeIdentifier:'com.apple.CoreSimulator.SimDeviceType.iPhone-15'}]}}));\n`;
+  for (const name of ['bash', 'xcrun']) writeFileSync(join(bin, name), executable, { mode: 0o755 });
+  writeFileSync(join(dir, '.fitsy-sim-claim.json'), JSON.stringify({ owner: 'other-lane', expires: Math.floor(Date.now() / 1000) + 3600 }));
+  const result = spawnSync(process.execPath, [join(root, 'scripts/sim/actions.mjs'), 'boot'], { cwd: dir, encoding: 'utf8', timeout: 10000,
+    env: { ...env, PATH: `${bin}:${env.PATH}`, HOME: dir, FITSY_PRODUCT_ROOT: dir, GITHUB_WORKSPACE: dir, GITHUB_ACTIONS: 'true', RUNNER_OS: 'macOS',
+      RUNNER_TEMP: dir, GITHUB_RUN_ID: '15', GITHUB_RUN_ATTEMPT: '1', FITSY_XCTEST_SIM_UDID: udid, FITSY_SIM_OWNER: 'actions-15-1',
+      FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS: '2' } });
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stderr, /Timed out waiting for simulator claim held by other-lane to be released/);
 });
 
 test('real cleanup retains failed Maestro bytes privately and fails closed when retention is unavailable', t => {
@@ -331,4 +376,63 @@ test('CLI cleanup fails and retains ownership when an owned Metro ignores SIGTER
     child.kill('SIGKILL');
     await ended;
   }
+});
+
+function fakeClock(startMs = 0) {
+  let elapsed = startMs;
+  return { now: () => elapsed, wait: async ms => { elapsed += ms; } };
+}
+
+test('hosted boot waits out a foreign claim released before the deadline, then proceeds', async () => {
+  const owners = ['someone-else', 'someone-else', ''];
+  const { now, wait } = fakeClock();
+  let calls = 0;
+  await waitForClaimableSimulator(60000, { checkOwner: () => { calls++; return owners[Math.min(calls - 1, owners.length - 1)]; },
+    checkBooted: () => false, pollMs: 15000, now, wait, log: () => {} });
+  assert.equal(calls, owners.length);
+});
+
+test('hosted boot fails clearly instead of hanging when a foreign claim outlasts the deadline', async () => {
+  const { now, wait } = fakeClock();
+  await assert.rejects(
+    waitForClaimableSimulator(30000, { checkOwner: () => 'stuck-local-lane', checkBooted: () => false, pollMs: 15000, now, wait, log: () => {} }),
+    /Timed out waiting for simulator claim held by stuck-local-lane to be released/);
+});
+
+test('hosted boot fails clearly when a foreign booted simulator (no claim owner) outlasts the deadline', async () => {
+  const { now, wait } = fakeClock();
+  await assert.rejects(
+    waitForClaimableSimulator(30000, { checkOwner: () => '', checkBooted: () => true, pollMs: 15000, now, wait, log: () => {} }),
+    /Timed out waiting for a foreign booted simulator to be released/);
+});
+
+test('an already-clear claim (none held, or expired) lets the hosted boot proceed without waiting', async () => {
+  let waited = false;
+  await waitForClaimableSimulator(60000, { checkOwner: () => '', checkBooted: () => false, wait: async () => { waited = true; }, log: () => {} });
+  assert.equal(waited, false);
+});
+
+test('a long wait logs progress periodically instead of going silent until the external timeout kills it', async () => {
+  const { now, wait } = fakeClock();
+  const lines = [];
+  await assert.rejects(
+    waitForClaimableSimulator(600000, { checkOwner: () => 'stuck-local-lane', checkBooted: () => false, pollMs: 15000, logEveryMs: 60000,
+      now, wait, log: line => lines.push(line) }),
+    /Timed out waiting for simulator claim held by stuck-local-lane/);
+  // First check logs immediately; then roughly once per logEveryMs (600s / 60s), not once per 15s poll.
+  assert(lines.length >= 9 && lines.length <= 12, `expected ~10 progress lines over 10 minutes at a 60s log interval, got ${lines.length}`);
+  assert(lines.every(line => /Waiting for simulator claim held by stuck-local-lane/.test(line)));
+});
+
+test('waitForClaimableSimulator logs again immediately when the owner changes, even before the next scheduled log', async () => {
+  const owners = ['first-owner', 'first-owner', 'second-owner', ''];
+  const { now, wait } = fakeClock();
+  const lines = [];
+  let calls = 0;
+  await waitForClaimableSimulator(60000, { checkOwner: () => { calls++; return owners[Math.min(calls - 1, owners.length - 1)]; },
+    checkBooted: () => false, pollMs: 15000, logEveryMs: 60000, now, wait, log: line => lines.push(line) });
+  assert.deepEqual(lines, [
+    'Waiting for simulator claim held by first-owner to be released (60s left)',
+    'Waiting for simulator claim held by second-owner to be released (30s left)',
+  ]);
 });

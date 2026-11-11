@@ -13,8 +13,14 @@ export function actionsSelection(files, eventName, event, options = {}) {
   if (plan.required) return result({ required: true, scope: plan.scope === 'full' ? 'full' : 'flow', flows: plan.flows, reason: plan.reason });
   // A changed native runner still needs real execution of its setup, assertion
   // and teardown path. It does not change every product journey on main.
-  const controls = files.some(path => /^(scripts\/(sim|verify)\/|\.github\/workflows\/simulator\.yml$)/.test(path) &&
-    !/\.(?:test\.[^/]+|md|txt)$/.test(path));
+  // Scoped to exactly what the hosted "Maestro on Mac" job's own execution
+  // path depends on: all of scripts/sim/ (its own directory), the specific
+  // scripts/verify/ files it imports from (confirmed by grepping scripts/sim/
+  // for '../verify/*' imports), and the workflow file itself. A tooling-only
+  // change elsewhere under scripts/verify/ (e.g. test.sh's L2 sharding) never
+  // touches how journeys run, so it must not force hosted smoke coverage.
+  const simControlPath = /^scripts\/sim\/|^scripts\/verify\/(?:impact-plan|media-integration|product-flow|simulator-actions)\.mjs$|^\.github\/workflows\/simulator\.yml$/;
+  const controls = files.some(path => simControlPath.test(path) && !/\.(?:test\.[^/]+|md|txt)$/.test(path));
   return result({ required: controls, scope: controls ? 'smoke' : 'none', flows: [],
     reason: controls ? 'Changed simulator controls require the three maintained hosted smoke journeys' : plan.reason });
 }

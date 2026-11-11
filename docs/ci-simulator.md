@@ -25,7 +25,7 @@ The full budget covers the observed 713-second cold build and 3450-second full e
 Both scopes use one Xcode build worker, one Metro worker, a 2 GB Node heap and a 768 MB Java heap.
 That deadline starts after assignment and does not bound a queue with no registered runner.
 Keep only one runner registered with `fitsy-sim` and leave the old local publisher paused.
-Manual native work must respect the existing `scripts/sim/sim` claim; CI refuses to boot alongside another booted simulator.
+Manual native work must respect the existing `scripts/sim/sim` claim; the hosted boot step waits (bounded by its own worker timeout) for a foreign claim or booted simulator to clear, then claims normally, instead of failing instantly or preempting a local lane.
 Run the media integration gate after releasing the native lane: its host-isolation test also acquires the canonical OS lock, so running it concurrently with an owned Maestro session causes a real lock timeout.
 
 Changes limited to simulator/verification controls run `cold-start-welcome`, `signin-options` and `paywall-access` to exercise the changed setup, assertion and teardown path.
@@ -80,7 +80,7 @@ The original migration in #704 already recorded zero registered runners and an u
 3. From that directory, run `./svc.sh install`, `./svc.sh start`, then `./svc.sh status` to install and verify GitHub's launchd service.
    Configure the service's `.path` with the installed Homebrew, Java and Maestro executable directories, then restart it with `./svc.sh stop` and `./svc.sh start`.
    Keep the runner account logged in and the Mac awake while jobs execute.
-   Use `./svc.sh stop` whenever the daily machine needs all its resources.
+   Leave the service running for ordinary local native work: the hosted boot step serializes on the existing `scripts/sim/sim` claim instead of colliding with it, so local lanes no longer need to stop the service first.
 4. Create one dedicated **iPhone 15** in Xcode's Devices and Simulators, name it `Fitsy CI iPhone 15`, then shut it down.
    Copy its identifier from `xcrun simctl list devices available` into repository Actions variable `FITSY_SIM_UDID`.
    Do not select a personal simulator: CI erases this device's data after every job and reuses the same device next time.
