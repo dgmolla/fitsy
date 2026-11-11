@@ -349,26 +349,51 @@ test('hosted boot waits out a foreign claim released before the deadline, then p
   const { now, wait } = fakeClock();
   let calls = 0;
   await waitForClaimableSimulator(60000, { checkOwner: () => { calls++; return owners[Math.min(calls - 1, owners.length - 1)]; },
-    checkBooted: () => false, pollMs: 15000, now, wait });
+    checkBooted: () => false, pollMs: 15000, now, wait, log: () => {} });
   assert.equal(calls, owners.length);
 });
 
 test('hosted boot fails clearly instead of hanging when a foreign claim outlasts the deadline', async () => {
   const { now, wait } = fakeClock();
   await assert.rejects(
-    waitForClaimableSimulator(30000, { checkOwner: () => 'stuck-local-lane', checkBooted: () => false, pollMs: 15000, now, wait }),
+    waitForClaimableSimulator(30000, { checkOwner: () => 'stuck-local-lane', checkBooted: () => false, pollMs: 15000, now, wait, log: () => {} }),
     /Timed out waiting for simulator claim held by stuck-local-lane to be released/);
 });
 
 test('hosted boot fails clearly when a foreign booted simulator (no claim owner) outlasts the deadline', async () => {
   const { now, wait } = fakeClock();
   await assert.rejects(
-    waitForClaimableSimulator(30000, { checkOwner: () => '', checkBooted: () => true, pollMs: 15000, now, wait }),
+    waitForClaimableSimulator(30000, { checkOwner: () => '', checkBooted: () => true, pollMs: 15000, now, wait, log: () => {} }),
     /Timed out waiting for a foreign booted simulator to be released/);
 });
 
 test('an already-clear claim (none held, or expired) lets the hosted boot proceed without waiting', async () => {
   let waited = false;
-  await waitForClaimableSimulator(60000, { checkOwner: () => '', checkBooted: () => false, wait: async () => { waited = true; } });
+  await waitForClaimableSimulator(60000, { checkOwner: () => '', checkBooted: () => false, wait: async () => { waited = true; }, log: () => {} });
   assert.equal(waited, false);
+});
+
+test('a long wait logs progress periodically instead of going silent until the external timeout kills it', async () => {
+  const { now, wait } = fakeClock();
+  const lines = [];
+  await assert.rejects(
+    waitForClaimableSimulator(600000, { checkOwner: () => 'stuck-local-lane', checkBooted: () => false, pollMs: 15000, logEveryMs: 60000,
+      now, wait, log: line => lines.push(line) }),
+    /Timed out waiting for simulator claim held by stuck-local-lane/);
+  // First check logs immediately; then roughly once per logEveryMs (600s / 60s), not once per 15s poll.
+  assert(lines.length >= 9 && lines.length <= 12, `expected ~10 progress lines over 10 minutes at a 60s log interval, got ${lines.length}`);
+  assert(lines.every(line => /Waiting for simulator claim held by stuck-local-lane/.test(line)));
+});
+
+test('waitForClaimableSimulator logs again immediately when the owner changes, even before the next scheduled log', async () => {
+  const owners = ['first-owner', 'first-owner', 'second-owner', ''];
+  const { now, wait } = fakeClock();
+  const lines = [];
+  let calls = 0;
+  await waitForClaimableSimulator(60000, { checkOwner: () => { calls++; return owners[Math.min(calls - 1, owners.length - 1)]; },
+    checkBooted: () => false, pollMs: 15000, logEveryMs: 60000, now, wait, log: line => lines.push(line) });
+  assert.deepEqual(lines, [
+    'Waiting for simulator claim held by first-owner to be released (60s left)',
+    'Waiting for simulator claim held by second-owner to be released (30s left)',
+  ]);
 });

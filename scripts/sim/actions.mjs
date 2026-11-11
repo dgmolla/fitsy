@@ -34,11 +34,22 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 // claim expires or is released, or its device is shut down. Neither lane
 // preempts the other; the hosted side is just patient up to its own deadline.
 export async function waitForClaimableSimulator(deadlineMs, { checkOwner = claimOwner, checkBooted = () => devices().some(item => item.state === 'Booted'),
-  pollMs = 15000, now = Date.now, wait = sleep } = {}) {
+  pollMs = 15000, logEveryMs = 60000, now = Date.now, wait = sleep, log = console.error } = {}) {
+  let lastLoggedOwner, lastLoggedAt = -Infinity;
   for (;;) {
     const owner = checkOwner();
     const booted = checkBooted();
     if (!owner && !booted) return;
+    // Silence here previously meant a stuck wait was indistinguishable from any
+    // other hang: the external job timeout (set to the same budget as this
+    // deadline) would SIGTERM the process before this function's own error
+    // ever printed, leaving only a bare "cancelled" conclusion with no reason
+    // in the log. Log progress periodically, and name the reason on timeout.
+    if (owner !== lastLoggedOwner || now() - lastLoggedAt >= logEveryMs) {
+      log(owner ? `Waiting for simulator claim held by ${owner} to be released (${Math.round((deadlineMs - now()) / 1000)}s left)`
+        : 'Waiting for a foreign booted simulator to be released');
+      lastLoggedOwner = owner; lastLoggedAt = now();
+    }
     if (now() >= deadlineMs) {
       throw new Error(owner
         ? `Timed out waiting for simulator claim held by ${owner} to be released`
@@ -249,7 +260,13 @@ export async function main(action) {
     const device = devices().find(item => item.udid === udid);
     if (device?.deviceTypeIdentifier !== 'com.apple.CoreSimulator.SimDeviceType.iPhone-15') throw new Error('FITSY_SIM_UDID must select an available iPhone 15');
     const workerSeconds = Number(process.env.FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS || 90 * 60);
-    await waitForClaimableSimulator(Date.now() + workerSeconds * 1000);
+    // FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS is the same budget as the job's own
+    // timeout-minutes. Without margin, an exhausted wait races GitHub's own
+    // SIGTERM and reliably loses, so the job dies with a bare "cancelled" and
+    // no reason instead of this function's own named error. 60s is enough for
+    // this one check-and-throw; it does not meaningfully shrink the time left
+    // for the real build/flows afterward when the claim frees up promptly.
+    await waitForClaimableSimulator(Date.now() + workerSeconds * 1000 - 60000);
     mkdirSync(work, { recursive: true, mode: 0o700 });
     const { claimDevice } = await import('./product-flow.mjs');
     claimDevice();
