@@ -749,8 +749,14 @@ async function execute(udid, names, mode, { approvalId, environmentRetryAllowed 
     event(timeline, { type: 'run-start', simulator: udid, inputHash: hash, buildHash: r.appHash, admission, evidenceMode: mode.name,
       videoRequested: mode.recordVideo });
     const { app, ...buildIdentity } = r;
+    // #773/#794: lets a later publish-time base update (main moved, nothing
+    // journey-relevant changed) reuse this report via baseUpdateDeltaIsSafe()
+    // instead of a full recollection. Only meaningful when this commit was
+    // clean at collection; an uncommitted edit isn't visible to a commit diff.
+    const headAtCollection = run('git', ['rev-parse', 'HEAD']);
+    const cleanAtCollection = !run('git', ['status', '--porcelain']);
     const report = { version: 1, ...buildIdentity, storeMode: currentStoreMode,
-      ...identity, ...server, inputHash: hash,
+      ...identity, ...server, inputHash: hash, headAtCollection, cleanAtCollection,
       selection: plan.simulator, releaseExceptionId: approvalId, exceptions, environmentRetryAllowed,
       jsHash: inputHash(root, 'js'), configHash: environment().configHash,
       publicConfig: environment().publicConfig,

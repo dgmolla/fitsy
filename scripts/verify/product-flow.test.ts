@@ -693,3 +693,96 @@ test('repoEnv keeps the isolated scratch git config selection but drops reposito
   expect(result.status).toBe(0);
   expect(JSON.parse(result.stdout)).toEqual({ GIT_CONFIG_GLOBAL: '/scratch/gitconfig', GIT_CONFIG_NOSYSTEM: '1' });
 });
+
+describe('baseUpdateDeltaIsSafe (#773/#794): reuse a report across an unrelated main update', () => {
+  function gitRepo() {
+    mkdirSync(join(dir, 'apps/mobile'), { recursive: true });
+    mkdirSync(join(dir, 'scripts/sim'), { recursive: true });
+    mkdirSync(join(dir, 'scripts/verify'), { recursive: true });
+    fixtureGit(['init', '-q', dir]);
+    fixtureGit(['-C', dir, 'config', 'user.email', 'fixture@example.test']);
+    fixtureGit(['-C', dir, 'config', 'user.name', 'Fixture']);
+    writeFileSync(join(dir, 'apps/mobile/app.tsx'), 'export default null;\n');
+    fixtureGit(['-C', dir, 'add', '-A']);
+    fixtureGit(['-C', dir, 'commit', '-qm', 'base']);
+    const headAtCollection = execFileSync('git', ['-C', dir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    const configHash = JSON.parse(evaluate(`gate.publicConfigIdentity(${JSON.stringify(dir)})`).stdout).configHash;
+    return { headAtCollection, configHash };
+  }
+  function baseReport(extra: Record<string, unknown>) {
+    return { cleanAtCollection: true, ...extra };
+  }
+  function check(report: Record<string, unknown>) {
+    return JSON.parse(evaluate(`gate.baseUpdateDeltaIsSafe(${JSON.stringify(report)}, ${JSON.stringify(dir)})`).stdout);
+  }
+
+  test('a tooling-only delta (the actual #794 case: scripts/sim + scripts/verify, no mobile/api source) is safe to reuse', () => {
+    const { headAtCollection, configHash } = gitRepo();
+    writeFileSync(join(dir, 'scripts/sim/claim-fix.mjs'), 'export const x = 1;\n');
+    writeFileSync(join(dir, 'scripts/verify/registry.yml'), 'checks: []\n');
+    fixtureGit(['-C', dir, 'add', '-A']);
+    fixtureGit(['-C', dir, 'commit', '-qm', 'tooling-only main update']);
+    expect(check(baseReport({ headAtCollection, configHash }))).toBe(true);
+  });
+
+  test('an unmapped mobile-facing delta is never reused, even with everything else valid', () => {
+    const { headAtCollection, configHash } = gitRepo();
+    writeFileSync(join(dir, 'apps/mobile/app.tsx'), 'export default function Screen() { return null; }\n');
+    fixtureGit(['-C', dir, 'add', '-A']);
+    fixtureGit(['-C', dir, 'commit', '-qm', 'mobile screen changed on main']);
+    expect(check(baseReport({ headAtCollection, configHash }))).toBe(false);
+  });
+
+  test('a high-sensitivity path (e.g. scripts/deploy, a release path) forces the conservative default (not reusable)', () => {
+    const { headAtCollection, configHash } = gitRepo();
+    mkdirSync(join(dir, 'scripts/deploy'), { recursive: true });
+    writeFileSync(join(dir, 'scripts/deploy/release-helper.mjs'), 'export const x = 1;\n');
+    fixtureGit(['-C', dir, 'add', '-A']);
+    fixtureGit(['-C', dir, 'commit', '-qm', 'release-path script changed on main']);
+    expect(check(baseReport({ headAtCollection, configHash }))).toBe(false);
+  });
+
+  test('no delta at all (identical HEAD) is never reused: a real mismatch, not a base update', () => {
+    const { headAtCollection, configHash } = gitRepo();
+    expect(check(baseReport({ headAtCollection, configHash }))).toBe(false);
+  });
+
+  test('a dirty working tree right now is never reused, even with an otherwise-safe delta', () => {
+    const { headAtCollection, configHash } = gitRepo();
+    writeFileSync(join(dir, 'scripts/sim/claim-fix.mjs'), 'export const x = 1;\n');
+    fixtureGit(['-C', dir, 'add', '-A']);
+    fixtureGit(['-C', dir, 'commit', '-qm', 'tooling-only main update']);
+    writeFileSync(join(dir, 'uncommitted.txt'), 'oops\n');
+    expect(check(baseReport({ headAtCollection, configHash }))).toBe(false);
+  });
+
+  test('collection was not clean: never reused regardless of the delta', () => {
+    const { headAtCollection, configHash } = gitRepo();
+    writeFileSync(join(dir, 'scripts/sim/claim-fix.mjs'), 'export const x = 1;\n');
+    fixtureGit(['-C', dir, 'add', '-A']);
+    fixtureGit(['-C', dir, 'commit', '-qm', 'tooling-only main update']);
+    expect(check(baseReport({ headAtCollection, configHash, cleanAtCollection: false }))).toBe(false);
+  });
+
+  test('a diverged (non-ancestor) history is never reused', () => {
+    const { headAtCollection, configHash } = gitRepo();
+    // Rewrite history at the same position: the amended commit is a sibling
+    // of the original, not its descendant, so it can never be an ancestor.
+    fixtureGit(['-C', dir, 'commit', '-q', '--amend', '-m', 'rewritten base (e.g. after a force-push)']);
+    expect(check(baseReport({ headAtCollection, configHash }))).toBe(false);
+  });
+
+  test('a changed public config is never reused even with an otherwise safe delta', () => {
+    const { headAtCollection } = gitRepo();
+    writeFileSync(join(dir, 'scripts/sim/claim-fix.mjs'), 'export const x = 1;\n');
+    fixtureGit(['-C', dir, 'add', '-A']);
+    fixtureGit(['-C', dir, 'commit', '-qm', 'tooling-only main update']);
+    expect(check(baseReport({ headAtCollection, configHash: 'stale-config-hash' }))).toBe(false);
+  });
+
+  test('missing headAtCollection or cleanAtCollection (an older report shape) safely falls through', () => {
+    const { configHash } = gitRepo();
+    expect(check({ configHash })).toBe(false);
+    expect(check({ configHash, headAtCollection: null })).toBe(false);
+  });
+});
