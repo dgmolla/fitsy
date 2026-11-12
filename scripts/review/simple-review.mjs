@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const controls = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const marker = '<!-- fitsy-simple-review:v1 -->';
-const roleLenses = { backend: 'danger-zone', frontend: 'danger-zone', cto: 'workflow-security',
+const roleLenses = { backend: 'danger-zone', frontend: 'danger-zone', cto: 'ci-impact',
   designer: 'docs-sanity', gtm: 'docs-sanity', 'product-manager': 'spec-conformance' };
 const command = (program, args, options = {}) => execFileSync(program, args,
   { encoding: 'utf8', timeout: 15000, maxBuffer: 8 * 1024 * 1024, ...options });
@@ -36,6 +36,13 @@ export function validateReview(output, lenses) {
   required(result.findings.filter(f => f.severity === 'NIT').length <= 5, 'Too many nits');
   required(result.verdict === (confirmed.length ? 'fail' : 'pass') && lenses.every(domain =>
     result.domains[domain] === (confirmed.some(f => f.domains.includes(domain)) ? 'fail' : 'pass')), 'Inconsistent verdict');
+  required(result.rationale && typeof result.rationale === 'object' && !Array.isArray(result.rationale), 'Missing rationale object');
+  for (const domain of lenses) {
+    if (result.domains[domain] !== 'pass') continue;
+    const bullets = result.rationale[domain];
+    required(Array.isArray(bullets) && bullets.length >= 1 && bullets.length <= 4 &&
+      bullets.every(b => typeof b === 'string' && b.trim() && b.length <= 240), `Missing or invalid pass rationale for ${domain}`);
+  }
   return { ...result, blocking: confirmed.some(f => ['P0', 'P1'].includes(f.priority)) };
 }
 
@@ -121,8 +128,11 @@ export async function review(event, { worktree = process.cwd(), root = controls,
   }
   const status = error ? 'Review incomplete; see the workflow log.' : result.blocking ?
     'Confirmed P0/P1 findings require fixes.' : 'No confirmed P0/P1 findings; other findings are advisory.';
+  const passRationale = result ? Object.keys(result.domains).filter(domain => result.domains[domain] === 'pass' && result.rationale?.[domain])
+    .map(domain => `- **${domain}**: ${result.rationale[domain].join('; ')}`).join('\n') : '';
+  const rationaleSection = passRationale ? `\n\n### Why each passing domain is fine\n${passRationale}` : '';
   const details = result ? `\n\n\`\`\`json\n${JSON.stringify(result, null, 2)}\n\`\`\`` : '';
-  const body = `**TL;DR:** ${status}\n\n${marker}\nReviewed head: ${pr.head.sha}\nBase: ${pr.base.sha}${details}`;
+  const body = `**TL;DR:** ${status}\n\n${marker}\nReviewed head: ${pr.head.sha}\nBase: ${pr.base.sha}${rationaleSection}${details}`;
   required(body.length <= 60000, 'Review exceeds the single-comment limit');
   await current();
   await request(existing ? `issues/comments/${existing.id}` : `issues/${event.number}/comments`, existing ? 'PATCH' : 'POST', { body });

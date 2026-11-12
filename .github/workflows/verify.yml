@@ -159,6 +159,10 @@ jobs:
        (needs.classify.outputs.code == 'false' && needs.static.result == 'skipped'))
     name: Tests (L2)
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [api, scripts, mobile]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -171,13 +175,51 @@ jobs:
       - run: git fetch origin main
       # The canonical runner owns PostGIS, target checks, migrations and seed.
       # External API keys stay absent; tests replace external services.
+      # Each shard runs only its own group (same commands/worker limits as the
+      # unsharded run) in parallel with the others; a shard whose group isn't
+      # affected by this change reports skipped and exits 0, not failed.
       - name: Run L2 checks
-        run: node scripts/verify/run.mjs --layer=2 --runs=ci --scope=changed
+        env:
+          FITSY_VERIFY_TEST_GROUP: ${{ matrix.group }}
+        run: node scripts/verify/run.mjs --layer=2 --runs=ci --scope=changed --only=test
       - name: Upload L2 diagnostics
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: verify-l2-logs-attempt-${{ github.run_attempt }}
+          name: verify-l2-logs-attempt-${{ github.run_attempt }}-${{ matrix.group }}
+          path: .evidence/verify/logs/
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: warn
+
+  test-other:
+    needs: [classify, static]
+    if: >-
+      always() && needs.classify.result == 'success' &&
+      needs.classify.outputs.tests == 'true' &&
+      ((needs.classify.outputs.code == 'true' && needs.static.result == 'success') ||
+       (needs.classify.outputs.code == 'false' && needs.static.result == 'skipped'))
+    name: Tests (L2 other)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: git fetch origin main
+      # The two L2 checks not sharded by test group: small and fast relative
+      # to the api/scripts/mobile suites, so they stay on one runner.
+      - name: Run remaining L2 checks
+        run: node scripts/verify/run.mjs --layer=2 --runs=ci --scope=changed --only=own-code-mocks,rate-limit-store
+      - name: Upload L2 diagnostics
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-l2-other-logs-attempt-${{ github.run_attempt }}
           path: .evidence/verify/logs/
           include-hidden-files: true
           retention-days: 7
@@ -218,7 +260,7 @@ jobs:
 
   verify:
     name: Verify
-    needs: [classify, static, domain-check, test, build]
+    needs: [classify, static, domain-check, test, test-other, build]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
@@ -233,6 +275,7 @@ jobs:
             .classify.result == "success" and
             .static.result == expected(.classify.outputs.code) and
             .test.result == expected(.classify.outputs.tests) and
+            ."test-other".result == expected(.classify.outputs.tests) and
             .build.result == expected(.classify.outputs.build) and
             ."domain-check".result == (if $event == "pull_request" then "success" else "skipped" end)
           ' <<<"$NEEDS_JSON"

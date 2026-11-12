@@ -120,7 +120,7 @@ During the next separately authorized build, retain the frozen source and instal
 On that exact clean source, evaluate `node scripts/deploy/native-fingerprint.mjs` inside the EAS production environment with `EXPO_NO_DOTENV=1` and without repository credentials.
 Require its hash to equal the actual fingerprint runtime embedded in the IPA, then record that hash and package version in the channel's reviewed binary receipt.
 Run `node scripts/deploy/native-compatibility.mjs --channel=testflight --production-env` with the same environment before adopting the new baseline.
-Retain independent workflow-security review of the source-bound receipt.
+Retain independent ci-impact review of the source-bound receipt.
 
 `ota-policy.json` selects automatic `testflight` OTA after green main Verify, exact production deployment and production smoke.
 The publication helper must still verify channel-to-branch isolation and the complete binary receipt before exporting or publishing.
@@ -191,7 +191,7 @@ Missing or malformed manifest evidence and an exhausted duplicate history fail c
 Supply an explicit known-good group when automatic selection cannot establish a distinct prior bundle.
 The mobile rollback helper also republishes iOS only, including when the previous group contains both platforms.
 There is no verified Android production binary, so this proof grants no Android publication authority.
-Replacing the baseline requires actual EAS/Apple binary evidence and independent workflow-security review; a tag alone is insufficient.
+Replacing the baseline requires actual EAS/Apple binary evidence and independent ci-impact review; a tag alone is insufficient.
 Retain the prior baseline and release receipts in Git and on the owning issue.
 
 Processing, OTA publication and observed device uptake are distinct outcomes.
