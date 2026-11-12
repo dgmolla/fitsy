@@ -84,7 +84,29 @@ describe("requireAuth — valid token", () => {
 
     expect(result).not.toBeInstanceOf(NextResponse);
     expect(result).toEqual(payload);
-    expect(mockVerifyToken).toHaveBeenCalledWith("valid.jwt.token");
+    expect(mockVerifyToken).toHaveBeenCalledWith("valid.jwt.token", {});
+  });
+
+  it("forwards caller options (e.g. allowAnonymous) to verifyToken", async () => {
+    mockVerifyToken.mockResolvedValue({ sub: "user-123", email: "alice@example.com" });
+    await requireAuth(makeRequest("Bearer valid.jwt.token"), { allowAnonymous: true });
+    expect(mockVerifyToken).toHaveBeenCalledWith("valid.jwt.token", { allowAnonymous: true });
+  });
+});
+
+describe("requireAuth — anonymous session rate limit (#801)", () => {
+  it("applies the tighter per-device limit to an anonymous payload, independent of a real user's budget", async () => {
+    mockVerifyToken.mockResolvedValue({ sub: "anon-device-1", email: "", isAnonymous: true });
+    const request = (ip: number) => new NextRequest("http://localhost/api/restaurants/preview", {
+      headers: { authorization: "Bearer anon.jwt.token", "x-forwarded-for": `203.0.113.${ip}` },
+    });
+    for (let i = 0; i < 10; i++) expect(await requireAuth(request(i), { allowAnonymous: true })).not.toBeInstanceOf(NextResponse);
+    const denied = await requireAuth(request(10), { allowAnonymous: true }) as NextResponse;
+    expect(denied.status).toBe(429);
+
+    // A real account's own budget is untouched by the anonymous limiter above.
+    mockVerifyToken.mockResolvedValue({ sub: "real-user-1", email: "real@example.test" });
+    expect(await requireAuth(request(99))).not.toBeInstanceOf(NextResponse);
   });
 });
 

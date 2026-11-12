@@ -14,7 +14,7 @@ testIfDb('target-ranked preview through real API handlers, JWT and Postgres', ()
     const e = error as { stdout?: string; stderr?: string };
     throw new Error(`Goal-preview endpoint tests failed:\n${e.stdout ?? ''}\n${e.stderr ?? ''}`);
   }
-  expect(Number(output.match(/^# tests (\d+)$/m)?.[1])).toBe(11);
+  expect(Number(output.match(/^# tests (\d+)$/m)?.[1])).toBe(13);
   expect(output).toMatch(/^# fail 0$/m);
   expect(output).toMatch(/^# skipped 0$/m);
 }, 35_000);

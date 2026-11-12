@@ -237,26 +237,15 @@ env:
 - assertVisible: "Estimated"
 - tapOn:
     id: welcome-continue
-- extendedWaitUntil:
-    visible:
-      id: onboarding-widget-card
-    timeout: 15000
-- assertVisible:
-    id: onboarding-widget-example
-- assertVisible: "1. Long-press your Home Screen."
-- assertVisible: "2. Tap \\+ \\(or Edit → Add Widget\\)."
-- assertVisible: "3. Search fitsy and add the widget."
-- assertVisible:
-    id: welcome-skip
-- takeScreenshot: onboarding-widget-card
-- tapOn:
-    id: welcome-continue
-# Debug retains its explicit map opt-in; production iOS needs no query flag.
-# Enter the same authenticated, bounded preview without changing its fixtures.
-- openLink: com.fitsy.mobile://welcome/preview?mapDebug=1
-- tapOn:
-    text: "^Open$"
-    optional: true
+# The widget screen moved to the end of onboarding (after payment); it no
+# longer appears here. Preview is map-first by product requirement (not the
+# search tab's experiment flag), so the real "Continue" tap above must land
+# directly in map mode on its own, with no mapDebug override needed. The
+# coachmark tour's native Modal masks discovery-map/preview-back from
+# accessibility once it auto-starts, so asserting map mode here would race
+# that ~600ms auto-start; the assertions right after the tour closes below
+# (discovery-map, preview-back, map-card-0, map-pin-2) already cover it
+# reliably, since nothing forces map mode anymore without the removed link.
 - extendedWaitUntil:
     visible:
       id: coachmark-next
@@ -586,20 +575,8 @@ env:
 - tapOn:
     id: welcome-continue
 - assertVisible: "A little context.*A better choice.*"
-- tapOn:
-    id: welcome-continue
-- extendedWaitUntil:
-    visible:
-      id: onboarding-widget-card
-    timeout: 15000
-- assertVisible:
-    id: onboarding-widget-example
-- assertVisible: "1. Long-press your Home Screen."
-- assertVisible: "2. Tap \\+ \\(or Edit → Add Widget\\)."
-- assertVisible: "3. Search fitsy and add the widget."
-- assertVisible:
-    id: welcome-skip
-- takeScreenshot: onboarding-widget-card
+# The widget screen moved to the end of onboarding (after payment); continue
+# now reaches the preview directly.
 - tapOn:
     id: welcome-continue
 - extendedWaitUntil:

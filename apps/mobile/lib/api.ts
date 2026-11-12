@@ -34,7 +34,7 @@ async function handleUnauthorized(path: string): Promise<never> {
   throw new ApiRequestError(401, 'Session expired');
 }
 
-async function get<T>(path: string, authenticated = true, options: { signal?: AbortSignal } = {},
+async function get<T>(path: string, authenticated = true, options: { signal?: AbortSignal; allowAnonymous?: boolean } = {},
   expectedUserId?: string): Promise<T> {
   const headers: Record<string, string> = {};
   let requestToken: string | undefined;
@@ -42,7 +42,9 @@ async function get<T>(path: string, authenticated = true, options: { signal?: Ab
   if (authenticated) {
     const { data } = await supabase.auth.getSession();
     if (expectedUserId && data.session?.user.id !== expectedUserId) throw new Error('Account changed before request');
-    const token = data.session?.user.is_anonymous ? undefined : data.session?.access_token;
+    // Anonymous sessions are unauthenticated everywhere except the one
+    // route an onboarding caller explicitly opts into (`allowAnonymous`).
+    const token = data.session?.user.is_anonymous && !options.allowAnonymous ? undefined : data.session?.access_token;
     requestToken = token;
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;

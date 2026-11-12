@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { Alert } from 'react-native';
 import type { CustomerInfo, PurchasesPackage } from 'react-native-purchases';
-import { supabase } from './supabase';
+import { isRealAccountSession, supabase } from './supabase';
 import { withinMs } from './async';
 import type { EntitlementSyncReason } from './entitlement';
 import type { SubscriptionVerdict } from './apiClient';
@@ -40,7 +40,9 @@ export function usePurchaseActions({ setCustomerInfo, markStoreConfirmed, syncEn
   const purchase = useCallback(
     async (pkg: PurchasesPackage, source: string, attribution?: { paywall_variant: 'A' | 'B'; paywall_config_version: string; paywall_tester_override?: boolean }): Promise<boolean> => {
       const { data } = await supabase.auth.getSession();
-      const userId = data.session?.user.id;
+      // An anonymous session (#801) has a real sub but no usable paid access
+      // behind it - never key a store purchase to it.
+      const userId = isRealAccountSession(data.session) ? data.session!.user.id : undefined;
       const identified = userId
         ? await withinMs(ensurePurchasesUser(userId), PURCHASE_IDENTITY_CAP_MS)
         : false;
@@ -81,7 +83,8 @@ export function usePurchaseActions({ setCustomerInfo, markStoreConfirmed, syncEn
 
   const restore = useCallback(async (): Promise<'active' | 'expired' | 'none' | null> => {
     const { data } = await supabase.auth.getSession();
-    const userId = data.session?.user.id;
+    // Same as purchase(): an anonymous session is never a real account.
+    const userId = isRealAccountSession(data.session) ? data.session!.user.id : undefined;
     const identified = userId
       ? await withinMs(ensurePurchasesUser(userId), PURCHASE_IDENTITY_CAP_MS)
       : false;

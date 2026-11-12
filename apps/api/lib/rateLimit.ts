@@ -121,6 +121,15 @@ export const dataIpLimiter = createRateLimiter({ namespace: 'data-ip', windowMs:
 export const dataUserLimiter = createRateLimiter({ namespace: 'data-user', windowMs: 60_000, max: 120 });
 
 /**
+ * Anonymous sessions on the one route that accepts them (guided preview,
+ * #801): a real account's generous `dataUserLimiter` budget is sized for
+ * ongoing app use, not a throwaway, free-to-create identity. Keyed by the
+ * anonymous session's own sub, so it's a per-device cap, not per-IP -
+ * reinstalling the app for a fresh identity is the only way around it.
+ */
+export const anonymousDataUserLimiter = createRateLimiter({ namespace: 'data-user-anon', windowMs: 60_000, max: 10 });
+
+/**
  * Feedback endpoint: 5 submissions per user per 5 minutes.
  * Deters spamming the team inbox while leaving room for genuine follow-ups.
  */

@@ -28,17 +28,45 @@ const claimOwner = () => {
   return claim && typeof claim.owner === 'string' && claim.expires > Date.now() / 1000 ? claim.owner : '';
 };
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+// runOwnedMaestro's own exit handling documents that Maestro's driver child can
+// still be flushing files for a moment after the supervised command's exit is
+// observed (its own "owned-descendant-after-command-exit" grace window). Give
+// the report file the same kind of brief, bounded grace before calling it
+// missing; a flow Maestro already reported as passed should not false-fail on
+// a close read. An extra (unexpected) match is a different problem and is not
+// worth waiting out - it fails immediately with full diagnostics instead.
+export async function awaitCommandReport(dir, { readdir = () => readdirSync(dir, { recursive: true }), wait = sleep, maxWaitMs = 3000, pollMs = 250 } = {}) {
+  const match = entries => entries.filter(file => /(?:^|\/)commands-.*\.json$/.test(file));
+  let entries = readdir(), reports = match(entries);
+  for (let waited = 0; reports.length === 0 && waited < maxWaitMs; waited += pollMs) {
+    await wait(pollMs);
+    entries = readdir(); reports = match(entries);
+  }
+  if (reports.length !== 1) throw new Error(`found ${reports.length} of ${entries.length} entries: ${JSON.stringify(reports)}`);
+  return reports[0];
+}
 // The hosted boot step shares one Mac with local interactive lanes. Rather than
 // fail the instant a foreign claim or booted simulator is seen, wait (bounded
 // by the job's own worker timeout) for it to clear naturally: the local lane's
 // claim expires or is released, or its device is shut down. Neither lane
 // preempts the other; the hosted side is just patient up to its own deadline.
 export async function waitForClaimableSimulator(deadlineMs, { checkOwner = claimOwner, checkBooted = () => devices().some(item => item.state === 'Booted'),
-  pollMs = 15000, now = Date.now, wait = sleep } = {}) {
+  pollMs = 15000, logEveryMs = 60000, now = Date.now, wait = sleep, log = console.error } = {}) {
+  let lastLoggedOwner, lastLoggedAt = -Infinity;
   for (;;) {
     const owner = checkOwner();
     const booted = checkBooted();
     if (!owner && !booted) return;
+    // Silence here previously meant a stuck wait was indistinguishable from any
+    // other hang: the external job timeout (set to the same budget as this
+    // deadline) would SIGTERM the process before this function's own error
+    // ever printed, leaving only a bare "cancelled" conclusion with no reason
+    // in the log. Log progress periodically, and name the reason on timeout.
+    if (owner !== lastLoggedOwner || now() - lastLoggedAt >= logEveryMs) {
+      log(owner ? `Waiting for simulator claim held by ${owner} to be released (${Math.round((deadlineMs - now()) / 1000)}s left)`
+        : 'Waiting for a foreign booted simulator to be released');
+      lastLoggedOwner = owner; lastLoggedAt = now();
+    }
     if (now() >= deadlineMs) {
       throw new Error(owner
         ? `Timed out waiting for simulator claim held by ${owner} to be released`
@@ -157,9 +185,10 @@ async function runFlows(udid, work) {
       diagnostic: () => command('xcrun', ['simctl', 'io', udid, 'screenshot', join(dir, 'failure.png')]),
     });
     if (result.code !== 0 || result.reason) throw new Error(`Maestro failed: ${name}`);
-    const reports = readdirSync(dir, { recursive: true }).filter(file => /(?:^|\/)commands-.*\.json$/.test(file));
-    if (reports.length !== 1) throw new Error(`Missing Maestro command report: ${name}`);
-    assertFlowCommands(readFileSync(path), JSON.parse(readFileSync(join(dir, reports[0]), 'utf8')), name);
+    let report;
+    try { report = await awaitCommandReport(dir); }
+    catch (error) { throw new Error(`Missing Maestro command report: ${name} (${error.message})`); }
+    assertFlowCommands(readFileSync(path), JSON.parse(readFileSync(join(dir, report), 'utf8')), name);
     // Setup may intentionally reach the expired screen; its maintained target
     // flow validates that screen after setup, including pixel checks.
     if (!name.endsWith('-signin')) inspectScreenshotDirectory(dir, readFileSync(path));
@@ -249,7 +278,17 @@ export async function main(action) {
     const device = devices().find(item => item.udid === udid);
     if (device?.deviceTypeIdentifier !== 'com.apple.CoreSimulator.SimDeviceType.iPhone-15') throw new Error('FITSY_SIM_UDID must select an available iPhone 15');
     const workerSeconds = Number(process.env.FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS || 90 * 60);
-    await waitForClaimableSimulator(Date.now() + workerSeconds * 1000);
+    // FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS is the same budget as the job's own
+    // timeout-minutes, which is measured from job start, not from this step.
+    // checkout/setup-node/npm ci/fingerprint/cache-restore already spend real
+    // time before this line runs, so the deadline must be anchored to the
+    // job's own start (FITSY_JOB_STARTED_AT, set by this job's first step),
+    // not to "now" here - otherwise the 60s margin is silently eaten by that
+    // setup time and GitHub's own SIGTERM still wins the race, with the job
+    // dying as a bare "cancelled" instead of this function's named error.
+    const jobStartedAt = Number(process.env.FITSY_JOB_STARTED_AT);
+    const budgetStart = Number.isFinite(jobStartedAt) && jobStartedAt > 0 ? jobStartedAt * 1000 : Date.now();
+    await waitForClaimableSimulator(budgetStart + workerSeconds * 1000 - 60000);
     mkdirSync(work, { recursive: true, mode: 0o700 });
     const { claimDevice } = await import('./product-flow.mjs');
     claimDevice();

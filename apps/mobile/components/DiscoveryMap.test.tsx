@@ -581,7 +581,8 @@ it('recovers the production map preview, preserves sample disclosure, and carrie
   await screen.findByTestId('preview-retry');
   expect(screen.getByTestId('discovery-map')).toBeTruthy();
   expect(screen.getByTestId('preview-back')).toBeTruthy();
-  expect(screen.getByLabelText('Onboarding progress').props.accessibilityValue.now).toBe(75);
+  // The map preview is the real map screen: no onboarding progress chrome over it.
+  expect(screen.queryByLabelText('Onboarding progress')).toBeNull();
   offline = false;
   await act(async () => fireEvent.press(screen.getByTestId('preview-retry')));
   await screen.findByTestId('map-card-2');
@@ -618,6 +619,49 @@ it('recovers the production map preview, preserves sample disclosure, and carrie
     expect(Object.fromEntries(url.searchParams)).toMatchObject({ guided: '1', lat: '34.04', lng: '-118.24' });
     expect(url.searchParams.has('cursor')).toBe(false);
   }
+});
+
+it('shows a real, named fourth restaurant locked as a paid-tier teaser, with no dish match leaked', async () => {
+  await saveOnboardingField('goal', 'lose_fat');
+  // A lat/lng unused by any other test in this file - the guided preview
+  // client caches by exact area + targets, and the fixed 'buyer' test user
+  // id would otherwise collide with another test's cached response.
+  await saveOnboardingField('area', { lat: 34.19, lng: -118.39, name: 'Teaser Area', source: 'manual' });
+  markPreviewTourSeen();
+  const teaser = { ...restaurants[3], bestMatch: null };
+  global.fetch = jest.fn(withAccountProfile(async input => {
+    const url = new URL(input);
+    requests.push(url);
+    if (url.pathname === '/api/restaurants/preview') {
+      return response({ data: restaurants.slice(0, 3), meta: { nearbyDishCount: 12, radiusMiles: 3, lockedTeaser: teaser } });
+    }
+    return response({ active: false, verdict: 'never_subscribed', synced: true, stale: false, lastRcVerifiedAt: new Date().toISOString() });
+  }));
+  const screen = renderJourney('/welcome/preview', { ...routes, 'welcome/preview': () => <Preview /> });
+  await screen.findByTestId('map-card-3');
+  expect(screen.getByText('4 / 4')).toBeTruthy();
+  expect(screen.getByText('Fourth Spot')).toBeTruthy();
+  expect(screen.getByTestId('map-card-3').props.accessibilityLabel).toBe('Fourth Spot. Unlock meal name and full menu with Pro.');
+  expect(screen.queryByTestId('preview-hidden-dish-spot-3')).toBeNull();
+});
+
+it('shows only the three real picks when the area has no fourth nearby restaurant', async () => {
+  await saveOnboardingField('goal', 'lose_fat');
+  // Also a cache-key-unique area; see the comment in the preceding test.
+  await saveOnboardingField('area', { lat: 34.21, lng: -118.41, name: 'No Teaser Area', source: 'manual' });
+  markPreviewTourSeen();
+  global.fetch = jest.fn(withAccountProfile(async input => {
+    const url = new URL(input);
+    requests.push(url);
+    if (url.pathname === '/api/restaurants/preview') {
+      return response({ data: restaurants.slice(0, 3), meta: { nearbyDishCount: 3, radiusMiles: 3, lockedTeaser: null } });
+    }
+    return response({ active: false, verdict: 'never_subscribed', synced: true, stale: false, lastRcVerifiedAt: new Date().toISOString() });
+  }));
+  const screen = renderJourney('/welcome/preview', { ...routes, 'welcome/preview': () => <Preview /> });
+  await screen.findByTestId('map-card-2');
+  expect(screen.getByText('3 / 3')).toBeTruthy();
+  expect(screen.queryByTestId('map-card-3')).toBeNull();
 });
 
 it.each([undefined, false, 'true', 'control'])('fails closed for a non-boolean map flag (%s)', async value => {

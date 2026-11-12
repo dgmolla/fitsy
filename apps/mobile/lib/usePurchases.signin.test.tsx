@@ -285,6 +285,24 @@ describe('sign-in', () => {
     expect(mockApi.syncSubscription).toHaveBeenCalledWith('sign_in');
   });
 
+  it('treats an anonymous sign-in (#801) the same as no session: never calls the server, never bounces', async () => {
+    // A real anonymous Supabase session (#801) is not "no session" to a naive
+    // `!data.session` check, but it must still skip the authenticated server
+    // sync - that call would 401 and the API client turns a 401 into a
+    // "session expired" bounce back to the welcome screen for a visitor who
+    // never actually signed in.
+    mockAuth.session = null;
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.entitled).toBe(false));
+    mockAuth.session = { user: { id: 'anon-1', is_anonymous: true } };
+    mockRc.identifyPurchasesUser.mockResolvedValueOnce(freeInfo);
+    await act(async () => { mockAuth.listener?.('SIGNED_IN', mockAuth.session); });
+    await flush();
+    expect(result.current.entitled).toBe(false);
+    expect(mockApi.syncSubscription).not.toHaveBeenCalled();
+    expect(mockApi.fetchSubscriptionStatus).not.toHaveBeenCalled();
+  });
+
   it('ignores the SIGNED_IN that session recovery re-emits for the user boot already resolved', async () => {
     mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     const { result, seen } = renderProviderTracking();

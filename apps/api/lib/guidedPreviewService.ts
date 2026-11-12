@@ -47,7 +47,8 @@ export function guidedPreviewSql({ lat, lng, targets, query }: GuidedPreviewPara
     ), winners AS (
       SELECT DISTINCT ON ("restaurantId") * FROM relevant ORDER BY "restaurantId", "scoreSum", "menuItemId"
     ), picks AS MATERIALIZED (
-      SELECT * FROM winners ORDER BY "orderKey", "restaurantId" LIMIT 3
+      -- One extra row beyond the three picks: the onboarding teaser's locked fourth option.
+      SELECT * FROM winners ORDER BY "orderKey", "restaurantId" LIMIT 4
     ), counts AS (
       SELECT (SELECT count(*)::integer FROM area_menu) AS "nearbyDishCount"
     )
@@ -66,13 +67,17 @@ export async function findGuidedPreview(params: GuidedPreviewParams): Promise<Gu
   const rows = await prisma.$queryRaw<PreviewRow[]>(guidedPreviewSql(params));
   const counts = rows[0]!;
   const targetsActive = MACRO_DIMENSIONS.some(key => activeTarget(params.targets[key]));
+  const picks = rows.filter(row => row.restaurantId != null);
+  const teaserRow = picks[3];
   return {
-    data: rows.filter(row => row.restaurantId != null).map(row => restaurantResultFromRow(row, targetsActive, true)),
+    data: picks.slice(0, 3).map(row => restaurantResultFromRow(row, targetsActive, true)),
     meta: {
       nearbyDishCount: counts.nearbyDishCount,
       radiusMiles: 3,
       // Explicit null disables numerical proof in older clients as well.
       goalMatch: null,
+      // Same redaction rule as an unentitled search row: real restaurant, no dish match sent.
+      lockedTeaser: teaserRow ? { ...restaurantResultFromRow(teaserRow, targetsActive, true), bestMatch: null } : null,
     },
   };
 }

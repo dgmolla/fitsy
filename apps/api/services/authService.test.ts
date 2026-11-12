@@ -57,4 +57,22 @@ describe("verifyToken", () => {
       issuer: 'https://test.supabase.co/auth/v1', audience: 'authenticated', requiredClaims: ['sub', 'exp', 'iat'],
     });
   });
+
+  describe('allowAnonymous (#801)', () => {
+    it('accepts an anonymous session with no email, flagged for the caller', async () => {
+      mockVerify.mockResolvedValue({ payload: { sub: 'anon-device', role: 'authenticated', is_anonymous: true } });
+      const payload = await verifyToken('anon.jwt.token', { allowAnonymous: true });
+      expect(payload).toEqual({ sub: 'anon-device', email: '', isAnonymous: true });
+    });
+
+    it('still rejects a non-anonymous token missing an email even with allowAnonymous', async () => {
+      mockVerify.mockResolvedValue({ payload: { sub: 'user', role: 'authenticated' } });
+      await expect(verifyToken('token', { allowAnonymous: true })).rejects.toThrow('signed-in Supabase account');
+    });
+
+    it('still rejects role=service_role even when anonymous and allowed', async () => {
+      mockVerify.mockResolvedValue({ payload: { sub: 'anon', role: 'service_role', is_anonymous: true } });
+      await expect(verifyToken('token', { allowAnonymous: true })).rejects.toThrow('signed-in Supabase account');
+    });
+  });
 });
