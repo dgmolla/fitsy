@@ -1,5 +1,5 @@
 import type { RestaurantResult } from '@fitsy/shared';
-import { hasMapCoordinate, mapCuisineEmoji, mapRestaurantLabel } from './discoveryMap';
+import { hasMapCoordinate, mapRestaurantLabel } from './discoveryMap';
 
 const restaurant = { name: 'Flor do Ave', cuisineTags: ['Portuguese'], lat: 34.04, lng: -118.24 } as RestaurantResult;
 
@@ -17,9 +17,3 @@ it.each([[NaN, 0], [0, Infinity], [91, -118], [34, -181], [0, 0]])('rejects unus
 it.each([[0, -118], [34, 0], [-90, 180]])('keeps valid equator, meridian and boundary coordinates (%s, %s)', (lat, lng) => {
   expect(hasMapCoordinate({ ...restaurant, lat, lng })).toBe(true);
 });
-
-it.each([[['SUSHI'], '🍣'], [['restaurant', 'Mexican'], '🌮'], [['Italian'], '🍕'], [[], '🍴'], [['Unknown'], '🍴']])(
-  'uses provider cuisine categories for emoji pins (%s)', (cuisineTags, expected) => {
-    expect(mapCuisineEmoji({ ...restaurant, cuisineTags: cuisineTags as string[] })).toBe(expected);
-  },
-);

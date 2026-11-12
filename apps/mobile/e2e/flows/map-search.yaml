@@ -35,6 +35,8 @@ env:
 - assertNotVisible:
     id: preview-edit-targets
 - assertNotVisible: "^Nearby$"
+- assertNotVisible:
+    id: map-options-open
 # Search replaces the map with the ordinary list and its macro editor.
 - tapOn:
     id: map-search-entry
@@ -278,21 +280,7 @@ env:
     centerElement: true
 - tapOn: "Search near DTLA"
 - assertVisible: "Location: DTLA"
-- tapOn:
-    id: map-options-open
-- tapOn:
-    id: map-pin-style-cuisine
-- takeScreenshot: map-v2-cuisine-pins
-- tapOn:
-    id: map-options-open
-- tapOn:
-    id: map-pin-style-icon
 - takeScreenshot: map-v2-icon-pins
-- tapOn:
-    id: map-options-open
-- tapOn:
-    id: map-pin-style-numbered
-- takeScreenshot: map-v2-numbered-pins
 - swipe:
     start: "83%,70%"
     end: "10%,70%"
