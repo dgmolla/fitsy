@@ -318,6 +318,50 @@ npx tsx scripts/pipeline-report.ts --latest
 Monitor definitions are provisioned by `scripts/axiom-setup.ts` (source of truth for the exact queries).
 The full event schema and APL query examples live in the archived `docs/engineering/archive/data-pipeline-v3.md` (Observability section) until a dedicated `monitoring.md` absorbs them.
 
+### Triage: when a monitor fires
+
+Each entry is a diagnostic query to run first, the most likely causes in order, and the action to take. All queries target the `fitsy-pipeline` dataset in Axiom.
+
+**Error spike** (`> 50 errors in 5-minute window`)
+```
+['fitsy-pipeline'] | where type == "error" and _time > ago(15m) | summarize count() by message, retryable | order by count_ desc
+```
+- Most `retryable: true` with the same `message` → a transient upstream failure (UE API or Haiku rate limiting); check if the run auto-retried and recovered on its own before intervening.
+- Clustered around one `hexId` → likely a bad/edge-case location (invalid geometry, UE has no coverage there); re-run that hex alone with `--hex-id` once the cause is identified, don't resume the whole run.
+- Spans many distinct hexes with `retryable: false` → likely a credential/config issue (UE cookie expired, Anthropic key invalid); check the Slack "UE cookie expired" alert class first (below) before assuming a code bug.
+
+**Run failed** (`restaurantsFailed > restaurantsPersisted` on the run event)
+```
+['fitsy-pipeline'] | where type == "run" | order by _time desc | limit 1
+```
+- Check `status` on that row: `spend_cap` means the run stopped itself at the cost ceiling, not a failure - this monitor firing on a `spend_cap` run is a false positive worth tightening, not an incident.
+- `status: "failed"` with a high `restaurantsFailed` concentrated in one phase → re-run with `--resume` (the pipeline auto-resumes via `findIncompleteRunId`); do not start a fresh `run-id` or you'll re-scrape completed hexes.
+- Cross-reference with the Error spike query above for the same time window to find the actual failure cause before resuming.
+
+**Cost overrun** (`costTotal > 200` on the run event)
+```
+['fitsy-pipeline'] | where type == "cost_checkpoint" and runId == "<runId from the alert>" | order by _time asc | project _time, hexId, hexCost, cumulativeCost
+```
+- Look for one or two `hexId` rows with an outsized `hexCost` relative to the rest - usually a single dense, menu-heavy hex (many restaurants, large menus) rather than a systemic cost regression.
+- If costs are elevated broadly across hexes (not concentrated), check whether a recent prompt/model change increased per-item Haiku cost - compare `cumulativeCostBreakdown.haiku` across recent runs via `pipeline-report.ts --latest` on each.
+- This is a hard stop signal, not just a warning: the run already halted at the cap (see `--cost-cap-usd`/`PRELOAD_COST_CAP_USD` in `docs/engineering/devops/costs.md`). No action is needed to stop anything further; the question is only whether to raise the cap and resume or investigate cost first.
+
+**Cost checkpoint spike** (`hexCost > 5` on a single hex checkpoint)
+```
+['fitsy-pipeline'] | where type == "cost_checkpoint" and hexCost > 5 | order by _time desc | project _time, runId, hexId, hexCost, hexUsage
+```
+- Early warning for the same thing Cost overrun catches in aggregate - investigate before it scales across more hexes, not after the run-level cap fires.
+- Check `hexUsage` for the actual Haiku call count/tokens on that hex; an unusually high restaurant or menu-item count for one hex is the common, benign cause.
+
+**Zero output** (`restaurantsPersisted == 0` on the run event)
+```
+['fitsy-pipeline'] | where type == "error" and runId == "<runId from the alert>" | order by _time asc | limit 20
+```
+- Check the first few errors chronologically, not the most recent - a pipeline that fails at the very start (auth/cookie) produces zero output and then keeps erroring the same way for the rest of the run.
+- If there are no `error` events at all for that run, check `cost_checkpoint`/Phase 1 discovery logs directly - a Phase 1 (discover) failure before any hex reaches Phase 2 can produce zero persisted restaurants without ever emitting a pipeline-level error event.
+
+**Owner for all five:** Fitsy Data (pipeline-owned files per `monitoring-alerting.md`'s ownership table). Tooling lane owns the monitor *definitions* (`scripts/axiom-setup.ts`) but not triage of a live firing.
+
 ---
 
 ## Slack alerts
