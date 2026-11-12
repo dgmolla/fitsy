@@ -298,7 +298,7 @@ Do not change branch protection as part of local review tooling cleanup.
 The implementer cannot supply its own independent verdict.
 
 The retained `scripts/route-reviewers.sh` maps changed paths to roles.
-The runner always includes correctness and maps API/mobile to danger-zone, CTO to workflow-security, product-manager to spec-conformance, and design/GTM to docs-sanity.
+The runner always includes correctness and maps API/mobile to danger-zone, CTO to ci-impact, product-manager to spec-conformance, and design/GTM to docs-sanity.
 `REVIEW.md` retains the severity definitions, evidence requirements and complete-domain JSON contract.
 Missing domains, contradictory verdicts, malformed output, timeouts and provider failures never establish approval.
 Only CONFIRMED P0/P1 findings block the review result.
