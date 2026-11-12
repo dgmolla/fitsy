@@ -68,3 +68,14 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     detectSessionInUrl: false,
   },
 });
+
+/**
+ * An anonymous session (#801) is a visitor, not a signed-in account: every
+ * gate that means "does a real account own this" must treat it exactly like
+ * no session at all, the same way `routeToPaywall` already does.
+ */
+export function isRealAccountSession(
+  session: { user: { id?: string; is_anonymous?: boolean } } | null | undefined,
+): boolean {
+  return !!session && !session.user.is_anonymous;
+}

@@ -13,7 +13,7 @@ import type {
   CustomerInfo,
   PurchasesOffering,
 } from 'react-native-purchases';
-import { supabase } from './supabase';
+import { isRealAccountSession, supabase } from './supabase';
 import { usePurchaseActions } from './usePurchaseActions';
 import { usePurchaseIntroEligibility } from './usePurchaseIntroEligibility';
 import { withinMs } from './async';
@@ -95,14 +95,17 @@ export function PurchasesProvider({ children }: { children: React.ReactNode }) {
         const sessionResult = await withinMs(sessionRead, BOOT_VERDICT_CAP_MS);
         if (!sessionResult) {
           void sessionRead.then(async ({ data }) => {
-            if (cancelled || !data.session) return;
+            if (cancelled || !isRealAccountSession(data.session)) return;
             const current = await supabase.auth.getSession();
-            if (!cancelled && current.data.session?.user.id === data.session.user.id) {
-              auth.resumeLateBootUser(data.session.user.id);
+            if (!cancelled && current.data.session?.user.id === data.session!.user.id) {
+              auth.resumeLateBootUser(data.session!.user.id);
             }
           }).catch(() => undefined);
         }
-        userId = sessionResult?.data.session?.user.id;
+        // An anonymous session (#801) is a visitor, not an account: boot must
+        // resolve it the same way as no session at all, so it never fires an
+        // authenticated server call that would 401 and wipe local progress.
+        userId = isRealAccountSession(sessionResult?.data.session) ? sessionResult!.data.session!.user.id : undefined;
         bootUserId = userId;
         auth.markBootUser(userId);
         if (configured) {

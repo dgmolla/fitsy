@@ -80,8 +80,6 @@ it('allows a returning onboarding preview after decline but still gates full men
   }, { initialUrl: '/welcome/how-it-works' });
   await screen.findByTestId('nutrition-source-published');
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
-  await screen.findByTestId('onboarding-widget-card');
-  await act(async () => { fireEvent.press(screen.getByTestId('welcome-skip')); });
   expect(await screen.findByTestId('preview-guide')).toBeTruthy();
   expect(await AsyncStorage.getItem('@fitsy/onboardingPreviewEntry')).toBe('1');
   await waitFor(() => expect(screen.getByTestId('access-probe').props.children).toBe('direct:false|onboarding:true'));
@@ -94,8 +92,6 @@ it('allows a returning onboarding preview after decline but still gates full men
   await act(async () => { router.push('/welcome/how-it-works'); });
   await screen.findByTestId('nutrition-source-published');
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
-  await screen.findByTestId('onboarding-widget-card');
-  await act(async () => { fireEvent.press(screen.getByTestId('welcome-skip')); });
   expect(await screen.findByTestId('preview-guide')).toBeTruthy();
   await act(async () => { fireEvent.press(screen.getByTestId('locked-full-menu')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/signin'));

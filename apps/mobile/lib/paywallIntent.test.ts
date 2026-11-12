@@ -2,23 +2,36 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { claimPaywallIntent, clearPaywallIntent, getPaywallIntent, getPurchasedContinuation, markPurchasedContinuation, rememberPaywallIntent } from './paywallIntent';
 
 let mockUserId: string | null = null;
+let mockIsAnonymous = false;
 jest.mock('@supabase/supabase-js', () => {
   process.env.EXPO_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY = 'unit-test-anon-key';
   return { createClient: () => ({ auth: {
-  getSession: async () => ({ data: { session: mockUserId ? { user: { id: mockUserId } } : null } }),
+  getSession: async () => ({ data: { session: mockUserId ? { user: { id: mockUserId, is_anonymous: mockIsAnonymous } } : null } }),
   startAutoRefresh: () => undefined,
   stopAutoRefresh: () => undefined,
   } }) };
 });
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 const choice = { restaurantId: 'restaurant', menuItemId: 'pasta', action: 'save' as const };
-beforeEach(async () => { mockUserId = null; await clearPaywallIntent(); jest.restoreAllMocks(); });
+beforeEach(async () => { mockUserId = null; mockIsAnonymous = false; await clearPaywallIntent(); jest.restoreAllMocks(); });
 
 test('the explicit sign-in continuation preserves the anonymous meal choice', async () => {
   await rememberPaywallIntent(choice);
   expect(await getPaywallIntent()).toEqual(choice);
   mockUserId = 'account-a';
+  expect(await getPaywallIntent()).toBeNull();
+  await claimPaywallIntent('account-a');
+  expect(await getPaywallIntent()).toEqual(choice);
+});
+
+test('a real sign-in (#801) claims a meal selected during an anonymous session', async () => {
+  mockUserId = 'anon-device-1';
+  mockIsAnonymous = true;
+  await rememberPaywallIntent(choice);
+  expect(await getPaywallIntent()).toEqual(choice);
+  mockUserId = 'account-a';
+  mockIsAnonymous = false;
   expect(await getPaywallIntent()).toBeNull();
   await claimPaywallIntent('account-a');
   expect(await getPaywallIntent()).toEqual(choice);

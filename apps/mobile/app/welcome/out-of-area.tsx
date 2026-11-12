@@ -9,7 +9,7 @@ import { AnimatedPress } from '@/components/AnimatedPress';
 import { trackOnboardingScreenView } from '@/lib/analytics';
 import { api } from '@/lib/api';
 import { getOnboardingData } from '@/lib/onboardingStorage';
-import { supabase } from '@/lib/supabase';
+import { isRealAccountSession, supabase } from '@/lib/supabase';
 
 const FITSY_INSTAGRAM = 'https://instagram.com/fitsy.lyfe';
 
@@ -38,7 +38,9 @@ export default function OutOfAreaScreen() {
       const { area } = await getOnboardingData();
       if (!area) { Alert.alert('Choose your area first', 'We need your selected area to register your interest.'); return; }
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { router.push('/welcome/signin?outOfArea=1'); return; }
+      // An anonymous session (#801) can't carry the waitlist's authenticated
+      // request - it needs the same real sign-in as a brand-new visitor.
+      if (!isRealAccountSession(session)) { router.push('/welcome/signin?outOfArea=1'); return; }
       await api.post('/api/waitlist', { lat: area.lat, lng: area.lng }, true);
       setJoined(true);
     } catch {

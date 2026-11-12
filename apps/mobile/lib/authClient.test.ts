@@ -1,7 +1,7 @@
 /**
  * @jest-environment node
  */
-import { adoptSession, appleSignIn, clearToken, completeGoogleSignIn, devLogin, loginAndStore, registerAndStore } from './authClient';
+import { adoptSession, appleSignIn, clearToken, completeGoogleSignIn, devLogin, getStoredToken, loginAndStore, registerAndStore } from './authClient';
 import type { AuthApiResponse } from '@fitsy/shared';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -27,6 +27,8 @@ jest.mock('./supabase', () => ({
       signOut: jest.fn().mockResolvedValue({ error: null }),
     },
   },
+  isRealAccountSession: (session: { user: { is_anonymous?: boolean } } | null | undefined) =>
+    !!session && !session.user.is_anonymous,
 }));
 
 const SecureStore = jest.requireMock('expo-secure-store') as {
@@ -34,7 +36,7 @@ const SecureStore = jest.requireMock('expo-secure-store') as {
   deleteItemAsync: jest.Mock;
 };
 const SupabaseMock = jest.requireMock('./supabase') as {
-  supabase: { auth: { setSession: jest.Mock } };
+  supabase: { auth: { setSession: jest.Mock; getSession: jest.Mock } };
 };
 
 function makeMockFetch(options: { ok: boolean; status?: number; body?: unknown }) {
@@ -326,5 +328,26 @@ describe('registerAndStore', () => {
     await expect(
       registerAndStore('Jane', 'existing@example.com', 'secret'),
     ).rejects.toThrow('Email already in use');
+  });
+});
+
+describe('getStoredToken', () => {
+  afterEach(() => { SupabaseMock.supabase.auth.getSession.mockResolvedValue({ data: { session: null } }); });
+
+  it('returns the access token for a real signed-in session', async () => {
+    SupabaseMock.supabase.auth.getSession.mockResolvedValue({
+      data: { session: { access_token: 'jwt-real', user: { id: 'u1' } } },
+    });
+    expect(await getStoredToken()).toBe('jwt-real');
+  });
+
+  it('returns null for an anonymous session (#801) instead of its token', async () => {
+    // Every consumer of this function wants "does a real account own this
+    // device" - sending an anonymous token to an endpoint that doesn't
+    // expect it would 401.
+    SupabaseMock.supabase.auth.getSession.mockResolvedValue({
+      data: { session: { access_token: 'jwt-anon', user: { id: 'anon-1', is_anonymous: true } } },
+    });
+    expect(await getStoredToken()).toBeNull();
   });
 });

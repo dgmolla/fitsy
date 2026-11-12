@@ -8,7 +8,7 @@ import { MACRO_TARGETS_KEY, clearArchivedMacroTarget, getAnonymousCompleteTarget
 import { MEALS_PER_DAY } from './macroCalculator';
 import { macroCalories } from './macroEnergy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase } from './supabase';
+import { isRealAccountSession, supabase } from './supabase';
 import type { ProfileResponse as ProfileContract, UserGoalV2 } from '@fitsy/shared';
 import { PENDING_PROFILE_SYNC_KEY, isProfileSyncForgotten, profileWriteWasAcknowledged, recordProfileAcknowledgement, queueProfileStorage,
   waitForProfileStorage } from './profileSyncStorage';
@@ -192,7 +192,10 @@ export type ProfileReconciliation = 'restored' | 'absent' | 'unavailable' | 'acc
 export async function pullProfileFromServer(): Promise<ProfileReconciliation> {
   try {
     const { data: startingAuth } = await supabase.auth.getSession();
-    const expectedUserId = startingAuth.session?.user?.id;
+    // An anonymous session (#801) has no server profile to pull or push -
+    // treat it the same as no session, so this never fires an authenticated
+    // request an anonymous token can't carry.
+    const expectedUserId = isRealAccountSession(startingAuth.session) ? startingAuth.session!.user.id : undefined;
     if (!expectedUserId) return 'account-changed';
     const stillCurrent = async () =>
       (await supabase.auth.getSession()).data.session?.user?.id === expectedUserId;

@@ -18,6 +18,21 @@ import { requestDiscoverySignIn } from '@/lib/discoverySignIn';
 import { useRouteContinuation } from '@/lib/useRouteContinuation';
 import { trackLocationPrimingShown, trackLocationPermissionGranted, trackLocationPermissionDenied } from '@/lib/analytics';
 
+/**
+ * Lets a fresh user into onboarding anonymously instead of forcing a real
+ * sign-in immediately (#801); `routeToPaywall`'s existing sign-in gate is
+ * the sole mandatory point once the free preview is spent or declined.
+ * `fetchGuidedPreview` is the one API call an anonymous session can make.
+ * Falls back to requiring real sign-in only if anonymous sign-in itself
+ * fails (e.g. disabled on the Supabase project, or offline).
+ */
+async function ensureSession(): Promise<boolean> {
+  const { data } = await supabase.auth.getSession();
+  if (data.session?.access_token) return true;
+  const { data: anon, error } = await supabase.auth.signInAnonymously();
+  return !error && !!anon.session?.access_token;
+}
+
 export default function LocationPermissionScreen() {
   useOnboardingStep('location-permission');
   const [busy, setBusy] = useState(false);
@@ -34,9 +49,9 @@ export default function LocationPermissionScreen() {
     setBusy(false);
     setArea(undefined);
     setAreaRead('loading');
-    void supabase.auth.getSession().then(async ({ data }) => {
-      if (!current) return;
-      if (!data.session?.access_token || data.session.user.is_anonymous) {
+    void ensureSession().then(async ok => {
+      if (!current) return null;
+      if (!ok) {
         await requestDiscoverySignIn('/welcome/location-permission', () => current);
         return null;
       }
