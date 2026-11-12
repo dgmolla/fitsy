@@ -329,9 +329,34 @@ export function isPlayableVideo(file) {
   }
 }
 
+// #773/#794: inputHash is a whole-tree hash, so an unrelated commit merged
+// into main after collection (e.g. a tooling-only PR) invalidates every
+// report, even when nothing journey-relevant changed. Reuse is safe only
+// when the collected tree was clean, the current tree is clean, and the
+// entire committed difference since collection both exists and classifies
+// as simulator scope 'none' - i.e. the same routing an ordinary PR gets,
+// run against the base-update delta instead of the PR's own diff. Any
+// genuinely new local/PR change, not just a base update, fails this and
+// falls through to the existing strict check.
+export function baseUpdateDeltaIsSafe(report, cwd = root) {
+  if (report.cleanAtCollection !== true || typeof report.headAtCollection !== 'string' || !report.headAtCollection) return false;
+  if (report.configHash !== publicConfigIdentity(cwd).configHash) return false;
+  try { if (git(['status', '--porcelain'], cwd)) return false; } catch { return false; }
+  let currentHead;
+  try { currentHead = git(['rev-parse', 'HEAD'], cwd); } catch { return false; }
+  if (currentHead === report.headAtCollection) return false;
+  try { git(['merge-base', '--is-ancestor', report.headAtCollection, currentHead], cwd); } catch { return false; }
+  let files;
+  try { files = git(['diff', '--name-only', '--no-renames', '-z', report.headAtCollection, currentHead], cwd).split('\0').filter(Boolean); }
+  catch { return false; }
+  if (!files.length) return false;
+  return simulatorSelection(files, { cwd }).scope === 'none';
+}
+
 export function validate(report, plan, hash, directory, now = Date.now(), cwd = root, nativeHash = null,
   mode = 'final-candidate', verifiedExceptions = [], fixtureConfigurations = {}) {
-  insist(report.version === 1 && report.inputHash === hash, 'missing or stale source/test identity');
+  insist(report.version === 1, 'missing report version');
+  insist(report.inputHash === hash || baseUpdateDeltaIsSafe(report, cwd), 'missing or stale source/test identity');
   insist(['development', 'final-candidate', 'requested-video'].includes(mode) && report.evidenceMode === mode,
     `Expected ${mode} evidence; development or requested-video proof cannot satisfy final publication`);
   const time = Date.parse(report.finishedAt);
