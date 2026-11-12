@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { isRealAccountSession, supabase } from './supabase';
 import { getMacroTargets, getQuarantinedLegacyTarget, hasSavedMealTargets, restoreQuarantinedLegacyTarget,
   type MacroTargetMode } from './macroStorage';
 import { deliverQueuedProfile, pullProfileFromServer, queueSavedProfileToServer } from './profileSync';
@@ -7,7 +7,9 @@ export type StartupTargetRecovery = 'restored' | 'absent' | 'unavailable' | 'acc
 
 /** Recover an upgraded account before asking it to create replacement targets. */
 export async function recoverStartupMealTargets(confirm: (mode: MacroTargetMode) => Promise<boolean>): Promise<StartupTargetRecovery> {
-  const expectedUserId = (await supabase.auth.getSession()).data.session?.user?.id;
+  // An anonymous session (#801) has no account to recover targets for.
+  const { data } = await supabase.auth.getSession();
+  const expectedUserId = isRealAccountSession(data.session) ? data.session!.user.id : undefined;
   if (!expectedUserId) return 'account-changed';
   const stillCurrent = async () =>
     (await supabase.auth.getSession()).data.session?.user?.id === expectedUserId;

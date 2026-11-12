@@ -10,7 +10,10 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: (k: string) => getItem(k), setItem: (k: string, v: string) => setItem(k, v), removeItem: (k: string) => removeItem(k), multiRemove: (k: string[]) => removeItem(k as unknown as string) },
 }));
 jest.mock('expo-router', () => ({ router: { push: jest.fn(), replace: jest.fn() } }));
-jest.mock('./supabase', () => ({ supabase: { auth: { getSession: jest.fn() } } }));
+jest.mock('./supabase', () => ({ supabase: { auth: { getSession: jest.fn() } },
+  isRealAccountSession: (session: { user: { is_anonymous?: boolean } } | null | undefined) =>
+    !!session && !session.user.is_anonymous,
+}));
 
 // Fresh module per test so the in-memory mirror starts empty. resetModules
 // also re-instantiates the expo-router / supabase mocks, so the handles the
@@ -160,6 +163,16 @@ describe('routeToPaywall', () => {
     expect(g.push).not.toHaveBeenCalled();
     expect(store.get('@fitsy/paywallIntent')).toContain('"menuItemId":"m1"');
     expect(store.get('@fitsy/paymentSignInContinuation')).toBe('1');
+  });
+
+  it('sends a real anonymous Supabase session (#801) to sign-in, same as no session at all', async () => {
+    const g = await load();
+    g.getSession.mockResolvedValue({ data: { session: { user: { id: 'anon-device-1', is_anonymous: true } } } });
+    await g.routeToPaywall();
+    expect(g.push).toHaveBeenCalledWith('/welcome/signin');
+    // Never treated as "signed in" - no subscription-verdict sync for a
+    // throwaway identity that isn't a real account.
+    expect(g.syncPaywallVerdict).not.toHaveBeenCalled();
   });
 
   it('saves a meal claim for first-time anonymous sign-in without selecting payment', async () => {

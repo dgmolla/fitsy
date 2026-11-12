@@ -27,8 +27,12 @@ import { saveMacroTargets } from '../lib/macroStorage';
 import { hasSeenPreviewTour, hasUsedPreviewSample, markPreviewSampleUsed, markPreviewTourSeen } from '../lib/teaserGate';
 import { getOnboardingData } from '../lib/onboardingStorage';
 
-type Session = { access_token: string; user: { id: string } } | null;
+type Session = { access_token: string; user: { id: string; is_anonymous?: boolean } } | null;
 let mockSession: Session = null;
+// Anonymous sign-in is off by default (matches today's real dev project, #801)
+// so every pre-existing "no session" test keeps exercising the forced-signin
+// fallback without needing to know this mock exists.
+let mockAnonymousSignInError: Error | null = new Error('anonymous_provider_disabled');
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
 jest.mock('posthog-react-native', () => {
@@ -42,6 +46,11 @@ jest.mock('@supabase/supabase-js', () => {
     getSession: async () => ({ data: { session: mockSession } }),
     signOut: async () => { mockSession = null; return { error: null }; },
     setSession: async () => { mockSession = { access_token: 'test-token', user: { id: 'buyer' } }; return { data: { session: mockSession } }; },
+    signInAnonymously: async () => {
+      if (mockAnonymousSignInError) return { data: { session: null }, error: mockAnonymousSignInError };
+      mockSession = { access_token: 'anon-token', user: { id: 'anon-device', is_anonymous: true } };
+      return { data: { session: mockSession }, error: null };
+    },
     onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
     startAutoRefresh() {}, stopAutoRefresh() {},
   } }) };
@@ -109,6 +118,7 @@ beforeEach(async () => {
   await AsyncStorage.clear();
   await SecureStore.deleteItemAsync('fitsy_authToken');
   mockSession = null;
+  mockAnonymousSignInError = new Error('anonymous_provider_disabled');
   (ExpoNotifications.getPermissionsAsync as jest.Mock).mockReset().mockResolvedValue({ status: 'undetermined' });
   (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockClear();
   (ExpoLocation.requestForegroundPermissionsAsync as jest.Mock).mockClear();
@@ -154,6 +164,22 @@ it('signs in before live coverage and resumes the protected step after a cold la
   await waitFor(() => expect(resumed.getPathname()).toBe('/welcome/goal'));
   expect(global.fetch).toHaveBeenCalledWith(expect.stringContaining('/api/restaurants/preview?'),
     expect.objectContaining({ headers: { Authorization: 'Bearer test-token' } }));
+});
+
+it('lets a fresh user into onboarding anonymously instead of forcing sign-in first (#801)', async () => {
+  mockAnonymousSignInError = null;
+  const screen = renderJourney('/welcome/location-permission');
+  // The real content renders - never bounced to the sign-in screen.
+  await screen.findByTestId('location-use-current');
+  expect(screen.queryByTestId('signup-apple')).toBeNull();
+  expect(mockSession?.user.is_anonymous).toBe(true);
+});
+
+it('falls back to forcing real sign-in when anonymous sign-in itself fails', async () => {
+  mockAnonymousSignInError = new Error('anonymous_provider_disabled');
+  const screen = renderJourney('/welcome/location-permission');
+  await screen.findByTestId('signup-apple');
+  expect(screen.queryByTestId('location-use-current')).toBeNull();
 });
 
 it('resets a spent preview sample and tour when a new onboarding pass starts', async () => {

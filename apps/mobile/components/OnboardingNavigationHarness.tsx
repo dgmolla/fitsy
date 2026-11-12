@@ -30,9 +30,12 @@ import { hasPaymentSignInContinuation, rememberPaymentSignInContinuation } from 
 import { hasPendingMealClaim, rememberPendingMealClaim } from '../lib/pendingMealClaim';
 import type { ProfileResponse, UserGoalV2 } from '@fitsy/shared';
 
-type Session = { access_token: string; user: { id: string; user_metadata?: Record<string, unknown> } } | null;
+type Session = { access_token: string; user: { id: string; user_metadata?: Record<string, unknown>; is_anonymous?: boolean } } | null;
 type AuthListener = (event: string, session: Session) => void;
-export const mockState: { session: Session; sessionRead?: () => Promise<{ data: { session: Session } }>; googleResponse?: 'cancel' | 'missing-token'; authListeners: Set<AuthListener> } = { session: null, authListeners: new Set() };
+export const mockState: { session: Session; sessionRead?: () => Promise<{ data: { session: Session } }>; googleResponse?: 'cancel' | 'missing-token'; authListeners: Set<AuthListener>;
+  // Off by default, matching today's real dev project (#801) - existing
+  // "no session" tests keep exercising the forced-signin fallback unchanged.
+  anonymousSignInError: Error | null } = { session: null, authListeners: new Set(), anonymousSignInError: new Error('anonymous_provider_disabled') };
 jest.mock('@react-native-async-storage/async-storage', () => require('@react-native-async-storage/async-storage/jest/async-storage-mock'));
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
 jest.mock('posthog-react-native', () => {
@@ -51,6 +54,11 @@ jest.mock('@supabase/supabase-js', () => {
     },
     signOut: async () => { mockState.session = null; return { error: null }; },
     setSession: async () => { mockState.session = { access_token: 'test-token', user: { id: 'buyer' } }; return { data: { session: mockState.session } }; },
+    signInAnonymously: async () => {
+      if (mockState.anonymousSignInError) return { data: { session: null }, error: mockState.anonymousSignInError };
+      mockState.session = { access_token: 'anon-token', user: { id: 'anon-device', is_anonymous: true } };
+      return { data: { session: mockState.session }, error: null };
+    },
     onAuthStateChange: (listener: AuthListener) => {
       mockState.authListeners.add(listener);
       return { data: { subscription: { unsubscribe() { mockState.authListeners.delete(listener); } } } };
@@ -174,6 +182,7 @@ beforeEach(async () => {
   mockState.sessionRead = undefined;
   mockState.googleResponse = undefined;
   mockState.authListeners.clear();
+  mockState.anonymousSignInError = new Error('anonymous_provider_disabled');
   accountProfiles = Object.create(null);
   (ExpoNotifications.getPermissionsAsync as jest.Mock).mockReset().mockResolvedValue({ status: 'undetermined' });
   (ExpoNotifications.requestPermissionsAsync as jest.Mock).mockClear();

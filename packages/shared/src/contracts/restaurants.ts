@@ -74,6 +74,9 @@ export const guidedPreviewResponseSchema = z.object({
     nearbyDishCount: z.number().int().nonnegative(),
     radiusMiles: z.literal(3),
     goalMatch: goalMatchSchema.nullable().optional(),
+    // A real fourth nearby restaurant, bestMatch always redacted (same rule
+    // as an unentitled search row) - the onboarding tour renders it locked.
+    lockedTeaser: restaurantResultSchema.nullable().optional(),
   }),
 });
 export type GuidedPreviewResponse = z.infer<typeof guidedPreviewResponseSchema>;

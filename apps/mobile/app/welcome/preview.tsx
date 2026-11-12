@@ -6,7 +6,7 @@ import { DiscoveryScreen } from '@/components/DiscoveryScreen';
 import { usePreviewAccess } from '@/lib/usePreviewAccess';
 import { usePurchases } from '@/lib/usePurchases';
 import { routeToPaywall } from '@/lib/teaserGate';
-import { clearOnboardingPreviewEntry } from '@/lib/onboardingPreviewEntry';
+import { clearOnboardingPreviewEntry, rememberShowWidgetTip } from '@/lib/onboardingPreviewEntry';
 
 export default function PreviewScreen() {
   const access = usePreviewAccess(true);
@@ -27,7 +27,7 @@ export default function PreviewScreen() {
   useEffect(() => {
     if (!focused || !access.ready || entitled === null) return;
     if (entitled) router.replace('/(tabs)/search');
-    else if (!access.canPreview) void routeToPaywall({ replace: true });
+    else if (!access.canPreview) void rememberShowWidgetTip().then(() => routeToPaywall({ replace: true }));
   }, [focused, access.ready, access.canPreview, entitled]);
   if (!access.ready || !access.canPreview || entitled) return null;
   return <DiscoveryScreen onboardingPreview onPreviewBack={goBack} />;
