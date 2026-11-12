@@ -18,25 +18,23 @@ The boolean fields accept only actual booleans; the channel accepts only `develo
 
 | Gap | Contract | Limitation |
 | --- | --- | --- |
-| Staff/test exclusion | DEV/preview API origins, Debug/Metro/development distributions, the existing review account, `app_metadata.fitsy_internal_or_test=true`, or the Profile test-account choice mark the person `$internal_or_test_user=true`. | TestFlight by itself is not an internal account; existing staff must choose exclusion or receive the explicit administrator metadata through an authorized account-management process. |
+| Staff/test exclusion | DEV/preview API origins, Debug/Metro/development distributions, the existing review account, `app_metadata.fitsy_internal_or_test=true`, or a dev-only test-account control mark the person `$internal_or_test_user=true`. | TestFlight by itself is not an internal account; existing staff must choose exclusion or receive the explicit administrator metadata through an authorized account-management process. |
 | Distribution | Debug/Metro is `development`; otherwise the configured Expo Update channel supplies `testflight` or `production`; preview/e2e/development channels are `development`; unrecognized channels are `unknown`. | This records deployment configuration, not an independently attested installation source; historical builds cannot be relabeled from their `kind` value. |
 | Meaningful use | `restaurant_detail_viewed` includes boolean `unlocked` and `has_macros` after the focused, loaded menu passes its access guards; `menu_item_tapped` includes `unlocked`. | An unlocked menu containing macros is an activity proxy, not proof of reading every item or eating a meal. |
 | Save continuation | `item_saved`, `action=save`, `entry_point=purchase_continuation` fires after the existing post-purchase save succeeds. | An already-known bookmark, failed save or unsave is not a newly completed save. |
-| LA cohort | Profile's optional LA consent stores `user_metadata.fitsy_la_cohort_consent_v1` in the signed-in account; only strict `true` produces `la_cohort=true` on subsequent events and the identified person. | A neighborhood choice or GeoIP never grants consent; controlled DEV consent is not evidence of real LA uptake. |
+| LA cohort | The app's MVP scope is LA-only (`apps/mobile/lib/locations.ts`) - every resolvable search area is LA, so `la_cohort=true` is derived automatically for every identified, non-internal/test account. There is no self-report opt-in. | This is a forward-compatible cohort label, not evidence of real engagement; it needs a real area-based check before any non-LA city ships. |
 | Identity | The Supabase account UUID is the distinct ID on initial sign-in, token refresh and user updates; direct account switches and sign-out clear the previous SDK identity. | Two different provider accounts are not automatically merged; genuine physical-device continuity and adopted customer behavior need separate observation. |
 
-Profile exclusion is intentionally one-way for an account.
+Test-account exclusion is intentionally one-way for an account.
 The app never sends `$internal_or_test_user=false` as a person update, so another device cannot silently remove a known test classification.
-An excluded account can still exercise consent and menu journeys for controlled evidence.
+An excluded account can still exercise menu journeys for controlled evidence.
 No production account metadata is backfilled by this change, and previously retained private properties are not erased.
 Any historical data cleanup remains separately owned and authorized.
 
-Consent changes use the authenticated Supabase user endpoint with the initiating account's captured token, then refresh the persisted session and analytics identity.
+The dev-only exclusion write uses the authenticated Supabase user endpoint with the initiating account's captured token, then refreshes the persisted session and analytics identity.
 A concurrent account switch cannot retarget the write to the new account.
-The control stays off until confirmed opt-in and supports revocation.
-Cold start and sign-in identify the account with LA attribution off until a fresh Auth read confirms consent; a late response after sign-out or account change cannot restore it.
 An already-running second device receives account metadata on its next auth refresh.
-Neither LA nor internal/test metadata grants application access or entitlement.
+Neither LA cohort nor internal/test metadata grants application access or entitlement.
 
 The existing `kind` on `subscription_check` and `client_error` retains #605's monitoring meaning.
 Launch SQL must use `distribution_channel` instead of excluding `kind=development`, which also labels TestFlight monitoring traffic.
@@ -48,8 +46,8 @@ PostHog [internal-user filtering](https://posthog.com/tutorials/filter-internal-
 Do not rely on a project toggle or infer staff eligibility from email or subscription status.
 Use both the cohort and direct person/event booleans so a cohort refresh delay cannot admit a known test event.
 PostHog documents [daily dynamic-cohort recalculation](https://posthog.com/docs/data/cohorts#how-often-are-dynamic-cohorts-updated); direct booleans take effect without waiting for that refresh.
-Require consent at capture time and the current person consent so later enrollment does not retroactively qualify earlier activity.
-Missing contract, channel, consent or access fields are ineligible.
+The `la_cohort` checks below stay in the query for forward compatibility with a non-LA city; in the current LA-only MVP every identified, non-internal account already satisfies them.
+Missing contract, channel or access fields are ineligible.
 
 ```sql
 -- Two completed Monday-Sunday weeks in Los Angeles; named timezone handles DST.
@@ -82,7 +80,7 @@ FROM (
 ```
 
 The query cannot demonstrate two completed eligible weeks until the contract is adopted and those weeks have elapsed.
-The #735 worker owns controlled emission and insight setup; the launch owner owns real consenting participant enrollment and the first completed-week interpretation after deployment.
+The #735 worker owns controlled emission and insight setup; the launch owner owns real LA participant enrollment and the first completed-week interpretation after deployment.
 Saved insight and measured execution receipts belong in the audit follow-up and issue/PR proof.
 Project-wide defaults, existing insight rewrites, feature flags, paid add-ons and retained-data deletion are outside this change.
 
@@ -129,7 +127,7 @@ between any two edges is measurable as a PostHog funnel step.
 
 | Event | When | Properties | Question it answers |
 |-------|------|------------|---------------------|
-| `$identify` / `$set` (via `identifyAnalyticsUser`) | Account sign-in, refresh or metadata update | `email?`, `la_cohort`, `$internal_or_test_user=true?` | Stitch the same account and apply consent/test classification; nutrition and other person fields remain denied |
+| `$identify` / `$set` (via `identifyAnalyticsUser`) | Account sign-in, refresh or metadata update | `email?`, `la_cohort`, `$internal_or_test_user=true?` | Stitch the same account and apply the LA-cohort label and test classification; nutrition and other person fields remain denied |
 | SDK reset (via `resetAnalyticsSession`) | Sign-out or account switch | no captured `$reset` event | Drop the previous identity from subsequent activity |
 
 ## Onboarding

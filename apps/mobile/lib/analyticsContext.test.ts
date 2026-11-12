@@ -25,7 +25,7 @@ test.each([
   process.env = { ...env, EXPO_PUBLIC_API_URL: api };
   expect(analyticsDistribution()).toBe(distribution);
   expect(analyticsAccount({ id: 'account', user_metadata: { neighborhood: 'DTLA' } }))
-    .toEqual({ la_cohort: false, $internal_or_test_user: internal });
-  expect(analyticsAccount({ id: 'account', user_metadata: { fitsy_la_cohort_consent_v1: true, fitsy_internal_or_test: true } }))
+    .toEqual({ la_cohort: true, $internal_or_test_user: internal });
+  expect(analyticsAccount({ id: 'account', user_metadata: { fitsy_internal_or_test: true } }))
     .toEqual({ la_cohort: true, $internal_or_test_user: true });
 });
