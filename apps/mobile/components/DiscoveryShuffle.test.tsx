@@ -88,16 +88,17 @@ it('replaces search cards through the same endpoint with one tiny button and no 
   expect(requests.filter(url => url.pathname === '/api/restaurants')).toHaveLength(before + 1);
   expect(screen.getByTestId('discovery-hero').props.accessibilityLabel).not.toBe(first);
   expect(screen.getByTestId('discovery-search').props.value).toBe('meal');
-  expect(within(screen.getByTestId('discovery-search-bar')).getByTestId('shuffle-button')).toBeTruthy();
+  expect(within(screen.getByTestId('discovery-toolbar')).getByTestId('shuffle-button')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Shuffle results' })).toBeTruthy();
   const button = screen.getByTestId('shuffle-button');
-  expect(StyleSheet.flatten(button.props.style)).toMatchObject({ width: 24, height: 24 });
+  // Matches the map's own Shuffle sizing now (#824) - the list no longer has its own smaller variant.
+  expect(StyleSheet.flatten(button.props.style)).toMatchObject({ width: 44, height: 44 });
   expect(button.props.hitSlop).toBe(10);
   expect(screen.getAllByTestId('shuffle-button')).toHaveLength(1);
   for (const id of ['shuffle-section', 'shuffle-result', 'shuffle-again', 'shuffle-view-menu', 'shuffle-empty', 'shuffle-error', 'shuffle-loading', 'shuffle-edit-targets']) {
     expect(screen.queryByTestId(id)).toBeNull();
   }
-  await waitFor(() => expect(screen.getByTestId('discovery-macro-strip')).toBeTruthy());
+  await waitFor(() => expect(screen.getByTestId('discovery-goals')).toBeTruthy());
   // Replay the saved flow's post-tap assertions against the real search screen.
   const firstTap = commands.findIndex(command => command.tapOn?.id === 'shuffle-button');
   const capture = commands.findIndex(command => command.takeScreenshot === 'shuffle-search');

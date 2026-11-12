@@ -1,5 +1,5 @@
 import React, { Suspense, useCallback, useReducer, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WelcomeNav } from './WelcomeNav';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -15,12 +15,12 @@ import { routeToPaywall } from '@/lib/teaserGate';
 import { trackOnboardingScreenView } from '@/lib/analytics';
 import { useDiscoveryState } from '@/lib/useDiscoveryState';
 import { s } from './DiscoveryScreen.styles';
-import { Masthead, MacroStrip, SearchBar } from './DiscoveryChrome';
+import { Masthead, MacroStrip, SearchBar, DiscoveryToolbar } from './DiscoveryChrome';
 import { HeroCard, PreviewTourButton, RestaurantSection } from './DiscoveryCards';
-import { ShuffleButton } from './ShuffleButton';
 import { useMapSearchFlag } from '@/lib/useMapSearchFlag';
 import { useFloatingNavClearance } from '@/lib/floatingNav';
 import { DiscoveryViewToggle } from './DiscoveryViewToggle';
+const VIEW_FADE_MS = 150;
 // Load the native map only on eligible iOS entries.
 const DiscoveryMap = React.lazy(async () => require('./DiscoveryMap') as typeof import('./DiscoveryMap'));
 const FREE_RESULT_COUNT = 3;
@@ -33,6 +33,15 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
   const mapEnabled = useMapSearchFlag(mapDebug === '1' || onboardingPreview);
   const [view, setView] = useState<'map' | 'list'>('map');
   const showMap = mapEnabled && view === 'map';
+  const viewFade = useRef(new Animated.Value(1)).current;
+  // The view switch itself is synchronous (so callers can rely on the new
+  // screen being mounted immediately after calling this); only the opacity
+  // fade-in is animated, as a lightweight transition rather than a hard cut.
+  const switchView = useCallback((next: 'map' | 'list') => {
+    setView(next);
+    viewFade.setValue(0);
+    Animated.timing(viewFade, { toValue: 1, duration: VIEW_FADE_MS, useNativeDriver: true }).start();
+  }, [viewFade]);
   const discovery = useDiscoveryState({ onboardingPreview });
   const { navigation, isOnboardingPreview, tried, inputs, filterMode, query, setQuery, canSearch, hasQuery, location,
     locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea,
@@ -70,14 +79,16 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
       <Ionicons name="chevron-back" size={20} color={EDITORIAL.textMid} />
     </Pressable>}
     <Text style={s.previewHint}>{onboardingPitch(tried).preview}</Text>
-    {mapEnabled && !showMap && <DiscoveryViewToggle map={false} onPress={() => setView('map')} />}
+    {mapEnabled && !showMap && <DiscoveryViewToggle map={false} onPress={() => switchView('map')} />}
     <PreviewTourButton ready={tourReady} onPress={startTour} />
   </View>;
   const header = (
     <>
-      {previewIntro}
-      <MacroStrip macros={inputs} onEdit={() => setFilterVisible(true)} editRef={tourEditRef} />
-      {renderSearchBar(!isOnboardingPreview && <ShuffleButton style={mapEnabled && s.mapShuffle} disabled={!canShuffle} onPress={handleShuffle} />)}
+      {isOnboardingPreview && <>
+        {previewIntro}
+        <MacroStrip macros={inputs} onEdit={() => setFilterVisible(true)} editRef={tourEditRef} />
+        {renderSearchBar()}
+      </>}
       {!canSearch && (
         <View style={s.inlineEmpty}>
           <Ionicons name="search-outline" size={32} color={EDITORIAL.greenAccent} />
@@ -186,14 +197,19 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
       edges={showMap ? [] : isOnboardingPreview ? ['top', 'right', 'bottom', 'left'] : ['top', 'right', 'left']}
       style={{ flex: 1, backgroundColor: EDITORIAL.cream }}
     >
+      <Animated.View style={{ flex: 1, opacity: viewFade }}>
       {showMap ? <Suspense fallback={<ActivityIndicator accessibilityLabel="Loading map" />}>
-        <DiscoveryMap discovery={discovery} onShowList={() => setView('list')}
+        <DiscoveryMap discovery={discovery} onShowList={() => switchView('list')}
           previewHeader={isOnboardingPreview ? <>{previewNav}{previewIntro}</> : undefined}
           onTourLayoutChange={onTourLayoutChange} />
       </Suspense> : <>
       {previewNav}
-      <Masthead preview={isOnboardingPreview} locationRef={tourLocationRef} locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker}
-        mapControl={mapEnabled && !isOnboardingPreview ? { onPress: () => setView('map') } : undefined} />
+      {isOnboardingPreview
+        ? <Masthead preview locationRef={tourLocationRef} locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker} />
+        : <DiscoveryToolbar query={query} onQueryChange={setQuery} onClear={handleClearQuery} searchRef={tourSearchRef}
+            locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker} locationRef={tourLocationRef}
+            onMacrosPress={() => setFilterVisible(true)} canShuffle={canShuffle} onShuffle={handleShuffle}
+            onViewToggle={mapEnabled ? () => switchView('map') : undefined} />}
       {!loading && error !== null && (
         <View style={s.errorBanner}>
           <Text style={s.errorText}>{error}</Text>
@@ -231,6 +247,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
           }
         /></View>
       </>}
+      </Animated.View>
       <CoachMarks
         visible={tourVisible && locked === true}
         steps={tourSteps}

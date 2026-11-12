@@ -129,9 +129,10 @@ env:
     timeout: 30000
 - tapOn:
     id: coachmark-skip
-# Preview is map-first; switch to list so the applied-calories assertion
-# below has a macro strip to show against (the map toolbar's own Macros
-# button opens the same editor but never displays the numbers themselves).
+# The list's Macros control matches the map's (#824): a pill that opens the
+# editor, never a standing numeric display, on either screen now. Verify the
+# applied value by reopening the editor and reading its own field, not by
+# looking for the number rendered on the underlying screen.
 - extendedWaitUntil:
     visible:
       id: map-search-entry
@@ -140,20 +141,17 @@ env:
     id: map-search-entry
 - extendedWaitUntil:
     visible:
-      id: preview-edit-targets
+      id: discovery-goals
     timeout: 30000
 - tapOn:
-    id: preview-edit-targets
+    id: discovery-goals
 - tapOn: "Increase Protein"
 - copyTextFrom: "Calories per meal"
 - assertTrue: ${Number(maestro.copiedText) === output.kcal + 20}
 - tapOn:
     id: meal-filter-apply
-- extendedWaitUntil:
-    visible: "${output.kcal + 20}"
-    timeout: 30000
 - tapOn:
-    id: preview-edit-targets
+    id: discovery-goals
 - copyTextFrom: "Calories per meal"
 - assertTrue: ${Number(maestro.copiedText) === output.kcal + 20}
 - runFlow: ../helpers/dismiss-meal-targets.yaml

@@ -43,9 +43,9 @@ env:
 - assertNotVisible:
     id: discovery-map
 - assertVisible:
-    id: discovery-macro-strip
+    id: discovery-goals
 - tapOn:
-    id: preview-edit-targets
+    id: discovery-goals
 - runFlow:
     when:
       visible:

@@ -146,11 +146,11 @@ it.each(['map', 'list'])('mapDebug keeps visible Shuffle in the %s controls with
   await screen.findByTestId('map-pin-0');
   if (view === 'list') await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
   const shuffle = screen.getByRole('button', { name: 'Shuffle results' });
-  const controls = screen.getByTestId(view === 'map' ? 'map-toolbar' : 'discovery-search-bar');
+  const controls = screen.getByTestId(view === 'map' ? 'map-toolbar' : 'discovery-toolbar');
   expect(within(controls).getByTestId('shuffle-button')).toBe(shuffle);
   expect(StyleSheet.flatten(shuffle.props.style)).toMatchObject({ width: 44, height: 44 });
   expect(screen.getAllByTestId('shuffle-button')).toHaveLength(1);
-  if (view === 'map') expect(within(controls).getByRole('button', { name: 'Edit macros' })).toBeTruthy();
+  expect(within(controls).getByRole('button', { name: 'Edit macros' })).toBeTruthy();
 
   const pending = deferred<Response>();
   searchResponse = () => pending.promise;
@@ -245,9 +245,11 @@ it('opens the chosen full-photo card, then returns using the saved iOS flow cont
   expect(screen.getPathname()).toBe('/search');
   expect(screen.getByLabelText('Search: meal')).toBeTruthy();
   await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
-  expect(screen.getByText('40g')).toBeTruthy();
-  expect(screen.getByText('YOUR PICKS NEAR DTLA')).toBeTruthy();
-  expect(screen.queryByTestId('discovery-location')).toBeNull();
+  // The list matches the map's own chrome now (#824): no macro values or
+  // "picks near" heading, the same location pill and Macros button instead.
+  expect(screen.getByTestId('discovery-goals')).toBeTruthy();
+  expect(screen.queryByText(/YOUR PICKS NEAR/)).toBeNull();
+  expect(screen.getByLabelText('Location: DTLA')).toBeTruthy();
 });
 
 it.each(['LOW', 'MEDIUM'] as const)('keeps actual meal content and %s confidence through the single Map control', async confidence => {
@@ -268,7 +270,7 @@ it.each(['LOW', 'MEDIUM'] as const)('keeps actual meal content and %s confidence
   await screen.findByTestId('discovery-list');
   for (const text of meal) expect(within(screen.getByTestId('discovery-hero')).getByText(text)).toBeTruthy();
   expect(screen.getByTestId('discovery-hero').props.accessibilityLabel).toContain(qualified);
-  expect(screen.queryByTestId('discovery-location')).toBeNull();
+  expect(screen.getByTestId('discovery-location')).toBeTruthy();
   const mapControl = commands[start + 1].tapOn;
   if (typeof mapControl !== 'object') throw new Error('The native list journey must use its rendered Map control');
   await act(async () => fireEvent.press(screen.getByTestId(mapControl.id)));
@@ -344,8 +346,8 @@ it('searches a settled dragged area only after confirmation and ignores stale ar
   await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
   expect(screen.getByTestId('discovery-search').props.value).toBe('salmon');
   expect(within(screen.getByTestId('discovery-hero')).getByText('Pizza House')).toBeTruthy();
-  expect(screen.getByText('40g')).toBeTruthy();
-  expect(screen.queryByTestId('discovery-location')).toBeNull();
+  expect(screen.getByTestId('discovery-goals')).toBeTruthy();
+  expect(screen.getByTestId('discovery-location')).toBeTruthy();
 });
 
 it.each(['published', 'locked', 'missing'])('preserves %s meal disclosure through map and list', async state => {
@@ -379,7 +381,7 @@ it('opens the real search list and Macros editor while preserving bounded result
   await screen.findByTestId('map-pin-0');
   await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
   expect(screen.queryByTestId('discovery-map')).toBeNull();
-  expect(screen.getByTestId('discovery-macro-strip')).toBeTruthy();
+  expect(screen.getByTestId('discovery-goals')).toBeTruthy();
   await act(async () => fireEvent.changeText(screen.getByTestId('discovery-search'), 'pizza'));
   await waitFor(() => expect(searchParams().q).toBe('pizza'));
   await act(async () => fireEvent.press(screen.getByTestId('discovery-view-toggle')));
@@ -435,7 +437,7 @@ it('opens the real search list and Macros editor while preserving bounded result
   expect(searchParams().seed).toBeTruthy();
   await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
   expect(screen.getByLabelText('Search restaurants or dishes')).toBeTruthy();
-  expect(screen.getByText('40g')).toBeTruthy();
+  expect(screen.getByTestId('discovery-goals')).toBeTruthy();
   expect(screen.getByTestId('discovery-hero').props.accessibilityLabel).toBe('Flor do Ave new');
 });
 

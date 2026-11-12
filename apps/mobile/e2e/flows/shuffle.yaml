@@ -68,7 +68,7 @@ env:
     direction: DOWN
 - tapOn: "Search near DTLA"
 - tapOn:
-    id: preview-edit-targets
+    id: discovery-goals
 - runFlow:
     when:
       visible:
@@ -102,7 +102,7 @@ env:
     id: discovery-hero
 - evalScript: ${output.perfHero = maestro.copiedText}
 - tapOn:
-    id: preview-edit-targets
+    id: discovery-goals
 - runFlow: ../helpers/dismiss-meal-targets.yaml
 - extendedWaitUntil:
     visible:
@@ -134,7 +134,7 @@ env:
 - assertVisible:
     id: discovery-search-bar
 - assertVisible:
-    id: discovery-macro-strip
+    id: discovery-goals
 - assertNotVisible:
     id: shuffle-section
 - assertNotVisible:
