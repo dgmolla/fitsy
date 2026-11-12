@@ -8,13 +8,15 @@ import { test } from 'node:test';
 import { review, runAgent, selectLenses, validateReview } from './simple-review.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
-const lenses = ['correctness', 'workflow-security'];
+const lenses = ['correctness', 'ci-impact'];
 const finding = { domains: ['correctness'], severity: 'CONFIRMED', priority: 'P1', file: 'scripts/example.js',
   line: 1, summary: 'Empty input crashes', scenario: 'An empty request throws instead of returning a result',
   impact: 'Every empty request breaks the documented core flow', fix: 'Handle empty input before access' };
 const verdict = (findings = []) => ({ findings, verdict: findings.some(f => f.severity === 'CONFIRMED') ? 'fail' : 'pass',
   domains: Object.fromEntries(lenses.map(lens => [lens,
-    findings.some(f => f.severity === 'CONFIRMED' && f.domains.includes(lens)) ? 'fail' : 'pass'])) });
+    findings.some(f => f.severity === 'CONFIRMED' && f.domains.includes(lens)) ? 'fail' : 'pass'])),
+  rationale: Object.fromEntries(lenses.filter(lens => !findings.some(f => f.severity === 'CONFIRMED' && f.domains.includes(lens)))
+    .map(lens => [lens, [`Checked ${lens} for this diff; nothing changed its risk`]])) });
 const fenced = result => '```json\n' + JSON.stringify(result) + '\n```';
 
 test('all confidence/priority combinations preserve the raw verdict and only confirmed P0/P1 block', () => {
@@ -31,6 +33,12 @@ test('all confidence/priority combinations preserve the raw verdict and only con
 test('malformed, incomplete, contradictory and ambiguous responses never pass', () => {
   const bad = [null, {}, { ...verdict(), domains: { correctness: 'pass' } },
     { ...verdict(), verdict: 'fail' }, { ...verdict([finding]), verdict: 'pass' },
+    { ...verdict(), rationale: undefined }, { ...verdict(), rationale: [] },
+    { ...verdict(), rationale: { ...verdict().rationale, correctness: undefined } },
+    { ...verdict(), rationale: { ...verdict().rationale, correctness: [] } },
+    { ...verdict(), rationale: { ...verdict().rationale, correctness: [''] } },
+    { ...verdict(), rationale: { ...verdict().rationale, correctness: ['x'.repeat(241)] } },
+    { ...verdict(), rationale: { ...verdict().rationale, correctness: Array.from({ length: 5 }, () => 'ok') } },
     ...[{ severity: 'UNKNOWN' }, { priority: 'P9' }, { priority: ['P1'] }, { impact: '' }, { line: -1 }, { line: true },
       { domains: [] }, { domains: ['unknown'] }, { fix: '' }].map(change => verdict([{ ...finding, ...change }])),
     verdict(Array.from({ length: 6 }, () => ({ ...finding, severity: 'NIT' })))];
@@ -42,7 +50,7 @@ test('malformed, incomplete, contradictory and ambiguous responses never pass', 
 
 test('the retained router selects existing lenses from PR paths', () => {
   for (const [path, expected] of [['apps/api/app/api/example.ts', 'danger-zone'],
-    ['apps/mobile/app/index.tsx', 'danger-zone'], ['scripts/review/new.mjs', 'workflow-security'],
+    ['apps/mobile/app/index.tsx', 'danger-zone'], ['scripts/review/new.mjs', 'ci-impact'],
     ['docs/product/spec.md', 'spec-conformance'], ['docs/design/brief.md', 'docs-sanity']]) {
     assert.deepEqual(selectLenses(path + '\n'), ['correctness', expected]);
   }
@@ -87,13 +95,16 @@ test('real Git diff reaches one isolated provider; one bot comment is created th
   assert.equal(await review(f.event, f), 0);
   const provider = JSON.parse(readFileSync(f.log, 'utf8'));
   assert.match(provider.prompt, /\+export const value = 2/);
-  assert.match(provider.prompt, /Required domains: \["correctness","workflow-security"\]/);
+  assert.match(provider.prompt, /Required domains: \["correctness","ci-impact"\]/);
   assert.match(provider.prompt, /\$\(touch DO_NOT_CREATE\)/);
   assert.equal(provider.env.GH_TOKEN, undefined); assert.equal(provider.env.NODE_OPTIONS, undefined);
   assert.equal(provider.args[provider.args.indexOf('--sandbox') + 1], 'read-only');
   assert.notEqual(provider.cwd, f.worktree); assert.equal(existsSync(provider.cwd), false);
   assert.equal(f.writes.length, 1); assert.equal(f.writes[0].method, 'POST');
   assert.match(f.writes[0].body.body, /P2/); assert.match(f.writes[0].body.body, /advisory/);
+  assert.match(f.writes[0].body.body, /Why each passing domain is fine/);
+  assert.match(f.writes[0].body.body, /\*\*ci-impact\*\*: Checked ci-impact for this diff/);
+  assert.doesNotMatch(f.writes[0].body.body, /\*\*correctness\*\*: Checked correctness/);
   f.comments.push({ id: 9, user: { login: 'author' }, body: f.writes[0].body.body },
     { id: 10, user: { login: 'github-actions[bot]' }, body: f.writes[0].body.body });
   assert.equal(await review(f.event, f), 0);
