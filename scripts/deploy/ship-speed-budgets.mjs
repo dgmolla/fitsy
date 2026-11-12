@@ -8,8 +8,6 @@ import { dirname, resolve } from 'node:path';
 const REPO = 'dgmolla/fitsy';
 
 export const DEFAULT_BUDGETS = {
-  maestroQueueWaitMinutes: 15,
-  nativeAttemptsPerSha: 2,
   verifyDurationMinutes: 20,
   pushesPerPr: 8,
   statusCommentsPerIssuePerHour: 4,
@@ -80,23 +78,6 @@ export function openToMergeMinutes(prs) {
   return prs.map(pr => ({ pr: pr.number, title: pr.title, url: pr.url, minutes: Math.round(minutesBetween(pr.createdAt, pr.mergedAt)) }));
 }
 
-export function nativeAttemptsPerSha(runs) {
-  const bySha = {};
-  for (const run of runs) (bySha[run.headSha] ??= []).push(run);
-  return Object.entries(bySha).map(([sha, attempts]) => ({ sha, attempts: attempts.length }));
-}
-
-export function maestroQueueWaits(runs, jobsFor = runJobs) {
-  const waits = [];
-  for (const run of runs) {
-    for (const job of jobsFor(run.databaseId)) {
-      if (job.name !== 'Maestro on Mac' || !job.created_at || !job.started_at) continue;
-      waits.push({ run: run.databaseId, sha: run.headSha, queueWaitMinutes: Math.round(minutesBetween(job.created_at, job.started_at) * 10) / 10 });
-    }
-  }
-  return waits;
-}
-
 export function verifyDurations(runs, jobsFor = runJobs) {
   const durations = [];
   for (const run of runs) {
@@ -111,10 +92,6 @@ export function verifyDurations(runs, jobsFor = runJobs) {
 
 export function violations(budgets, metrics) {
   const out = [];
-  for (const m of metrics.maestroQueueWaits) if (m.queueWaitMinutes > budgets.maestroQueueWaitMinutes)
-    out.push(`Maestro queue wait ${m.queueWaitMinutes}min > ${budgets.maestroQueueWaitMinutes}min (run ${m.run})`);
-  for (const m of metrics.nativeAttemptsPerSha) if (m.attempts > budgets.nativeAttemptsPerSha)
-    out.push(`${m.attempts} native attempts > ${budgets.nativeAttemptsPerSha} for SHA ${m.sha.slice(0, 12)}`);
   for (const m of metrics.verifyDurations) if (m.durationMinutes > budgets.verifyDurationMinutes)
     out.push(`${m.job} took ${m.durationMinutes}min > ${budgets.verifyDurationMinutes}min (run ${m.run})`);
   for (const m of metrics.pushesPerPr) if (m.pushes > budgets.pushesPerPr)
@@ -126,14 +103,11 @@ export function violations(budgets, metrics) {
 
 export async function computeBudgets(days, budgets = DEFAULT_BUDGETS) {
   const prs = mergedPrs(days);
-  const simulatorRuns = workflowRuns('simulator.yml', days);
   const verifyRuns = workflowRuns('verify.yml', days);
   const since = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
   const metrics = {
     pushesPerPr: pushesPerPr(prs),
     openToMergeMinutes: openToMergeMinutes(prs),
-    nativeAttemptsPerSha: nativeAttemptsPerSha(simulatorRuns),
-    maestroQueueWaits: maestroQueueWaits(simulatorRuns),
     verifyDurations: verifyDurations(verifyRuns),
     issueCommentHours: issueCommentHours(fetchIssuesWithComments(days), since),
   };
@@ -146,7 +120,6 @@ function toMarkdown(report) {
   lines.push(report.violations.length ? report.violations.map(v => `- ${v}`).join('\n') : '_None._');
   lines.push('', '## Summary', '');
   lines.push(`- Merged PRs: ${report.metrics.pushesPerPr.length}`);
-  lines.push(`- Simulator runs: ${report.metrics.nativeAttemptsPerSha.reduce((n, a) => n + a.attempts, 0)}`);
   lines.push(`- Verify (L2) job samples: ${report.metrics.verifyDurations.length}`);
   return lines.join('\n') + '\n';
 }

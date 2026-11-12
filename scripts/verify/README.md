@@ -136,10 +136,7 @@ Shared components, theme/assets, app shells and unmapped UI require the full sui
 The bounded Discovery map-preview adaptation has a source comparison exception covering its existing onboarding, ordinary map/list, paywall and resubscribe consumers.
 It reconstructs the candidate from the complete base modules, permits only the listed preview/default adaptations, and checks the existing caller inventory in both revisions.
 Any additional product change, new caller, missing source or public configuration change restores full coverage.
-The same plan reaches local, hosted, final collection and publication callers, retaining all six interactive categories.
-The hosted selector couples job and worker budgets: smoke and up to three selected flows use 30 minutes/1800 seconds; larger selections and full coverage use 90 minutes/5400 seconds.
-The existing native caller derives the corresponding 35/95-minute lease, preserving setup, fixture transitions and cleanup time without changing individual journey deadlines.
-Only the exact coupled workflow budget wiring is admitted with the bounded preview adaptation; unrelated workflow or runner changes restore full coverage.
+The same plan reaches local, final collection and publication callers, retaining all six interactive categories.
 Independent review must approve a changed selector before native admission; a matching plan is not execution evidence.
 Mixed changes keep the broader coverage; render smoke never narrows high risk.
 The exact `needs-sim` PR label forces execution, using the affected selection when available and the full set otherwise.
@@ -147,11 +144,8 @@ Unavailable history or classification expands to full coverage.
 Adding or removing that label reruns Verify.
 
 The existing Build job runs only L3 checks on Ubuntu.
-CI computes `none|smoke|flow|full`, exports flow names and render checkpoints, and uploads the full plan as `selection.json` in the `sim-scope` artifact.
 The classifier and its baseline scripts have read-only credentials, with checkout credential persistence disabled.
-The separate `sim-scope.yml` completion workflow loads its publisher from the protected workflow revision, validates the source run, artifact and current PR head, and posts `Sim scope` with `scope=<scope> flows=<count>`.
-Only that trusted publisher has `statuses: write`; it never executes candidate code.
-The local poller reads exact flow names and render checkpoints from the linked Verify run's `selection.json`, rather than parsing names from the bounded status description.
+The hosted Simulator workflow was removed (#781); CI no longer computes or exports simulator scope, and `product-flow/local` is the only simulator pass.
 A docs-only `needs-sim` label requests local flows while static, tests and Build remain skipped.
 The final Verify aggregator is unchanged.
 Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.
@@ -170,7 +164,7 @@ The ordinary native build command checks the [shared immutable cache](../../docs
 Retire owned Metro, drivers and simulator resources at the end of the phase through the existing lifecycle controls.
 CI execution is refused by the local runner, and the registry contains no native execution check.
 Replay scope and preview regressions with `npm test -w @fitsy/scripts -- --runInBand --runTestsByPath verify/simulator-scope.test.ts sim/ci.test.ts sim/slack-video.test.ts`.
-Replay trusted publication and fixture isolation with `node --test scripts/verify/sim-scope-status.test.mjs scripts/sim/journey-fixtures.test.mjs`.
+Replay fixture isolation with `node --test scripts/sim/journey-fixtures.test.mjs`.
 See [shipping.md](../../docs/engineering/devops/shipping.md) for native setup, billing starting states and separate source-bound product acceptance.
 
 The local pre-push hook runs size/domain checks, then cheap static checks and focused tests.

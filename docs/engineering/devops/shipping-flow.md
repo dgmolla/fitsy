@@ -34,8 +34,6 @@ Start `codex exec -C ~/fitsy-wt/issue-N -s danger-full-access -` in the backgrou
 Watch workers and PRs about every five minutes; update BEHIND branches, resolve conflicts, and fix failed checks/reviews through the worker until GitHub auto-merges.
 At start, before each wait and before handoff/exit, freshly read both issue and PR comments, including edits, using observed `updated_at` cursors with inclusive ID/update/body-hash deduplication.
 Failed queries are errors, not empty feedback; acknowledge material owner directions on the issue and deliver them to the existing worker within current authority.
-At the first pending hosted Mac job, run the existing local `node scripts/verify/simulator-actions.mjs --preflight` and record absent capacity or unavailable inventory with its owner action instead of silently waiting.
-This diagnostic adds no required context or registration authority and does not stop independent authorized work.
 Infrastructure failures get one retry.
 By default, continue necessary code/review repairs while diagnosis and changed evidence show progress, numbering batches additively and preserving all prior failures and allocations.
 Pair repair unblocks with a proportionate causal audit, distinguish confirmed causes from hypotheses and unknowns, and apply low-stakes prevention in the affected existing callers, tests and guidance.
@@ -46,9 +44,6 @@ If the same failure happens twice anywhere, add one line with lasting prevention
 
 The Mac has 16 GB RAM: at most two workers, and one Simulator/Maestro user at a time.
 Workers atomically acquire `~/fitsy-wt/simulator.lock` with issue number and PID and remove only their own lock on exit; stale-lock recovery requires a stopped owner and no live simulator consumers.
-Respect an active simulator CI job as a consumer too; do not overlap it with local simulator work.
-See `docs/ci-simulator.md` if present for runner setup.
-This documentation change does not install or reconfigure a runner.
 
 Only workers enable squash auto-merge; never merge manually, bypass checks, use `--no-verify`, or change repository settings or required checks.
 Follow all [Hard rules](../../../AGENTS.md#hard-rules-both-roles), including no production data writes, secrets in logs, App Store submission, RevenueCat production use, rate-limiter fail-open, or `git gc`.
