@@ -34,8 +34,8 @@ const RestaurantMarker = React.memo(function RestaurantMarker({ result, position
     zIndex={selected ? 1000 : 100 - position} testID={`map-pin-${position}`}
     accessibilityRole="button" accessibilityLabel={mapRestaurantLabel(result)}
     accessibilityHint="Select restaurant card" accessibilityState={{ selected }} onPress={() => onSelect(result)}>
-    <View style={[s.pin, s.iconPin, selected && s.selectedPin]} collapsable={false}>
-      <Ionicons name="restaurant-outline" size={24} color={EDITORIAL.green} />
+    <View style={[s.pin, s.emojiPin, selected && s.selectedPin]} collapsable={false}>
+      <Text style={s.pinEmoji}>🍴</Text>
     </View>
   </Marker>;
 });

@@ -39,7 +39,8 @@ export const s = StyleSheet.create({
   pin: { width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: EDITORIAL.cream,
     backgroundColor: EDITORIAL.green, alignItems: 'center', justifyContent: 'center',
     shadowColor: EDITORIAL.green, shadowOpacity: 0.18, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
-  iconPin: { backgroundColor: EDITORIAL.cream, borderColor: EDITORIAL.creamDeep },
+  emojiPin: { backgroundColor: EDITORIAL.cream, borderColor: EDITORIAL.creamDeep },
   selectedPin: { backgroundColor: EDITORIAL.cream, borderColor: EDITORIAL.green },
+  pinEmoji: { fontSize: 25, lineHeight: 32 },
   carousel: { paddingLeft: 16, paddingRight: 40, gap: 12 },
 });
