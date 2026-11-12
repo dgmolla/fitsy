@@ -1,12 +1,17 @@
 import { useCallback, useRef, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import { EDITORIAL, FONTS } from '@/lib/brand';
-import { saveLaunchPreference, type LaunchPreference } from '@/lib/launchAnalyticsPreferences';
+import { markInternalOrTestAccount } from '@/lib/launchAnalyticsPreferences';
 
-export function LaunchAnalyticsPreferences() {
+/**
+ * Dev-only: lets a staff/test account exclude itself from launch metrics.
+ * Render this only behind `__DEV__` at the call site - it must never appear
+ * for normal users.
+ */
+export function DevTestAccountControl() {
   const [user, setUser] = useState<User | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
@@ -27,29 +32,22 @@ export function LaunchAnalyticsPreferences() {
     return () => { ++revision.current; data.subscription.unsubscribe(); };
   }, []));
 
-  async function save(field: LaunchPreference, enabled: boolean) {
+  async function save() {
     if (!user || busy) return;
     const current = revision.current;
     setBusy(true); setError(false);
-    try { await saveLaunchPreference(user.id, field, enabled); }
+    try { await markInternalOrTestAccount(user.id); }
     catch { if (revision.current === current) setError(true); }
     finally { setBusy(false); }
   }
   const excluded = user?.user_metadata?.fitsy_internal_or_test === true || user?.app_metadata?.fitsy_internal_or_test === true;
   return (
-    <View style={s.card} testID="launch-analytics-preferences">
-      <Text style={s.title}>LA launch analytics</Text>
-      <Text style={s.copy}>Optional: I use Fitsy in Los Angeles and agree to share my app activity with Fitsy through PostHog for LA launch analytics. No precise location or nutrition is shared. Turn this off anytime.</Text>
-      <View style={s.row}>
-        <Text style={s.label}>Include my LA activity</Text>
-        <Switch testID="la-analytics-consent" accessibilityLabel="Include my LA activity"
-          disabled={!user || busy} value={user?.user_metadata?.fitsy_la_cohort_consent_v1 === true}
-          trackColor={{ true: EDITORIAL.greenAccent }} onValueChange={value => void save('fitsy_la_cohort_consent_v1', value)} />
-      </View>
+    <View style={s.card} testID="dev-test-account-control">
+      <Text style={s.title}>Development: test account</Text>
       <Pressable accessibilityRole="button" testID="analytics-exclude-account" disabled={!user || busy || excluded}
         onPress={() => Alert.alert('Exclude this test account?', 'Use this for staff, testing or demos. This account will stay out of launch counts on every device.', [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Exclude account', onPress: () => void save('fitsy_internal_or_test', true) },
+          { text: 'Exclude account', onPress: () => void save() },
         ])}>
         <Text style={s.link}>{excluded ? 'Test account excluded from launch counts' : 'Using a staff or test account? Exclude it'}</Text>
       </Pressable>
@@ -61,9 +59,6 @@ export function LaunchAnalyticsPreferences() {
 const s = StyleSheet.create({
   card: { backgroundColor: EDITORIAL.cream, borderColor: EDITORIAL.creamDeep, borderWidth: 1, borderRadius: 20, padding: 20, marginBottom: 16, gap: 12 },
   title: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 17, color: EDITORIAL.text },
-  copy: { fontFamily: FONTS.nunitoSans, fontSize: 13, lineHeight: 20, color: EDITORIAL.textSoft },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  label: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 15, color: EDITORIAL.text, flexShrink: 1 },
   link: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 13, lineHeight: 20, color: EDITORIAL.greenAccent },
   error: { fontFamily: FONTS.nunitoSans, fontSize: 13, color: '#B85450' },
 });
