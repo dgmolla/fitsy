@@ -85,6 +85,59 @@ RevenueCat reachability deliberately expects an unauthenticated 401 on a documen
 It does not prove key validity, webhook delivery, App Store connectivity, or successful purchases.
 Shallow public health remains a database/source check and can remain 200 during a Redis outage.
 
+## Triage: when a check alerts
+
+Each entry names the query or endpoint to check first, the most likely causes, and the action. The Axiom queries use the same `['fitsy-pipeline'] | where type == 'api_request' and environment == 'production'` base filter the monitor itself runs (`scripts/verify/production-providers.mjs`'s `apiQuery`).
+
+**API errors / Route latency**
+```
+['fitsy-pipeline'] | where type == 'api_request' and environment == 'production' and _time > ago(5m) | summarize count() by route, status | order by count_ desc
+```
+- One route dominating the error count → check that route's recent deploys/PRs first; a route-specific regression is more likely than a platform-wide one.
+- Errors spread evenly across routes → check `/api/health?deep=1` directly (needs `CRON_SECRET`) to rule out a shared dependency (Supabase, Upstash) before assuming a code issue.
+- `api:telemetry-missing` instead of `api:5xx` → no telemetry arrived at all; check whether `withApiTelemetry` wrapping was removed from a route, or whether Vercel itself is down (check Vercel status page before the app).
+
+**Telemetry availability**
+- Fires only when synthetic probe traffic exists but no `api_request` events reach Axiom - this means the app is serving requests but `AXIOM_TOKEN`/the emit path is broken, not that the app is down. Check `apps/api/instrumentation.ts`/`apps/api/lib/apiEmitter.ts` for a recent change, and confirm `AXIOM_TOKEN` is still valid in the production Vercel env.
+
+**Synthetic requests / Deep health**
+- A single probe failing (not all) → check that specific route/dependency directly: `curl -i https://fitsy.org/api/health` for the shallow check, or the specific dependency (`supabase`/`upstash`/`revenuecat`) named in the deep health body for `?deep=1`.
+- All probes failing at once → the app or its edge is down; check the Vercel dashboard before anything else, and check `Production deployment` (below) for a bad deploy as the likely cause.
+
+**RevenueCat webhook**
+- Check `apps/api/app/api/revenuecat/webhook/route.ts`'s own `console.warn` output in Vercel logs for `stale_event_conflict`/`tiebreak_unavailable`/`purchase_reconciliation_pending` - these are the documented, usually-benign causes of rejected deliveries.
+- If rejections are a new pattern (not these known cases), check whether `REVENUECAT_WEBHOOK_AUTH` was rotated without updating RevenueCat's dashboard-side webhook secret.
+
+**Mobile subscription checks / Mobile JS fatal errors**
+- Query PostHog directly for the `subscription_check`/`client_error` events in the alerting window (same HogQL shape as `scripts/verify/production-providers.mjs`'s `mobileMetrics`) to see the actual `outcome` distribution, not just the aggregate rate.
+- A spike correlated with an app/API deploy → likely a client-server contract break from that release; check the diff for the relevant route or client call.
+- A spike with no correlated deploy → likely an upstream dependency outage surfacing as client-visible errors; cross-check `API errors` for the same window.
+
+**Production deployment**
+- `deploy:error` → check the Vercel deployment's own build log directly; this is a build/deploy failure, not a runtime issue.
+- `deploy:stale` (serving SHA behind main for 30+ min) → check whether a deploy is stuck `BUILDING`/`QUEUED` in Vercel, or whether `Deploy and Dev maintenance are scoped to main` and a recent push didn't trigger a deploy at all.
+
+**Upstash daily commands**
+- Check the Upstash dashboard for the actual daily command graph, not just the percentage in the alert - a sudden spike (vs. gradual growth) points to a specific endpoint or a runaway retry loop, not organic traffic growth.
+- At P1 (95%): rate-limited requests will start failing closed (`AGENTS.md`'s "never fail open" rule) - this is a real near-term user-impact risk, not just a cost warning.
+
+**API crons**
+- Check which `/api/internal/*` route is named in the alert, then check that specific cron's Vercel invocation history (`vercel.json`'s `crons` array) for its actual last execution and error, if any.
+
+**TLS/domain expiration**
+- Check the registrar/certificate provider directly; this almost never needs code changes, just a renewal action by whoever holds the domain/cert account.
+
+**Observer failure**
+- This means the *monitor itself* couldn't complete an observation (missing/malformed config, denied provider access) - not a product incident. Check the specific provider named in the alert's summary and the credentials table above for what's missing or invalid.
+
+**Deploy/EAS workflow failure**
+- Check the named GitHub Actions run directly (`gh run view <id> --log`) - this mirrors the existing release-pipeline incident-filing path, not a new investigation surface.
+
+**Dev maintenance failure**
+- Lower urgency (P2, non-production) - check `.github/workflows/dev-maintenance.yml`'s run log; this affects the dev environment's nightly reset/snapshot, not production.
+
+**Owner for all production-monitor checks:** the app lane owns route/client instrumentation, health checks, policy, and probe implementation (per the ownership table above); the existing release owner owns incident response and GitHub credential/routing activation. Tooling lane owns the monitor *code* (`scripts/verify/production-{monitor,providers,policy,alerts}.mjs`) but not triage of a live page.
+
 ## Configuration and activation
 
 The [environment manifest](../../../scripts/deploy/env-manifest.json) declares required bindings for development, preview, production, and monitor execution.
