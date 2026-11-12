@@ -193,7 +193,7 @@ Both journeys retain pin-to-preview coverage; `map-search` compares toggle and s
 The real-screen regression replays that helper with different native pin hit targets and a previously selected restaurant, requiring the same first result after toggling and a new one after shuffling.
 The denied-location journey settles the centered Hollywood picker, requires the unchanged area immediately, and taps a pin after fallback dismissal.
 Inspect native pin bounds against the controls and tray as well as the required preview assertion; one accessible pin does not prove all markers are unobscured.
-The primary flow captures C, G, A and B plus numbered, utensil, cuisine and installed Ionicons pin styles.
+The primary flow captures C, G, A and B; pins are icon-only now that the pin-style switcher was removed (#823).
 B's final-row proof requires the actual last row, the same restaurant in Peek, the last row again in Half, and a matching counter after real user scrolling.
 Its copied restaurant name uses literal suffix indexing; an inline end-anchor regex inside Maestro interpolation can remain unevaluated while reporting the command complete.
 The explicit suffix assertion and final-row visibility checks remain mandatory.
@@ -414,10 +414,10 @@ Keep its generated scheme snapshot, sealed artifact and private fixture bindings
 
 The map exposes only the owner-selected C alternate, with Macros, Shuffle and a horizontal restaurant carousel.
 Use the Map control in production iOS or `com.fitsy.mobile://search?mapDebug=1` in Debug; retired `mapTray` and `mapVariant` parameters are ignored.
-The options panel changes pin style only.
+The pin-style options panel, its toolbar button, and the `mapPin` param were removed (#823); pins always render in the icon style.
 Owner [6713988813](https://github.com/dgmolla/fitsy/issues/755#issuecomment-6713988813) retired A, B and baseline C from active source, capture and acceptance matrices on November7.
 Their galleries and raw results remain historical; removed subjourneys are not new passes or native waivers.
-The maintained `map-search` journey checks C menu/search/list/macros/Shuffle, city selection, explicit bounded pan confirmation, pin styles, visible final-card/name/counter synchronization and empty recovery.
+The maintained `map-search` journey checks C menu/search/list/macros/Shuffle, city selection, explicit bounded pan confirmation, visible final-card/name/counter synchronization and empty recovery.
 Rendered real-caller tests also cover failed Shuffle and retry restoration from pin and drag selection.
 Run on normal and small Simulator layouts and inspect control bounds, readable meal/confidence overlays, selected pins, carousel clipping and tab clearance.
 The impact-selected full scope, auth/subscription journeys and genuine Apple-history prerequisite remain unchanged by layout retirement.
