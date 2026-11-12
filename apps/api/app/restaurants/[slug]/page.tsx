@@ -11,7 +11,6 @@ import {
   formatTag,
 } from "@/lib/seoUtils";
 import { Nav } from "@/components/Nav";
-import { WAITLIST_URL } from "@/lib/appLinks";
 
 export const revalidate = 86400;
 
@@ -417,9 +416,9 @@ function CtaBanner({ restaurantName }: { restaurantName: string }) {
             Set your protein, carb, and fat targets. Fitsy ranks every dish.
           </p>
         </div>
-        <a href={WAITLIST_URL} className={styles.ctaButton}>
-          Join the waitlist
-        </a>
+        <span className={styles.ctaButton}>
+          Coming soon
+        </span>
       </div>
     </div>
   );
