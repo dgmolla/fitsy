@@ -2,6 +2,7 @@ import { Alert, act, fireEvent, installPurchasedAccount, mockState, renderJourne
   routes, waitFor } from './OnboardingNavigationHarness';
 import PostHog from 'posthog-react-native';
 import Profile from '../app/(tabs)/profile';
+import PrivacySettings from '../app/privacy-settings';
 import { useAuthAnalytics } from '../lib/useAuthAnalytics';
 import { __resetForTesting } from '../lib/analytics';
 import { saveLaunchPreference } from '../lib/launchAnalyticsPreferences';
@@ -17,8 +18,19 @@ function open() {
   function AnalyticsLayout() { useAuthAnalytics(); return <Root />; }
   const routeMap = { ...routes,
     _layout: AnalyticsLayout, '(tabs)/profile': () => <Profile />,
+    'privacy-settings': () => <PrivacySettings />,
   };
   return renderJourney('/profile', routeMap);
+}
+
+// The consent controls live behind Profile's "Privacy" row, not inline on
+// Profile itself (#762) - every test needs to navigate there first.
+async function openPrivacySettings() {
+  const screen = open();
+  const privacyRow = await screen.findByTestId('profile-privacy');
+  await act(async () => { fireEvent.press(privacyRow); });
+  await screen.findByTestId('la-analytics-consent');
+  return screen;
 }
 
 test('Profile opt-in, revocation and test exclusion reach auth storage and the analytics identity listener', async () => {
@@ -32,7 +44,7 @@ test('Profile opt-in, revocation and test exclusion reach auth storage and the a
     mockState.session!.user.user_metadata = { ...mockState.session!.user.user_metadata, ...data };
     return response(mockState.session!.user);
   });
-  const screen = open();
+  const screen = await openPrivacySettings();
   await waitFor(() => expect(screen.getByTestId('la-analytics-consent').props.disabled).toBe(false));
   expect(screen.getByTestId('la-analytics-consent').props.value).toBe(false);
   await act(async () => { fireEvent(screen.getByTestId('la-analytics-consent'), 'valueChange', true); });
@@ -49,16 +61,23 @@ test('Profile opt-in, revocation and test exclusion reach auth storage and the a
   await screen.findByText('Test account excluded from launch counts');
   expect(put).toHaveBeenLastCalledWith({ fitsy_internal_or_test: true });
   screen.unmount();
-  const reopened = open();
+  const reopened = await openPrivacySettings();
   await reopened.findByText('Test account excluded from launch counts');
   expect(reopened.getByTestId('la-analytics-consent').props.value).toBe(false);
+});
+
+test('the main Profile screen no longer shows the LA analytics card inline', async () => {
+  const screen = open();
+  await screen.findByTestId('profile-privacy');
+  expect(screen.queryByTestId('la-analytics-consent')).toBeNull();
+  expect(screen.queryByText('LA launch analytics')).toBeNull();
 });
 
 test('a failed preference write leaves LA consent off and exposes recovery', async () => {
   const original = global.fetch;
   global.fetch = jest.fn(async (input, init) => new URL(String(input)).pathname === '/auth/v1/user'
     ? { ...response({}), ok: false, status: 503 } : original(input, init));
-  const screen = open();
+  const screen = await openPrivacySettings();
   await waitFor(() => expect(screen.getByTestId('la-analytics-consent').props.disabled).toBe(false));
   await act(async () => { fireEvent(screen.getByTestId('la-analytics-consent'), 'valueChange', true); });
   await screen.findByText('Could not save your choice. Please try again.');

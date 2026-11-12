@@ -67,6 +67,12 @@ env:
     element:
       id: profile-logout
     direction: DOWN
+- tapOn:
+    id: profile-privacy
+- extendedWaitUntil:
+    visible:
+      id: la-analytics-consent
+    timeout: 15000
 - runFlow:
     when:
       visible: 'Using a staff or test account.*'
@@ -128,6 +134,12 @@ env:
     element:
       id: profile-logout
     direction: DOWN
+- tapOn:
+    id: profile-privacy
+- extendedWaitUntil:
+    visible:
+      id: la-analytics-consent
+    timeout: 15000
 - assertVisible:
     id: la-analytics-consent
     checked: true

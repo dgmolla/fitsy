@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 const PRIVACY_EMAIL = "privacy@fitsy.app";
-const EFFECTIVE_DATE = "June 6, 2026";
+const EFFECTIVE_DATE = "November 12, 2026";
 
 export default function PrivacyPage() {
   return (
@@ -83,11 +83,24 @@ export default function PrivacyPage() {
 
           <h3>Usage analytics</h3>
           <p>
-            We use PostHog to collect anonymized, aggregated product analytics
-            (for example, which screens are used and which features are popular)
-            so we can improve the app. We do not use this data to track you
-            across other companies&rsquo; apps or websites, and Fitsy does not
-            use the Advertising Identifier (IDFA).
+            We use PostHog to collect product analytics (for example, which
+            screens are used and which features are popular) so we can
+            improve the app. When you&rsquo;re signed in, this activity is
+            linked to your account &mdash; your user ID, and your email if
+            you&rsquo;ve shared one with us &mdash; so it is not anonymous.
+            We filter out location, nutrition values, and other sensitive
+            fields before they reach PostHog. We do not use this data to
+            track you across other companies&rsquo; apps or websites, and
+            Fitsy does not use the Advertising Identifier (IDFA).
+          </p>
+          <p>
+            If you&rsquo;re in our Los Angeles launch area, Profile &gt;
+            Privacy in the app lets you optionally include your activity in
+            LA launch metrics. This choice only adds that attribution; it
+            does not change the account-linked analytics described above,
+            which apply either way. You can turn it off at any time, and
+            staff/test accounts can be permanently excluded from launch
+            counts.
           </p>
         </section>
 
