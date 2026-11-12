@@ -28,6 +28,23 @@ const claimOwner = () => {
   return claim && typeof claim.owner === 'string' && claim.expires > Date.now() / 1000 ? claim.owner : '';
 };
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+// runOwnedMaestro's own exit handling documents that Maestro's driver child can
+// still be flushing files for a moment after the supervised command's exit is
+// observed (its own "owned-descendant-after-command-exit" grace window). Give
+// the report file the same kind of brief, bounded grace before calling it
+// missing; a flow Maestro already reported as passed should not false-fail on
+// a close read. An extra (unexpected) match is a different problem and is not
+// worth waiting out - it fails immediately with full diagnostics instead.
+export async function awaitCommandReport(dir, { readdir = () => readdirSync(dir, { recursive: true }), wait = sleep, maxWaitMs = 3000, pollMs = 250 } = {}) {
+  const match = entries => entries.filter(file => /(?:^|\/)commands-.*\.json$/.test(file));
+  let entries = readdir(), reports = match(entries);
+  for (let waited = 0; reports.length === 0 && waited < maxWaitMs; waited += pollMs) {
+    await wait(pollMs);
+    entries = readdir(); reports = match(entries);
+  }
+  if (reports.length !== 1) throw new Error(`found ${reports.length} of ${entries.length} entries: ${JSON.stringify(reports)}`);
+  return reports[0];
+}
 // The hosted boot step shares one Mac with local interactive lanes. Rather than
 // fail the instant a foreign claim or booted simulator is seen, wait (bounded
 // by the job's own worker timeout) for it to clear naturally: the local lane's
@@ -168,9 +185,10 @@ async function runFlows(udid, work) {
       diagnostic: () => command('xcrun', ['simctl', 'io', udid, 'screenshot', join(dir, 'failure.png')]),
     });
     if (result.code !== 0 || result.reason) throw new Error(`Maestro failed: ${name}`);
-    const reports = readdirSync(dir, { recursive: true }).filter(file => /(?:^|\/)commands-.*\.json$/.test(file));
-    if (reports.length !== 1) throw new Error(`Missing Maestro command report: ${name}`);
-    assertFlowCommands(readFileSync(path), JSON.parse(readFileSync(join(dir, reports[0]), 'utf8')), name);
+    let report;
+    try { report = await awaitCommandReport(dir); }
+    catch (error) { throw new Error(`Missing Maestro command report: ${name} (${error.message})`); }
+    assertFlowCommands(readFileSync(path), JSON.parse(readFileSync(join(dir, report), 'utf8')), name);
     // Setup may intentionally reach the expired screen; its maintained target
     // flow validates that screen after setup, including pixel checks.
     if (!name.endsWith('-signin')) inspectScreenshotDirectory(dir, readFileSync(path));
