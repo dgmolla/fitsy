@@ -94,13 +94,12 @@ export default function PrivacyPage() {
             Fitsy does not use the Advertising Identifier (IDFA).
           </p>
           <p>
-            If you&rsquo;re in our Los Angeles launch area, Profile &gt;
-            Privacy in the app lets you optionally include your activity in
-            LA launch metrics. This choice only adds that attribution; it
-            does not change the account-linked analytics described above,
-            which apply either way. You can turn it off at any time, and
-            staff/test accounts can be permanently excluded from launch
-            counts.
+            Fitsy currently serves the Los Angeles area only, so this
+            account-linked activity is also used to measure LA launch
+            adoption. There is no separate opt-in for this &mdash; it is the
+            same identity-linked usage data described above, not a distinct
+            tracking program. Fitsy&rsquo;s own staff and test accounts are
+            excluded from these counts.
           </p>
         </section>
 

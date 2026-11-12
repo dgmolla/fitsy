@@ -25,6 +25,7 @@ import { syncSavedProfileToServer, queueSavedProfileToServer, deliverQueuedProfi
 import { useTheme } from '@/lib/theme';
 import { FilterPopup } from '@/components/FilterPopup';
 import { ProfileEditSheet, type ProfileEditSheetProps } from '@/components/ProfileEditSheet';
+import { DevTestAccountControl } from '@/components/DevTestAccountControl';
 import { MACRO_COLORS } from '@/lib/macroColors';
 import { updateProfileFieldAndTargets } from '@/lib/profileTargetUpdate';
 import { openLegalLink } from '@/lib/legalLinks';
@@ -360,6 +361,8 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={14} color={EDITORIAL.creamDeep} />
         </Pressable>
 
+        {__DEV__ && <DevTestAccountControl />}
+
         {/* Logout */}
         <Pressable testID="profile-logout" style={s.logoutBtn} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={16} color="#B85450" />
@@ -373,7 +376,7 @@ export default function ProfileScreen() {
 
         {/* Legal / support — quiet footer */}
         <View style={s.legalRow}>
-          <Pressable testID="profile-privacy" hitSlop={8} onPress={() => router.push('/privacy-settings')}>
+          <Pressable testID="profile-privacy" hitSlop={8} onPress={() => openLegalLink('privacy')}>
             <Text style={s.legalLink}>Privacy</Text>
           </Pressable>
           <Text style={s.legalDot}>·</Text>
