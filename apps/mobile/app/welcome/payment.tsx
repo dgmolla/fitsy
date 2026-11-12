@@ -22,7 +22,7 @@ import { devTrialVisualOffer, devTrialVisualScenario } from '@/lib/devTrialVisua
 import { clearOnboardingPreviewEntry, consumeShowWidgetTip } from '@/lib/onboardingPreviewEntry';
 import { usePaywallDiscovery } from '@/lib/usePaywallDiscovery';
 import { paywallVariantConfig, resolvePaywallVariant, type PaywallVariant } from '@/lib/paywallVariant';
-import { supabase } from '@/lib/supabase';
+import { isRealAccountSession, supabase } from '@/lib/supabase';
 import { usePaywallReminderAvailability } from '@/lib/usePaywallReminderAvailability';
 import { clearPaymentSignInContinuation, navigateBackFromPayment } from '@/lib/paymentSignInContinuation';
 import { useOwnedHardwareBack } from '@/lib/useOwnedHardwareBack';
@@ -63,20 +63,23 @@ export default function PaymentScreen() {
       setIdentityReady(true);
       setIdentityUnavailable(false);
     };
+    // An anonymous session (#801) is not a real account for checkout purposes -
+    // resolve it the same as no session, so the redirect below sends it to
+    // real sign-in instead of exposing purchase/restore controls.
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       authEventReceived = true;
-      resolveIdentity(session?.user.id ?? null);
+      resolveIdentity(isRealAccountSession(session) ? session!.user.id : null);
     });
     const sessionRead = supabase.auth.getSession();
     void withinMs(sessionRead, BOOT_VERDICT_CAP_MS).then(result => {
       if (authEventReceived) return;
-      if (result) resolveIdentity(result.data.session?.user.id ?? null);
+      if (result) resolveIdentity(isRealAccountSession(result.data.session) ? result.data.session!.user.id : null);
       else {
         if (active) setIdentityUnavailable(true);
         void sessionRead.then(({ data }) => {
           // A slow read is still unknown, not proof of an anonymous visitor.
           // Keep purchase controls hidden until its late answer arrives.
-          if (!authEventReceived) resolveIdentity(data.session?.user.id ?? null);
+          if (!authEventReceived) resolveIdentity(isRealAccountSession(data.session) ? data.session!.user.id : null);
         }).catch(() => { if (active) setIdentityUnavailable(true); });
       }
     }).catch(() => { if (active) setIdentityUnavailable(true); });

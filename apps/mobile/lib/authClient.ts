@@ -7,7 +7,7 @@ import type {
   AuthResponse,
   GoogleAuthResponse,
 } from '@fitsy/shared';
-import { supabase } from './supabase';
+import { isRealAccountSession, supabase } from './supabase';
 import { clearPaywallIntent } from './paywallIntent';
 import { clearPaymentSignInContinuation } from './paymentSignInContinuation';
 import { clearPendingMealClaim } from './pendingMealClaim';
@@ -35,10 +35,14 @@ const TOKEN_KEY = 'fitsy_authToken';
  * Returns the current access token from the Supabase session.
  * Falls back to the legacy SecureStore key if the SDK has no session — covers
  * the upgrade window where users had a token stored before S-228 shipped.
+ * An anonymous session (#801) has no token here — every consumer of this
+ * function wants "does a real account own this device," and sending that
+ * token to an endpoint that doesn't expect it would 401.
  */
 export async function getStoredToken(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
-  if (data.session?.access_token) return data.session.access_token;
+  if (isRealAccountSession(data.session) && data.session!.access_token) return data.session!.access_token;
+  if (data.session) return null;
   // Legacy fallback: pre-S-228 token still in SecureStore.
   return SecureStore.getItemAsync(TOKEN_KEY);
 }

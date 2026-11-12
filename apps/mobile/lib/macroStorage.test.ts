@@ -1,15 +1,16 @@
 /**
  * @jest-environment node
  */
-import { archiveActiveMacroTargets, getDiscoveryMacroTargetSnapshot, getMacroTargetSnapshot, getMacroTargetSource, getMacroTargets, hasSavedMealTargets, saveMacroTargets, saveDiscoveryMacroTargets, clearMacroTargets, MACRO_TARGETS_KEY, SEARCH_MACRO_TARGETS_KEY } from './macroStorage';
+import { archiveActiveMacroTargets, getAnonymousCompleteTarget, getDiscoveryMacroTargetSnapshot, getMacroTargetSnapshot, getMacroTargetSource, getMacroTargets, hasSavedMealTargets, saveMacroTargets, saveDiscoveryMacroTargets, clearMacroTargets, MACRO_TARGETS_KEY, SEARCH_MACRO_TARGETS_KEY } from './macroStorage';
 import type { StoredMacroTargets } from './macroStorage';
 
 // Mock @react-native-async-storage/async-storage
 const store: Record<string, string> = {};
 let mockUserId: string | null = null;
+let mockIsAnonymous = false;
 jest.mock('@supabase/supabase-js', () => ({
   createClient: () => ({ auth: { getSession: async () => ({ data: {
-    session: mockUserId ? { user: { id: mockUserId } } : null,
+    session: mockUserId ? { user: { id: mockUserId, is_anonymous: mockIsAnonymous } } : null,
   } }) } }),
 }));
 
@@ -57,6 +58,7 @@ test('archived automatic provenance follows only its account until hydration', a
 beforeEach(() => {
   jest.clearAllMocks();
   mockUserId = null;
+  mockIsAnonymous = false;
   // Clear in-memory store
   Object.keys(store).forEach((k) => delete store[k]);
 });
@@ -251,5 +253,23 @@ describe('clearMacroTargets', () => {
   it('calls removeItem with the correct key', async () => {
     await clearMacroTargets();
     expect(AsyncStorage.removeItem).toHaveBeenCalledWith(MACRO_TARGETS_KEY);
+  });
+});
+
+describe('anonymous session targets (#801)', () => {
+  it('saves as unowned while anonymous - usable during that same pass, then follows the user into a real account', async () => {
+    mockUserId = 'anon-device-1';
+    mockIsAnonymous = true;
+    await saveMacroTargets(SAMPLE, 'complete', 'manual');
+    // The same anonymous pass can still read its own just-saved target.
+    expect(await getMacroTargets()).toEqual(SAMPLE);
+
+    mockUserId = 'real-user-1';
+    mockIsAnonymous = false;
+    // Once a real account exists, the unowned record hides from the normal
+    // read (routed through profile reconciliation instead)...
+    expect(await getMacroTargets()).toBeNull();
+    // ...which is exactly what getAnonymousCompleteTarget is for at sign-in.
+    expect(await getAnonymousCompleteTarget()).toEqual({ targets: SAMPLE, source: 'manual' });
   });
 });

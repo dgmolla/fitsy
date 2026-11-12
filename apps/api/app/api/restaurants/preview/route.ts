@@ -29,6 +29,12 @@ interface PreviewResponse {
  * match the caller's macro targets. Used in the onboarding teaser screen to
  * show prospective users real restaurants before they subscribe.
  *
+ * `guided=1` is the one case that accepts an anonymous Supabase session
+ * (#801), so a fresh user can see the real, personalized tour before
+ * creating an account; it has its own tighter per-device rate limit
+ * (`anonymousDataUserLimiter`) for exactly that reason. The plain preview
+ * below still requires a real account.
+ *
  * Returns only name + cuisine info. bestMatch / meal details are intentionally
  * omitted for legacy clients. guided=1 explicitly exposes three meal summaries
  * for the onboarding tour, with separate coverage and goal-qualified counts,
@@ -39,9 +45,12 @@ interface PreviewResponse {
 async function handleGET(
   request: NextRequest,
 ): Promise<NextResponse<PreviewResponse | GuidedPreviewResponse | { error: string }> | NextResponse> {
-  const auth = await requireAuth(request);
-  if (auth instanceof NextResponse) return auth;
   const { searchParams } = request.nextUrl;
+  // Only the guided onboarding tour accepts an anonymous session (#801);
+  // the plain preview below keeps requiring a real account.
+  const guided = searchParams.get("guided") === "1";
+  const auth = await requireAuth(request, { allowAnonymous: guided });
+  if (auth instanceof NextResponse) return auth;
 
   const latRaw = searchParams.get("lat");
   const lngRaw = searchParams.get("lng");
@@ -64,7 +73,6 @@ async function handleGET(
     return NextResponse.json({ error: "Invalid macro target" }, { status: 400 });
   }
 
-  const guided = searchParams.get("guided") === "1";
   const query = searchParams.get("q")?.trim();
   const selectedItemId = searchParams.get('selectedItemId') ?? undefined;
   if (guided && ((query?.length ?? 0) > 100 || ["cursor", "limit", "pageSize", "radiusMiles"].some(key => searchParams.has(key))

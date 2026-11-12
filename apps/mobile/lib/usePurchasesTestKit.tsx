@@ -73,7 +73,7 @@ jest.mock('./apiClient', () => mockLazy(() => mockApi));
 
 /** Mutable session the mocked Supabase client reports; `getSession` is countable. */
 export const mockAuth: {
-  session: { user: { id: string } } | null;
+  session: { user: { id: string; is_anonymous?: boolean } } | null;
   listener: ((event: string, session: unknown) => void) | undefined;
   getSession: jest.Mock;
 } = {
@@ -91,6 +91,8 @@ jest.mock('./supabase', () => ({
       },
     },
   },
+  isRealAccountSession: (session: { user: { is_anonymous?: boolean } } | null | undefined) =>
+    !!session && !session.user.is_anonymous,
 }));
 
 export const mockAnalytics = {

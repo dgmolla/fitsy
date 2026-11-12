@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { z } from 'zod';
-import { supabase } from './supabase';
+import { isRealAccountSession, supabase } from './supabase';
 import { restaurantResultSchema } from '../../../packages/shared/src/contracts/restaurants';
 
 const KEY = '@fitsy/paywallIntent';
@@ -40,7 +40,11 @@ async function readIntentRecord(key = KEY) {
 }
 export async function rememberPaywallIntent(intent: PaywallIntent): Promise<void> {
   const { data } = await supabase.auth.getSession();
-  const record = { intent: schema.parse(intent), userId: data.session?.user.id ?? null, createdAt: Date.now() };
+  // An anonymous session (#801) is unowned, same as no session - otherwise
+  // claimPaywallIntent would see a real sign-in's account ID mismatch the
+  // anonymous ID and delete the selection instead of attaching it.
+  const ownerId = isRealAccountSession(data.session) ? data.session!.user.id : null;
+  const record = { intent: schema.parse(intent), userId: ownerId, createdAt: Date.now() };
   await writeIntent(async () => {
     await AsyncStorage.removeItem(PURCHASED_KEY);
     await AsyncStorage.setItem(KEY, JSON.stringify(record));
@@ -50,7 +54,8 @@ export async function getPaywallIntent(expectedUserId?: string | null): Promise<
   try {
     await pendingWrite;
     const [record, { data }] = await Promise.all([readIntentRecord(), supabase.auth.getSession()]);
-    return record && record.userId === (data.session?.user.id ?? null) &&
+    const currentOwnerId = isRealAccountSession(data.session) ? data.session!.user.id : null;
+    return record && record.userId === currentOwnerId &&
       (expectedUserId === undefined || record.userId === expectedUserId) ? record.intent : null;
   } catch { return null; }
 }
