@@ -126,7 +126,10 @@ export async function routeToPaywall(options: { replace?: boolean; intent?: Payw
     if (options.intent) await rememberPaywallIntent(options.intent);
     try {
       const { data } = await supabase.auth.getSession();
-      if (data.session) {
+      // An anonymous session (#801) is not a signed-in account for this
+      // gate's purposes - it's exactly the thing this gate exists to ask
+      // for, same as no session at all.
+      if (data.session && !data.session.user.is_anonymous) {
         // The same authenticated backend verdict gates paid data and decides
         // which paywall is appropriate. A failed or stale lookup is never a
         // claim that this account has not subscribed before.

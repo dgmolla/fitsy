@@ -15,7 +15,7 @@ jest.mock('expo-secure-store', () => ({
 }));
 
 import * as SecureStore from 'expo-secure-store';
-import { secureStoreAdapter, supabase } from './supabase';
+import { isRealAccountSession, secureStoreAdapter, supabase } from './supabase';
 import { authFetch } from '@fitsy/shared/utils/authTransport';
 
 const mockedGet = SecureStore.getItemAsync as jest.Mock;
@@ -123,5 +123,17 @@ describe('supabase client', () => {
     expect(await authFetch('https://auth.example.test/auth/v1/token', options)).toBe(response);
     expect(transport).toHaveBeenCalledWith('https://auth.example.test/auth/v1/token', options);
     transport.mockRestore();
+  });
+});
+
+describe('isRealAccountSession', () => {
+  it('rejects no session and an anonymous session the same way', () => {
+    expect(isRealAccountSession(null)).toBe(false);
+    expect(isRealAccountSession(undefined)).toBe(false);
+    expect(isRealAccountSession({ user: { id: 'anon-1', is_anonymous: true } })).toBe(false);
+  });
+  it('accepts a real signed-in session', () => {
+    expect(isRealAccountSession({ user: { id: 'u1' } })).toBe(true);
+    expect(isRealAccountSession({ user: { id: 'u1', is_anonymous: false } })).toBe(true);
   });
 });

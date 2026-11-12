@@ -46,6 +46,26 @@ async function restoreWithStalledSync(result: ProviderResult) {
 }
 
 describe('purchase / restore', () => {
+  it('refuses to key a purchase or restore to an anonymous session (#801)', async () => {
+    // An anonymous session has a real RevenueCat-identifiable id but no
+    // usable paid access behind it - paid API routes reject its token, so
+    // a purchase here would charge money with no way to grant access.
+    mockAuth.session = { user: { id: 'anon-1', is_anonymous: true } };
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    mockRc.purchasePackage.mockResolvedValue({ outcome: 'purchased', customerInfo: proInfo });
+    let purchased: boolean | undefined;
+    await act(async () => { purchased = await result.current.purchase({} as never, 'test'); });
+    expect(purchased).toBe(false);
+    expect(mockRc.purchasePackage).not.toHaveBeenCalled();
+    expect(mockRc.ensurePurchasesUser).not.toHaveBeenCalled();
+    mockRc.restorePurchases.mockResolvedValue(proInfo);
+    let restored: 'active' | 'expired' | 'none' | null | undefined;
+    await act(async () => { restored = await result.current.restore(); });
+    expect(restored).toBeNull();
+    expect(mockRc.restorePurchases).not.toHaveBeenCalled();
+  });
+
   it('holds Restore while the signed-in native identity is unresolved', async () => {
     const { result } = renderProvider();
     await waitFor(() => expect(result.current.ready).toBe(true));

@@ -13,9 +13,9 @@ flowchart LR
     I --> W[Up to two workers implement and check]
     W --> P[PR with squash auto-merge]
     P --> G{Required checks}
-    G -->|Fix within retry limits| W
+    G -->|Diagnose, repair and audit| W
     G -->|Green| M[Merged and issue closed]
-    W -->|Retry limit| B[Blocked with reason]
+    W -->|External boundary or no safe progress| B[Blocked with reason]
     M --> C[Orchestrator cleans worktree]
     B --> C
     C --> I
@@ -32,7 +32,15 @@ Do not create labels: Dawit supplies a missing `codex` label; a missing `blocked
 Use `~/fitsy-wt/issue-N` and `codex/issue-N` from current `origin/main`, or resume the existing PR branch after checking ownership.
 Start `codex exec -C ~/fitsy-wt/issue-N -s danger-full-access -` in the background with the full issue and Worker/Hard rules on stdin, log to `~/fitsy-wt/logs/issue-N.log`, and record its PID on the issue.
 Watch workers and PRs about every five minutes; update BEHIND branches, resolve conflicts, and fix failed checks/reviews through the worker until GitHub auto-merges.
-Infrastructure failures get one retry; code/review failures get up to three fix attempts, then block with the reason and attempt summary.
+At start, before each wait and before handoff/exit, freshly read both issue and PR comments, including edits, using observed `updated_at` cursors with inclusive ID/update/body-hash deduplication.
+Failed queries are errors, not empty feedback; acknowledge material owner directions on the issue and deliver them to the existing worker within current authority.
+At the first pending hosted Mac job, run the existing local `node scripts/verify/simulator-actions.mjs --preflight` and record absent capacity or unavailable inventory with its owner action instead of silently waiting.
+This diagnostic adds no required context or registration authority and does not stop independent authorized work.
+Infrastructure failures get one retry.
+By default, continue necessary code/review repairs while diagnosis and changed evidence show progress, numbering batches additively and preserving all prior failures and allocations.
+Pair repair unblocks with a proportionate causal audit, distinguish confirmed causes from hypotheses and unknowns, and apply low-stakes prevention in the affected existing callers, tests and guidance.
+Do not repeat identical failures or weaken checks; block with evidence and a concrete resume action when diagnosis cannot establish safe progress or a real external dependency or consequential decision remains unresolved.
+Account/legal grants and product/release decisions, including production design selection, retain their separate boundaries.
 A crashed worker gets one diagnosed restart with its history preserved; a second crash blocks the issue with a sanitized log tail.
 If the same failure happens twice anywhere, add one line with lasting prevention to [shipping lessons](shipping-lessons.md) in the affected PR.
 

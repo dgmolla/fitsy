@@ -133,39 +133,20 @@ it('keeps own meal targets through trust, Back, and the saved-target shortcut wi
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/how-it-works'));
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
-  await screen.findByTestId('onboarding-widget-card');
-  await act(async () => { fireEvent.press(screen.getByTestId('welcome-skip')); });
   expect(await screen.findByText('Discovery preview')).toBeTruthy();
 });
 
-it('offers only goals that can continue from assisted target tuning to nutrition trust', async () => {
+it('continues from assisted target tuning to nutrition trust without re-asking the already-chosen goal', async () => {
   await saveOnboardingField('goal', 'performance');
   await saveOnboardingField('targetMode', 'estimate');
   const screen = renderRouter(routes, { initialUrl: '/welcome/tuning' });
   await screen.findByTestId('meal-target-calories');
-  expect(screen.queryByTestId('meal-goal-maintain')).toBeNull();
-  for (const goal of ['lose_fat', 'performance', 'build_muscle']) expect(screen.getByTestId(`meal-goal-${goal}`)).toBeTruthy();
-  await act(async () => { fireEvent.press(screen.getByTestId('meal-goal-build_muscle')); });
+  for (const goal of ['maintain', 'lose_fat', 'performance', 'build_muscle']) expect(screen.queryByTestId(`meal-goal-${goal}`)).toBeNull();
+  await waitFor(() => expect(screen.getByTestId('welcome-continue').props.accessibilityState?.disabled).not.toBe(true));
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
   await waitFor(() => expect(screen.getPathname()).toBe('/welcome/how-it-works'));
   expect(screen.getByTestId('nutrition-source-published')).toBeTruthy();
-});
-
-it('shows the saved goal after assisted tuning changes it and the user returns to goal choice', async () => {
-  await saveOnboardingField('goal', 'performance');
-  await saveOnboardingField('targetMode', 'estimate');
-  const screen = renderRouter(routes, { initialUrl: '/welcome/goal' });
-  await waitFor(() => expect(screen.getByTestId('goal-performance').props.accessibilityState?.selected).toBe(true));
-  await act(async () => { router.push('/welcome/tuning'); });
-  await screen.findByTestId('meal-goal-build_muscle');
-  await act(async () => { fireEvent.press(screen.getByTestId('meal-goal-build_muscle')); });
-  await waitFor(() => expect((getOnboardingData())).resolves.toEqual(expect.objectContaining({ goal: 'build_muscle' })));
-  await act(async () => { router.back(); });
-  await waitFor(() => expect(screen.getPathname()).toBe('/welcome/goal'));
-  await waitFor(() => expect(screen.getByTestId('goal-build_muscle').props.accessibilityState?.selected).toBe(true));
-  expect(screen.getByTestId('goal-performance').props.accessibilityState?.selected).toBe(false);
-  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
-  expect((await getOnboardingData()).goal).toBe('build_muscle');
+  expect((await getOnboardingData()).goal).toBe('performance');
 });
 
 it('opens assisted questions only after confirmation and retains the earlier goal', async () => {
@@ -303,20 +284,13 @@ it('requires a fresh goal choice before showing macros for a legacy maintenance 
 });
 
 
-it.each(['welcome-continue', 'welcome-skip'])('keeps the optional widget card and %s out of Preview Back history', async action => {
+it('keeps Preview Back history clean now that the widget card no longer sits between trust and preview', async () => {
   await saveOnboardingField('goal', 'lose_fat');
   const targets = { calories: '600', protein: '40', carbs: '65', fat: '20' };
   await saveMacroTargets(targets);
   const screen = renderRouter(routes, { initialUrl: '/welcome/how-it-works' });
   await screen.findByTestId('nutrition-source-published');
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
-  await screen.findByTestId('onboarding-widget-example');
-  for (const step of [1, 2, 3]) expect(screen.getByTestId(`onboarding-widget-step-${step}`)).toBeTruthy();
-  await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
-  await screen.findByTestId('nutrition-source-published');
-  await act(async () => { fireEvent.press(screen.getByTestId('welcome-continue')); });
-  await screen.findByTestId('onboarding-widget-card');
-  await act(async () => { fireEvent.press(screen.getByTestId(action)); });
   await screen.findByText('Discovery preview');
   await act(async () => { router.back(); });
   await screen.findByTestId('nutrition-source-published');

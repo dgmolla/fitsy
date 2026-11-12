@@ -34,6 +34,53 @@ test('persisted focused recipe executes real matching Jest tests and retains the
   expect(cli().status).toBe(0);
   expect(JSON.parse(readFileSync(join(root, '.evidence/verify/focused-tests.json'), 'utf8'))).toMatchObject({ pattern: 'fixture outcome' });
 });
+test('native YAML changes require and execute the dynamic caller, including after a recipe was saved', () => {
+  expect(cli('--set', 'scripts/fixture.test.ts').status).toBe(0);
+  mkdirSync(join(root, 'apps/mobile/e2e/flows'), { recursive: true });
+  mkdirSync(join(root, 'scripts/sim'), { recursive: true });
+  const flow = join(root, 'apps/mobile/e2e/flows/map-search.yaml');
+  writeFileSync(flow, 'appId: com.fitsy.mobile\n---\n- inputText: pizza\n- pressKey: Enter\n');
+  writeFileSync(join(root, 'scripts/sim/ci.test.ts'), `const fs = require('node:fs');
+const yaml = require('js-yaml');
+test('native Search submission', () => {
+  const [, commands] = yaml.loadAll(fs.readFileSync('../apps/mobile/e2e/flows/map-search.yaml', 'utf8'));
+  expect(commands[1]).toEqual({ pressKey: 'Enter' });
+});\n`);
+  const missing = cli();
+  expect(missing.status).toBe(1);
+  expect(missing.stdout).toContain('requires scripts/sim/ci.test.ts');
+  expect(cli('--set', 'scripts/fixture.test.ts').status).toBe(1);
+  expect(cli('--set', 'scripts/sim/ci.test.ts', '--jest-pattern=unrelated').status).toBe(1);
+  expect(cli('--set', 'scripts/sim/ci.test.ts').status).toBe(0);
+  expect(cli().status).toBe(0);
+  writeFileSync(flow, 'appId: com.fitsy.mobile\n---\n- inputText: pizza\n- pressKey: Back\n');
+  const broken = cli();
+  expect(broken.status).toBe(1);
+  expect(broken.stderr).toContain('native Search submission');
+}, 45000);
+test('native CLI changes require the unfiltered spawned-plan consumer and propagate its failures', () => {
+  expect(cli('--set', 'scripts/fixture.test.ts').status).toBe(0);
+  mkdirSync(join(root, 'scripts/sim'), { recursive: true });
+  const producer = join(root, 'scripts/sim/ci.mjs');
+  writeFileSync(producer, "process.stdout.write(JSON.stringify({ scope: 'flow', flows: ['map-search'], environmentRetryAllowed: true }));\n");
+  writeFileSync(join(root, 'scripts/verify/simulator-scope.test.ts'), `const { spawnSync } = require('node:child_process');
+test('actual native CLI plan', () => {
+  const result = spawnSync(process.execPath, ['sim/ci.mjs'], { encoding: 'utf8' });
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout)).toEqual({ scope: 'flow', flows: ['map-search'], environmentRetryAllowed: true });
+});\n`);
+  const missing = cli();
+  expect(missing.status).toBe(1);
+  expect(missing.stdout).toContain('requires scripts/verify/simulator-scope.test.ts');
+  expect(cli('--set', 'scripts/fixture.test.ts').status).toBe(1);
+  expect(cli('--set', 'scripts/verify/simulator-scope.test.ts', '--jest-pattern=unrelated').status).toBe(1);
+  expect(cli('--set', 'scripts/verify/simulator-scope.test.ts').status).toBe(0);
+  expect(cli().status).toBe(0);
+  writeFileSync(producer, "process.stdout.write(JSON.stringify({ scope: 'flow', flows: ['map-search'] }));\n");
+  const broken = cli();
+  expect(broken.status).toBe(1);
+  expect(broken.stderr).toContain('actual native CLI plan');
+}, 45000);
 test('shared focused assertions execute and failures remain failures', () => {
   expect(cli('--set', 'packages/shared/fixture.test.ts').status).toBe(0);
   const passed = cli();

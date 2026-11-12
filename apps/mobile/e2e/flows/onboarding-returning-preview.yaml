@@ -223,20 +223,8 @@ env:
     timeout: 15000
 - tapOn:
     id: welcome-continue
-- extendedWaitUntil:
-    visible:
-      id: onboarding-widget-card
-    timeout: 15000
-- assertVisible:
-    id: onboarding-widget-example
-- assertVisible: "1. Long-press your Home Screen."
-- assertVisible: "2. Tap \\+ \\(or Edit → Add Widget\\)."
-- assertVisible: "3. Search fitsy and add the widget."
-- assertVisible:
-    id: welcome-skip
-- takeScreenshot: onboarding-widget-card
-- tapOn:
-    id: welcome-skip
+# The widget screen moved to the end of onboarding (after payment); continue
+# now reaches the preview directly.
 - extendedWaitUntil:
     visible:
       id: preview-guide
@@ -244,12 +232,25 @@ env:
 - tapOn:
     id: coachmark-skip
     optional: true
+# Preview is map-first by product requirement, not the search tab's experiment
+# flag: the real "Continue" navigation above must land in map mode on its own.
 - extendedWaitUntil:
     visible:
-      id: discovery-hero
+      id: map-pin-0
     timeout: 30000
+- assertVisible:
+    id: discovery-map
+- assertVisible:
+    id: preview-back
+- assertNotVisible:
+    id: map-load-more
 - tapOn:
-    id: discovery-hero
+    id: map-pin-0
+- assertVisible:
+    id: map-preview-open
+- takeScreenshot: returning-map-preview
+- tapOn:
+    id: map-preview-open
 - extendedWaitUntil:
     visible:
       id: paywall-logo

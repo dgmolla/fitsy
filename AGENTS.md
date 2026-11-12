@@ -8,6 +8,7 @@ Read the applicable [API](apps/api/AGENTS.md), [mobile](apps/mobile/AGENTS.md), 
 - Read existing code before writing; plan first with a small, pass/fail "Done when".
 - Climb the minimalism ladder: does it need to exist; reuse repo code, platform features, standard libraries, or installed dependencies; then write the minimum code.
 - One task = one branch = one PR; keep tasks small and prefer app work over process work.
+- Test scope comes from change-impact routing (#773); coupled tooling and product changes can ship together.
 - Keep task state and proof in GitHub issues and PRs, not a local process or queue.
 - Reproduce bugs through the real user journey before fixing them.
 - Add one small test where the risk is: branching logic, parsing, money, auth, or security; trivial changes stay trivial.
@@ -62,6 +63,8 @@ Use `gh` directly, with no daemon, helper script, new tooling, or skills.
    Feed stdin a prompt containing the issue number, full body, Worker rules, and Hard rules below.
    Run in the background, log to `~/fitsy-wt/logs/issue-N.log`, and record the PID and ownership on the issue.
 5. Watch workers about every five minutes, not more frequently.
+   At each checkpoint, freshly read the issue and PR comments, including edits, and pass material owner directions to the existing worker before waiting again.
+   At the first pending hosted Mac job, run `node scripts/verify/simulator-actions.mjs --preflight` with the existing authorized local `gh` identity and record missing capacity or unavailable inventory with its owner action; do not silently poll, change settings or block independent work.
    When a worker exits, verify its PR: if merged, close out (the issue auto-closes), remove its worktree and local branch; if blocked, remove its worktree after preserving unfinished work on its branch.
    If it crashed without either outcome, diagnose and restart it once with the same ownership and log history; a second crash marks the issue blocked with a sanitized log tail.
 6. When no eligible issues and no workers remain, sleep ten minutes and rescan; do not exit on an empty queue.
@@ -71,20 +74,26 @@ Use `gh` directly, with no daemon, helper script, new tooling, or skills.
 
 - Read the issue's Goal / Done when / Proof / Constraints.
   If Done when is missing, comment asking for it, mark the issue blocked, and exit.
+- At start, before each approximately five-minute wait and before handoff/exit, freshly read both issue and PR comments, including edits.
+  Use observed `updated_at` cursors with inclusive ID/update/body-hash deduplication; a failed query is an error, never empty feedback.
+  Acknowledge material owner directions on the issue and incorporate them within existing authority.
 - Read before writing; make the smallest change meeting Done when, add one test only where real risk exists, and list what was skipped.
 - Before every push, select tests for the changed files with `node scripts/verify/focused-tests.mjs --set <test paths>` and run `node scripts/verify/run.mjs --layer=0-1 --stage=cheap --scope=changed` for type-check, lint, and those tests.
   Do not push until these gates pass; local gate failures do not count as repair attempts.
   Apply this accounting prospectively; preserve previously recorded attempts.
 - Run applicable repository checks locally, commit, push normally with hooks enabled, and open a PR with `Closes #N`, Done-when, command/output proof, and skipped work.
   Reuse an existing PR when present and enable `gh pr merge --repo dgmolla/fitsy <PR_NUMBER> --auto --squash`.
-- When a native/Maestro run fails, reproduce and rerun only the failing journey locally until it passes, then complete one passing full native run before marking the PR ready, within the existing retry limits.
+- When a native/Maestro run fails, diagnose and rerun only the failing journey after a supported correction, then complete one passing full native run before marking the PR ready.
 - Iterate until merged, polling the PR about every five minutes.
   If BEHIND, run `gh pr update-branch --repo dgmolla/fitsy <PR_NUMBER>`; if a required check (Verify, AI review) fails, read the logs/review, fix, and push.
   Batch all known failures into a single repair attempt where possible.
   If conflicts occur, rebase on current main and resolve them; use `--force-with-lease` if the rebase requires a rewritten push.
 - Infrastructure failures (runner, simulator, network, GitHub outage) get one retry, then mark the issue blocked with the reason.
-  Code/review failures get up to three fix attempts, then mark the issue blocked with a summary of what was tried.
-  Keep attempt history and the next action on the issue/PR; restarting does not reset limits.
+  By default, continue necessary code/review repairs while diagnosis and changed evidence show progress, numbering repair batches additively without resetting prior failures or allocations.
+  Pair each repair unblock with a proportionate causal audit and apply low-stakes prevention through the affected existing callers, tests and guidance; report confirmed causes, hypotheses and remaining unknowns.
+  Do not loop identical failures or weaken checks; block with evidence and a concrete resume action when diagnosis cannot establish safe progress or a real external dependency or consequential decision remains unresolved.
+  Preserve genuine account/legal grants and product/release decisions, including production design selection, as separate boundaries.
+  Keep attempt history and the next action on the issue/PR; restarting does not reset it.
 - If the same failure happens twice anywhere, add a one-line entry to `docs/engineering/devops/shipping-lessons.md` in that PR with the lasting prevention.
 - Done means the PR merged; then exit.
 

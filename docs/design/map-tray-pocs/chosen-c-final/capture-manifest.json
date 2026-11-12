@@ -1,0 +1,125 @@
+{
+  "appSource": "3636dbae98f6308c162b048f4596c67eb95ef48e",
+  "images": [
+    {
+      "source": "3636dbae98f6308c162b048f4596c67eb95ef48e",
+      "jsHash": "724c6fcd3a19cfe2a957cfa7273a6bd8605412c6af2b6777a89fce9a7b3b81ff",
+      "bundleHash": "d18515089daf08595bbea49690d114d9188bdc73148586ec06bff70c9779c14c",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "nativeInputsStable": true,
+      "at": "2026-11-07T18:33:43.081Z",
+      "file": "normal-list-1-split.png",
+      "device": "iPhone 15 / iOS 17.5",
+      "udid": "98638215-7437-4A09-BF9F-C9E699E303B6",
+      "capturedAt": "2026-11-07T18:34:48.135131+00:00",
+      "sha256": "23c050b49ac85e1d7982a15d5091c9f4a289e87ff89aef809f6e319f97aa984e",
+      "bytes": 1870252,
+      "dimensions": [
+        1179,
+        2556
+      ],
+      "caption": "List 1: Map and named area, actual dish/macros and confidence"
+    },
+    {
+      "source": "3636dbae98f6308c162b048f4596c67eb95ef48e",
+      "jsHash": "724c6fcd3a19cfe2a957cfa7273a6bd8605412c6af2b6777a89fce9a7b3b81ff",
+      "bundleHash": "d18515089daf08595bbea49690d114d9188bdc73148586ec06bff70c9779c14c",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "nativeInputsStable": true,
+      "at": "2026-11-07T18:33:43.081Z",
+      "file": "normal-map-c-macros.png",
+      "device": "iPhone 15 / iOS 17.5",
+      "udid": "98638215-7437-4A09-BF9F-C9E699E303B6",
+      "capturedAt": "2026-11-07T18:35:21.190617+00:00",
+      "sha256": "31a3d14b1df1036ab42e857add2e6fecd8aaff74933de944b54b48c5e2667edb",
+      "bytes": 2202068,
+      "dimensions": [
+        1179,
+        2556
+      ],
+      "caption": "Chosen C alternate: Macros and selected actual Erewhon meal with LOW confidence"
+    },
+    {
+      "source": "3636dbae98f6308c162b048f4596c67eb95ef48e",
+      "jsHash": "724c6fcd3a19cfe2a957cfa7273a6bd8605412c6af2b6777a89fce9a7b3b81ff",
+      "bundleHash": "d18515089daf08595bbea49690d114d9188bdc73148586ec06bff70c9779c14c",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "nativeInputsStable": true,
+      "at": "2026-11-07T18:33:43.081Z",
+      "file": "normal-list-2-compact.png",
+      "device": "iPhone 15",
+      "udid": "98638215-7437-4A09-BF9F-C9E699E303B6",
+      "capturedAt": "2026-11-07T18:38:56.920351+00:00",
+      "sha256": "6656afad10bacb64bc4132ee66f23f1b5348259297d4bdb135a322cb83e55bdd",
+      "bytes": 1870305,
+      "dimensions": [
+        1179,
+        2556
+      ],
+      "caption": "List 2: compact Map and location icon, actual Erewhon dish/macros with low-confidence estimate"
+    },
+    {
+      "source": "3636dbae98f6308c162b048f4596c67eb95ef48e",
+      "jsHash": "724c6fcd3a19cfe2a957cfa7273a6bd8605412c6af2b6777a89fce9a7b3b81ff",
+      "bundleHash": "d18515089daf08595bbea49690d114d9188bdc73148586ec06bff70c9779c14c",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "nativeInputsStable": true,
+      "at": "2026-11-07T18:40:18.359Z",
+      "file": "small-list-1-split.png",
+      "device": "iPhone SE (3rd generation)",
+      "udid": "B2635EF1-A1BA-4712-978C-49486F4C14DB",
+      "capturedAt": "2026-11-07T18:41:24.662518+00:00",
+      "sha256": "61f1756fca9b6bcb7fe5a308d566a70b3dca50f09a4b5aeb11f6427b1c8c37ba",
+      "bytes": 916334,
+      "dimensions": [
+        750,
+        1334
+      ],
+      "caption": "List 1: named Map and Hollywood controls with actual Erewhon dish/macros and low confidence"
+    },
+    {
+      "source": "3636dbae98f6308c162b048f4596c67eb95ef48e",
+      "jsHash": "724c6fcd3a19cfe2a957cfa7273a6bd8605412c6af2b6777a89fce9a7b3b81ff",
+      "bundleHash": "d18515089daf08595bbea49690d114d9188bdc73148586ec06bff70c9779c14c",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "nativeInputsStable": true,
+      "at": "2026-11-07T18:40:18.359Z",
+      "file": "small-map-c-macros.png",
+      "device": "iPhone SE (3rd generation)",
+      "udid": "B2635EF1-A1BA-4712-978C-49486F4C14DB",
+      "capturedAt": "2026-11-07T18:41:41.949833+00:00",
+      "sha256": "beb3308cde9cb8e38e6d926f70754487eacf0d9969f0d70a91f3f78c134f69ae",
+      "bytes": 930668,
+      "dimensions": [
+        750,
+        1334
+      ],
+      "caption": "Chosen C alternate with Macros, selected Erewhon pin, real dish/macros and low confidence"
+    },
+    {
+      "source": "3636dbae98f6308c162b048f4596c67eb95ef48e",
+      "jsHash": "724c6fcd3a19cfe2a957cfa7273a6bd8605412c6af2b6777a89fce9a7b3b81ff",
+      "bundleHash": "d18515089daf08595bbea49690d114d9188bdc73148586ec06bff70c9779c14c",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "nativeInputsStable": true,
+      "at": "2026-11-07T18:40:18.359Z",
+      "file": "small-list-2-compact.png",
+      "device": "iPhone SE (3rd generation)",
+      "udid": "B2635EF1-A1BA-4712-978C-49486F4C14DB",
+      "capturedAt": "2026-11-07T18:42:35.239869+00:00",
+      "sha256": "456f8982fab132690b3376afd1146381ca006bcb6070f9375d22615a6f191994",
+      "bytes": 915786,
+      "dimensions": [
+        750,
+        1334
+      ],
+      "caption": "List 2: compact Map and location icon, actual Erewhon dish/macros with low-confidence estimate"
+    }
+  ]
+}

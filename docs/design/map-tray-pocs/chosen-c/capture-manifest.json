@@ -1,0 +1,197 @@
+{
+  "captureSource": "0adba31bf3567f45f12b0def3ebdb89f29fd9ff7",
+  "method": "Original xcrun simctl PNG captures of the guarded development app; no image edits",
+  "scope": "Observed UI states, not automated native scope acceptance",
+  "images": [
+    {
+      "source": "0adba31bf3567f45f12b0def3ebdb89f29fd9ff7",
+      "jsHash": "17f4209fba6d28757b91ee116586ea4e3073d12d858e678b22d4760f9584b1df",
+      "bundleHash": "1c6a6c4236def255455910fbceb1995f2e6e2e87da8c5e870f7afcfc484ddb70",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "at": "2026-11-07T16:57:43.444Z",
+      "file": "normal-map-c-macros.png",
+      "device": "iPhone 15 / iOS 17.5",
+      "udid": "98638215-7437-4A09-BF9F-C9E699E303B6",
+      "capturedAt": "2026-11-07T16:59:25.949947+00:00",
+      "sha256": "79704d977ec04bbdd67b8d74c506da139265430bb75c7f07e696fa094dfb01b5",
+      "bytes": 2930163,
+      "dimensions": [
+        1179,
+        2556
+      ],
+      "caption": "Chosen C alternate: Macros and actual Zinque dish/macros, focused pin and card 15 of 20"
+    },
+    {
+      "source": "0adba31bf3567f45f12b0def3ebdb89f29fd9ff7",
+      "jsHash": "17f4209fba6d28757b91ee116586ea4e3073d12d858e678b22d4760f9584b1df",
+      "bundleHash": "1c6a6c4236def255455910fbceb1995f2e6e2e87da8c5e870f7afcfc484ddb70",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "at": "2026-11-07T16:57:43.444Z",
+      "file": "normal-list-1-split-focused.png",
+      "device": "iPhone 15 / iOS 17.5",
+      "udid": "98638215-7437-4A09-BF9F-C9E699E303B6",
+      "capturedAt": "2026-11-07T17:01:15.237562+00:00",
+      "sha256": "d7f01490c5f2d68c8a64075f89bb39c024dea56c919d4d40579b9c27c83880a2",
+      "bytes": 2585950,
+      "dimensions": [
+        1179,
+        2556
+      ],
+      "caption": "List 1: split Map and area capsule, focused pizza search stays cool white"
+    },
+    {
+      "source": "0adba31bf3567f45f12b0def3ebdb89f29fd9ff7",
+      "jsHash": "17f4209fba6d28757b91ee116586ea4e3073d12d858e678b22d4760f9584b1df",
+      "bundleHash": "1c6a6c4236def255455910fbceb1995f2e6e2e87da8c5e870f7afcfc484ddb70",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "at": "2026-11-07T16:57:43.444Z",
+      "file": "normal-list-1-split.png",
+      "device": "iPhone 15 / iOS 17.5",
+      "udid": "98638215-7437-4A09-BF9F-C9E699E303B6",
+      "capturedAt": "2026-11-07T17:01:31.635464+00:00",
+      "sha256": "0f41f65b8a58a552992ae3fe2d34fc75b82c962bede113eed388de2968e59fd0",
+      "bytes": 2583295,
+      "dimensions": [
+        1179,
+        2556
+      ],
+      "caption": "List 1: explicit split Map and location, pizza submitted with Enter, actual Pasta Roma meal macros"
+    },
+    {
+      "source": "0adba31bf3567f45f12b0def3ebdb89f29fd9ff7",
+      "jsHash": "17f4209fba6d28757b91ee116586ea4e3073d12d858e678b22d4760f9584b1df",
+      "bundleHash": "1c6a6c4236def255455910fbceb1995f2e6e2e87da8c5e870f7afcfc484ddb70",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "at": "2026-11-07T16:57:43.444Z",
+      "file": "normal-list-2-compact.png",
+      "device": "iPhone 15 / iOS 17.5",
+      "udid": "98638215-7437-4A09-BF9F-C9E699E303B6",
+      "capturedAt": "2026-11-07T17:02:46.342167+00:00",
+      "sha256": "a0959f1219047a87a85242b1dc8246b6accd837e64c2eaf6e16a7f07415ff080",
+      "bytes": 2582814,
+      "dimensions": [
+        1179,
+        2556
+      ],
+      "caption": "List 2: compact Map plus location icon, current area in the existing subtitle, actual pizza results"
+    },
+    {
+      "source": "0adba31bf3567f45f12b0def3ebdb89f29fd9ff7",
+      "jsHash": "17f4209fba6d28757b91ee116586ea4e3073d12d858e678b22d4760f9584b1df",
+      "bundleHash": "1c6a6c4236def255455910fbceb1995f2e6e2e87da8c5e870f7afcfc484ddb70",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "at": "2026-11-07T16:57:43.444Z",
+      "file": "normal-list-2-compact-focused.png",
+      "device": "iPhone 15 / iOS 17.5",
+      "udid": "98638215-7437-4A09-BF9F-C9E699E303B6",
+      "capturedAt": "2026-11-07T17:03:20.886910+00:00",
+      "sha256": "eae00ee7cb85de7cb24145b2447f5cea740710b94f3c2f60246cde01fd677c1c",
+      "bytes": 2585658,
+      "dimensions": [
+        1179,
+        2556
+      ],
+      "caption": "List 2: focused pizza search keeps the same cool white surface"
+    },
+    {
+      "source": "0adba31bf3567f45f12b0def3ebdb89f29fd9ff7",
+      "jsHash": "17f4209fba6d28757b91ee116586ea4e3073d12d858e678b22d4760f9584b1df",
+      "bundleHash": "1c6a6c4236def255455910fbceb1995f2e6e2e87da8c5e870f7afcfc484ddb70",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "at": "2026-11-07T16:57:43.444Z",
+      "file": "small-list-1-split-focused.png",
+      "device": "iPhone SE / iOS 17.5",
+      "udid": "B2635EF1-A1BA-4712-978C-49486F4C14DB",
+      "capturedAt": "2026-11-07T17:09:38.155075+00:00",
+      "sha256": "7f0deb41bc4ec9fef1ea1b8f2a84b1998c43ec1cf4bad9fda7c65b60cb1146ae",
+      "bytes": 675986,
+      "dimensions": [
+        750,
+        1334
+      ],
+      "caption": "List 1 small: focused cool white search, software keyboard, Map and Hollywood controls remain reachable"
+    },
+    {
+      "source": "0adba31bf3567f45f12b0def3ebdb89f29fd9ff7",
+      "jsHash": "17f4209fba6d28757b91ee116586ea4e3073d12d858e678b22d4760f9584b1df",
+      "bundleHash": "1c6a6c4236def255455910fbceb1995f2e6e2e87da8c5e870f7afcfc484ddb70",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "at": "2026-11-07T16:57:43.444Z",
+      "file": "small-list-1-split.png",
+      "device": "iPhone SE / iOS 17.5",
+      "udid": "B2635EF1-A1BA-4712-978C-49486F4C14DB",
+      "capturedAt": "2026-11-07T17:09:54.252163+00:00",
+      "sha256": "2b0572494bee8d4f0ce9ebbd17f3d73590133e179cea3727d90fd7b1e191719e",
+      "bytes": 1068432,
+      "dimensions": [
+        750,
+        1334
+      ],
+      "caption": "List 1 small: Map and Hollywood capsule, actual Pizzana meal and macros after Enter"
+    },
+    {
+      "source": "0adba31bf3567f45f12b0def3ebdb89f29fd9ff7",
+      "jsHash": "17f4209fba6d28757b91ee116586ea4e3073d12d858e678b22d4760f9584b1df",
+      "bundleHash": "1c6a6c4236def255455910fbceb1995f2e6e2e87da8c5e870f7afcfc484ddb70",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "at": "2026-11-07T16:57:43.444Z",
+      "file": "small-map-c-macros.png",
+      "device": "iPhone SE / iOS 17.5",
+      "udid": "B2635EF1-A1BA-4712-978C-49486F4C14DB",
+      "capturedAt": "2026-11-07T17:10:18.854125+00:00",
+      "sha256": "7437cdb7e308260e2c8ed6ab66286d42e420ad4cb59c51596768ea30bb9eebda",
+      "bytes": 1025547,
+      "dimensions": [
+        750,
+        1334
+      ],
+      "caption": "Chosen C alternate small: Macros and actual Pizzana dish/macros, selected pin and card 1 of 11"
+    },
+    {
+      "source": "0adba31bf3567f45f12b0def3ebdb89f29fd9ff7",
+      "jsHash": "17f4209fba6d28757b91ee116586ea4e3073d12d858e678b22d4760f9584b1df",
+      "bundleHash": "1c6a6c4236def255455910fbceb1995f2e6e2e87da8c5e870f7afcfc484ddb70",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "at": "2026-11-07T16:57:43.444Z",
+      "file": "small-list-2-compact.png",
+      "device": "iPhone SE / iOS 17.5",
+      "udid": "B2635EF1-A1BA-4712-978C-49486F4C14DB",
+      "capturedAt": "2026-11-07T17:11:51.476858+00:00",
+      "sha256": "2f72fbc3bc4a63a45ee59f406910a5c158bcdfedc67426ba11364956d2a28444",
+      "bytes": 1066648,
+      "dimensions": [
+        750,
+        1334
+      ],
+      "caption": "List 2 small: compact Map and location icon, Hollywood shown in the existing subtitle"
+    },
+    {
+      "source": "0adba31bf3567f45f12b0def3ebdb89f29fd9ff7",
+      "jsHash": "17f4209fba6d28757b91ee116586ea4e3073d12d858e678b22d4760f9584b1df",
+      "bundleHash": "1c6a6c4236def255455910fbceb1995f2e6e2e87da8c5e870f7afcfc484ddb70",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "at": "2026-11-07T16:57:43.444Z",
+      "file": "small-list-2-compact-focused.png",
+      "device": "iPhone SE / iOS 17.5",
+      "udid": "B2635EF1-A1BA-4712-978C-49486F4C14DB",
+      "capturedAt": "2026-11-07T17:12:14.933097+00:00",
+      "sha256": "84702e779672167d85a0dddc703cf6329a5aa6e49e444513587149f2a1e6e6f9",
+      "bytes": 669014,
+      "dimensions": [
+        750,
+        1334
+      ],
+      "caption": "List 2 small: cool white focused search and compact Map/location controls above the software keyboard"
+    }
+  ]
+}

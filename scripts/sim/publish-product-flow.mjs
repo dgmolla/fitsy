@@ -1,14 +1,19 @@
 #!/usr/bin/env node
 // Publish an exact-head local verdict; no simulator or credential executes in CI.
 import { execFileSync, spawn } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdirSync, statSync, lstatSync, createReadStream, existsSync, realpathSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync, statSync, lstatSync, createReadStream, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { resolve } from 'node:path';
+import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { root, inputHash, impact, changedPaths, validate, baseline, repoEnv, publicConfigIdentity, requiredPublicConfigKeys } from '../verify/product-flow.mjs';
+import { root, inputHash, impact, changedPaths, validateAcceptance, baseline, repoEnv, publicConfigIdentity, requiredPublicConfigKeys, selectedFlows } from '../verify/product-flow.mjs';
+import { journeyFixture } from './journey-fixtures.mjs';
 import { validateMediaReceipt } from '../verify/media-integration.mjs';
-import { publicationArtifacts } from './publication-artifacts.mjs';
-import { comparison, simulatorContext } from '../verify/impact-plan.mjs';
+import { publicationArtifacts, redactSecrets } from './publication-artifacts.mjs';
+import { readPreviousReportForReuse } from './evidence-mode.mjs';
+import { comparison, isMain, simulatorContext } from '../verify/impact-plan.mjs';
+const yaml = createRequire(import.meta.url)('js-yaml');
 const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { cwd: root, encoding: 'utf8', env: repoEnv(), maxBuffer: 16 * 1024 * 1024, ...opts })?.trim() || '';
 const assert = (ok, why) => { if (!ok) throw new Error(why); };
 async function fileDigest(file) {
@@ -28,14 +33,43 @@ async function archivedDigest(archive, file) {
   });
 }
 const repo = 'dgmolla/fitsy', context = 'product-flow/local';
+const billingFixtureNames = new Set(['empty-store', 'expired-subscription', 'entitled-dev']);
+// The billing walkthrough category defaults to the empty-store persona when
+// no changed-journey flow overrides it (see product-flow.mjs). An operator
+// with a real fixtures file almost always has its own empty-store entry
+// (a genuinely empty account); prefer that over the configured caller, which
+// is typically entitled and can never satisfy an empty-history assertion.
+// With no fixtures file configured at all, keep checking the caller, exactly
+// as prepareWalkthrough's own 'default' journey (env: {}) does today.
+export function requiredBillingFixtures(plan) {
+  const fixtures = new Map();
+  if (plan.categories?.includes('billing'))
+    fixtures.set('empty-store', process.env.FITSY_E2E_FIXTURES ? journeyFixture({ tags: ['fixture:empty-store'] }).env : {});
+  for (const name of selectedFlows(plan)) {
+    const source = readFileSync(resolve(root, 'apps/mobile/e2e/flows', `${name}.yaml`), 'utf8');
+    const tags = yaml.load(source.split(/^---\s*$/m)[0]).tags || [];
+    // Only resolve (and require FITSY_E2E_FIXTURES for) a fixture this check
+    // actually cares about; an unrelated persona's own config stays optional.
+    const fixtureName = tags.filter(tag => tag.startsWith('fixture:')).map(tag => tag.slice(8))[0];
+    if (billingFixtureNames.has(fixtureName)) fixtures.set(fixtureName, journeyFixture({ tags }).env);
+  }
+  return [...fixtures.entries()].map(([name, env]) => ({ name, env })).sort((a, b) => a.name.localeCompare(b.name));
+}
 export function publicationPlan(evidenceDirectory, buildReceiptFile, paths = changedPaths('origin/main'), current = publicConfigIdentity(), options = {}) {
+  const { recoverHistoricalReport = false, ...impactOptions } = options;
   const readReceipt = file => existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
-  const previous = readReceipt(resolve(evidenceDirectory, 'report.json'));
+  const reportFile = resolve(evidenceDirectory, 'report.json');
+  const previous = recoverHistoricalReport && existsSync(reportFile)
+    ? readPreviousReportForReuse(reportFile) : { report: readReceipt(reportFile) };
   const build = readReceipt(buildReceiptFile);
-  return impact(paths, requiredPublicConfigKeys(previous, build, current), {
-    ...simulatorContext(process.env), ...options,
+  const keys = requiredPublicConfigKeys(previous.report, build, current);
+  if (previous.error) keys.push('<unknown>');
+  const plan = impact(paths, [...new Set(keys)].sort(), {
+    ...simulatorContext(process.env), ...impactOptions,
     comparison: comparison({ cwd: root, base: 'origin/main' }),
   });
+  return previous.error ? { ...plan,
+    historyWarning: 'Preserve unreadable historical evidence in the existing archive before fresh conservative collection' } : plan;
 }
 export async function createPublicationArchive(report, categories, dir, archive, execute = run) {
   const artifacts = publicationArtifacts(report, categories);
@@ -50,37 +84,69 @@ export async function createPublicationArchive(report, categories, dir, archive,
         `Published artifact must be a regular file with real parent directories: ${f}`);
     }
   }
-  execute('tar', ['-czf', archive, '-C', dir, ...artifacts]);
-  const archiveEntries = execute('tar', ['-tzf', archive]).split('\n');
-  assert(archiveEntries.length === artifacts.length && artifacts.every(file => archiveEntries.includes(file)), 'Published archive omits verified evidence');
-  for (const file of artifacts) {
-    assert(await archivedDigest(archive, file) === await fileDigest(resolve(dir, file)),
-      `Published archive has incomplete or changed bytes: ${file}`);
-  }
+  // Stage redacted copies rather than archiving the working evidence
+  // directory directly, so a disposable dev-fixture credential captured in
+  // a Maestro/XCTest receipt never reaches the published archive, while the
+  // report's own pre-redaction hashes (recorded at collection time) stay
+  // intact as the provenance record of what was actually collected.
+  const staging = mkdtempSync(join(tmpdir(), 'fitsy-publication-redacted-'));
+  try {
+    for (const f of artifacts) {
+      const staged = resolve(staging, f);
+      mkdirSync(dirname(staged), { recursive: true });
+      writeFileSync(staged, redactSecrets(readFileSync(resolve(dir, f))));
+    }
+    execute('tar', ['-czf', archive, '-C', staging, ...artifacts]);
+    const archiveEntries = execute('tar', ['-tzf', archive]).split('\n');
+    assert(archiveEntries.length === artifacts.length && artifacts.every(file => archiveEntries.includes(file)), 'Published archive omits verified evidence');
+    for (const file of artifacts) {
+      assert(await archivedDigest(archive, file) === await fileDigest(resolve(staging, file)),
+        `Published archive has incomplete or changed bytes: ${file}`);
+    }
+  } finally { rmSync(staging, { recursive: true, force: true }); }
 }
 export async function publishProductFlow(prNumber, {
+  preflight = false,
   execute = run,
   evidenceDirectory = resolve(root, '.evidence/product-flow'),
   buildReceiptFile = resolve(root, '.evidence/product-build/receipt.json'),
   publicationDirectory = resolve(root, '.evidence/publication'),
   resolvePlan = options => publicationPlan(evidenceDirectory, buildReceiptFile, undefined, undefined, options),
   sourceHash = inputHash,
-  validateEvidence = validate,
+  validateEvidence = validateAcceptance,
   validateMediaEvidence = candidate => validateMediaReceipt(changedPaths('origin/main'), candidate, sourceHash()),
 } = {}) {
+  if (preflight) {
+    const invoke = execute;
+    execute = (command, args, options = {}) => invoke(command, args, { ...options, timeout: 30000 });
+    // Exercise the same child environment used by the final checker before
+    // collecting native evidence. Never print environment values or stderr.
+    let config;
+    try {
+      config = JSON.parse(execute(process.execPath, ['--env-file=apps/mobile/.env.development.local', '--input-type=module', '-e',
+        `import {environment} from ${JSON.stringify(new URL('./product-flow.mjs', import.meta.url).href)}; console.log(JSON.stringify({configHash:environment().configHash}));`],
+      { stdio: ['ignore', 'pipe', 'pipe'] }));
+    } catch {
+      throw new Error('Final checker cannot load the canonical mobile environment; run npm run dev:env against the existing fitsy-api project and verify development configuration before final collection');
+    }
+    assert(config?.configHash === publicConfigIdentity().configHash, 'Final checker configuration differs from the collection configuration');
+  }
   const gh = args => execute('gh', args);
   let head;
   function status(state, description, target_url) {
     return execute('gh', ['api', `repos/${repo}/statuses/${head}`, '--input', '-'], { input: JSON.stringify({ state, context, description, target_url }) });
   }
   try {
-  assert(/^\d+$/.test(prNumber || ''), 'Usage: node scripts/sim/publish-product-flow.mjs PR_NUMBER');
-  const pr = JSON.parse(gh(['pr', 'view', prNumber, '--repo', repo, '--json', 'headRefOid,baseRefName,headRepositoryOwner,state,url,labels']));
+  assert(/^\d+$/.test(prNumber || '') || (preflight && prNumber === undefined),
+    'Usage: node scripts/sim/publish-product-flow.mjs PR_NUMBER [--preflight]');
+  const selector = prNumber ?? execute('git', ['branch', '--show-current']);
+  assert(selector && !selector.startsWith('-'), 'Automatic final preflight requires an owned branch or explicit PR number');
+  const pr = JSON.parse(gh(['pr', 'view', selector, '--repo', repo, '--json', 'headRefOid,baseRefName,headRepositoryOwner,state,url,labels']));
   assert(pr.state === 'OPEN' && pr.baseRefName === 'main' && pr.headRepositoryOwner.login === 'dgmolla', 'Expected an open same-repository PR to main');
   const candidate = execute('git', ['rev-parse', 'HEAD']);
   assert(pr.headRefOid === candidate, 'Local HEAD does not match the remote PR');
   head = candidate;
-  status('pending', 'Validating local candidate evidence', pr.url);
+  if (!preflight) status('pending', 'Validating local candidate evidence', pr.url);
   assert(!execute('git', ['status', '--porcelain']), 'Commit all candidate inputs before publishing evidence');
   if (process.env.FITSY_PRODUCT_ROOT) {
     // A live externally admitted frozen comparison may use newer trusted
@@ -91,20 +157,53 @@ export async function publishProductFlow(prNumber, {
     assert(!run('git', ['status', '--porcelain'], { cwd: controls }), 'Publisher controls must be clean');
     assert(execute('git', ['ls-remote', 'origin', 'refs/heads/main']).split(/\s+/)[0] === trusted, 'Trusted main advanced; revalidate frozen comparison');
   } else {
-    execute('git', ['fetch', 'origin', 'main']);
+    if (preflight) assert(execute('git', ['ls-remote', 'origin', 'refs/heads/main']).split(/\s+/)[0] ===
+      execute('git', ['rev-parse', 'origin/main']), 'Main advanced; fetch and update the candidate before final collection');
+    else execute('git', ['fetch', 'origin', 'main']);
     execute('git', ['merge-base', '--is-ancestor', 'origin/main', 'HEAD']);
   }
   const media = validateMediaEvidence(candidate);
-  const resolved = resolvePlan({ labels: (pr.labels || []).map(label => label.name) }), includeBaseline = process.argv.includes('--include-baseline');
+  const resolved = resolvePlan({ labels: (pr.labels || []).map(label => label.name), recoverHistoricalReport: preflight }),
+    includeBaseline = process.argv.includes('--include-baseline');
   const plan = includeBaseline ? { ...resolved, flows: [...new Set([...(resolved.flows || []), ...baseline])].sort(), baseline } : resolved;
   const evidenceRequired = plan.required || includeBaseline;
+  if (preflight && evidenceRequired) {
+    const fixtures = requiredBillingFixtures(plan);
+    if (fixtures.length) {
+      let results;
+      try {
+        results = JSON.parse(execute(process.execPath, ['--env-file=apps/mobile/.env.development.local', '--input-type=module', '-e',
+          `import {verifyInactiveEntitlement, verifyRemainingLifetime} from ${JSON.stringify(new URL('./active-entitlement.mjs', import.meta.url).href)};
+const built = {storeMode:'test-store', configuration:'Debug', buildMode:'owned-metro-test-store'};
+const out = {};
+for (const {name, env: override} of ${JSON.stringify(fixtures)}) {
+  const env = { ...process.env, ...override };
+  try { out[name] = { ok: true, ...(name === 'entitled-dev' ? await verifyRemainingLifetime({ built, env }) : await verifyInactiveEntitlement({ fixture: name, built, env })) }; }
+  catch (e) { out[name] = { ok: false, reason: e.message }; }
+}
+console.log(JSON.stringify(out));`],
+        { stdio: ['ignore', 'pipe', 'pipe'] }));
+      } catch (e) {
+        throw new Error(`Billing persona preflight could not run: ${e.message}`);
+      }
+      const failed = Object.entries(results).filter(([, r]) => !r.ok);
+      assert(!failed.length, `Billing persona preflight failed: ${failed.map(([fixture, r]) => `${fixture}: ${r.reason}`).join('; ')}`);
+    }
+  }
+  if (preflight) return { status: 'ready', head, plan, mediaIntegration: media?.required ? 'required' : 'not_applicable',
+    evidenceRequired, report: '.evidence/product-flow/report.json',
+    requiredProof: evidenceRequired ? ['final-candidate report with source/app/native/JS/config/backend/store/runtime identities',
+      'selected-flow commands, screenshots and real before/after XCTest closeouts',
+      'actual primary/recovery MCP traces for each selected category',
+      'final check and private archive byte/digest readback'] : [],
+    note: 'Preflight is not product acceptance or evidence reuse; final validation and publication remain required' };
   let target = pr.url;
   if (evidenceRequired) {
     const dir = evidenceDirectory, reportFile = resolve(dir, 'report.json');
     const report = JSON.parse(readFileSync(reportFile, 'utf8'));
     assert(report.evidenceMode === 'final-candidate',
       'Final candidate proof is required; rerun with --mode=final-candidate');
-    validateEvidence(report, plan, sourceHash(), dir);
+    await validateEvidence(report, plan, sourceHash(), dir);
     execute(process.execPath, ['--env-file=apps/mobile/.env.development.local', 'scripts/sim/product-flow.mjs', 'check']);
     const tag = `product-flow-${head}`;
     mkdirSync(publicationDirectory, { recursive: true });
@@ -115,7 +214,9 @@ export async function publishProductFlow(prNumber, {
     const archiveDigest = `sha256:${await fileDigest(archive)}`;
     const notes = resolve(publicationDirectory, 'notes.md');
     const recorded = report.videoRequested ?? report.flows.every(flow => Boolean(flow.video && flow.videoHash));
-    writeFileSync(notes, `Local simulator evidence for ${pr.url}\n\nCandidate: ${head}\nSource/test hash: ${report.inputHash}\nFinished: ${report.finishedAt}\nStore: ${report.storeMode}\n\nPrivate draft for repository reviewers; do not publish. Includes Maestro commands, screenshots and changed-journey observations${recorded ? ', plus complete untrimmed flow videos' : ''}.\n`);
+    const exceptions = (report.exceptions || []).map(item =>
+      `${item.flow}: ${item.status}, never passed; ${item.reason}; source ${item.source}; owner ${item.approval}.`).join('\n');
+    writeFileSync(notes, `**TL;DR:** Verified local simulator evidence is preserved for ${pr.url}.\n\nCandidate: ${head}\nSource/test hash: ${report.inputHash}\nFinished: ${report.finishedAt}\nStore: ${report.storeMode}\n${exceptions ? `\n${exceptions}\n` : ''}\nPrivate draft for repository reviewers; do not publish.\nIncludes Maestro commands, screenshots and changed-journey observations${recorded ? ', plus complete untrimmed flow videos' : ''}.\n`);
     let release;
     try { release = JSON.parse(gh(['release', 'view', tag, '--repo', repo, '--json', 'isDraft,url'])); } catch { /* create below */ }
     assert(!release || release.isDraft, 'Evidence release must remain a private draft');
@@ -137,13 +238,17 @@ export async function publishProductFlow(prNumber, {
   return { status: 'pass', context, head, applicability: evidenceRequired ? 'required' : 'not_applicable',
     mediaIntegration: media?.required ? 'required' : 'not_applicable', url: target };
   } catch (e) {
-  if (head) { try { status('failure', 'Local evidence failed; inspect publisher output'); } catch { /* preserve original failure */ } }
+  if (head && !preflight) { try { status('failure', 'Local evidence failed; inspect publisher output'); } catch { /* preserve original failure */ } }
   throw e;
   }
 }
-if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isMain(import.meta.url)) {
   try {
-    console.log(JSON.stringify(await publishProductFlow(process.argv[2])));
+    const flags = process.argv.slice(3);
+    assert(process.argv[2] && new Set(flags).size === flags.length &&
+      flags.every(flag => ['--preflight', '--include-baseline'].includes(flag)),
+    'Usage: node scripts/sim/publish-product-flow.mjs PR_NUMBER [--preflight] [--include-baseline]');
+    console.log(JSON.stringify(await publishProductFlow(process.argv[2], { preflight: flags.includes('--preflight') })));
   } catch (e) {
     console.error(e.message); process.exitCode = 1;
   }

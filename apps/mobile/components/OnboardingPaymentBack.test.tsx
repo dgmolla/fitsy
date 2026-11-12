@@ -9,6 +9,20 @@ import Trial from '../app/welcome/trial';
 import { getMacroTargets } from '../lib/macroStorage';
 import { installHardwareBackFixture } from './hardwareBackHarness';
 
+// Preview is map-first now, so this flow renders the real DiscoveryMap.
+jest.mock('react-native-maps', () => {
+  const React = require('react');
+  const { View, Pressable } = require('react-native');
+  return { __esModule: true,
+    default: React.forwardRef((props: object, ref: React.Ref<unknown>) => {
+      React.useImperativeHandle(ref, () => ({ animateToRegion: jest.fn(), animateCamera: jest.fn(), fitToCoordinates: jest.fn() }));
+      return <View {...props} />;
+    }),
+    Marker: ({ onPress, ...props }: { onPress: (event: unknown) => void }) =>
+      <Pressable testID="native-marker" {...props} onPress={() => onPress({ stopPropagation() {} })} />,
+  };
+});
+
 const targets = { calories: '654', protein: '0', carbs: '114', fat: '22' };
 const noSubscription = { entitlements: { active: {}, all: {} } } as CustomerInfo;
 const annual = { identifier: '$rc_annual', product: { identifier: 'annual', price: 59.99,
@@ -28,9 +42,11 @@ const routeMap = { ...routes, 'welcome/payment': ObservedPayment,
 
 async function signInFromPreview() {
   const screen = renderJourney('/welcome/preview', routeMap);
-  await screen.findByTestId('discovery-hero');
+  await screen.findByTestId('map-pin-0');
   if (screen.queryByTestId('coachmark-skip')) await act(async () => { fireEvent.press(screen.getByTestId('coachmark-skip')); });
-  await act(async () => { fireEvent.press(screen.getByTestId('discovery-hero')); });
+  await act(async () => { fireEvent.press(screen.getByTestId('map-pin-0')); });
+  await screen.findByTestId('map-preview-open');
+  await act(async () => { fireEvent.press(screen.getByTestId('map-preview-open')); });
   await screen.findByTestId('signup-apple');
   await act(async () => { fireEvent.press(screen.getByTestId('signup-apple')); });
   return screen;
@@ -90,6 +106,9 @@ it.each(['paid', 'allow reminder', 'skip reminder'].flatMap(offer =>
     }
     await act(async () => { if (back) back(); else fireEvent.press(screen.getByTestId('welcome-back')); });
     await waitFor(() => expect(screen.getPathname()).toBe('/welcome/preview'));
+    // Preview is map-first; switch to list to check the persisted search and macro
+    // context, unless the second pass already left it there from the first.
+    if (screen.queryByTestId('map-search-entry')) await act(async () => { fireEvent.press(screen.getByTestId('map-search-entry')); });
     await screen.findByTestId('discovery-hero');
     expect(screen.getByTestId('discovery-search').props.value).toBe('pizza');
     for (const value of ['654', '0g', '114g', '22g']) expect(screen.getByText(value)).toBeTruthy();

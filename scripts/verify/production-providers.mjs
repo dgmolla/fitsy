@@ -46,13 +46,23 @@ export function axiomRows(body) {
     Object.fromEntries(table.fields.map((field, column) => [field.name, table.columns[column][index]])));
 }
 
-export async function queryAxiom(apl, startTime, endTime, { env, fetchImpl }) {
+export async function queryAxiom(apl, startTime, endTime, { env, fetchImpl }, timestampField) {
   if (!env.AXIOM_TOKEN) throw new Error('Axiom query token missing');
   const body = await requestJson('https://api.axiom.co/v1/datasets/_apl?format=tabular', {
     method: 'POST', headers: { authorization: `Bearer ${env.AXIOM_TOKEN}`, 'content-type': 'application/json' },
     body: JSON.stringify({ apl, startTime: new Date(startTime).toISOString(), endTime: new Date(endTime).toISOString() }),
   }, fetchImpl);
-  return axiomRows(body);
+  const rows = axiomRows(body);
+  if (!timestampField) return rows;
+  return rows.map(row => {
+    const value = row[timestampField];
+    // Axiom's tabular max(_time) returns numeric nanoseconds, not Date.parse input.
+    // Bound conversion to the query window so wrong units cannot look healthy.
+    const millis = typeof value === 'number' && Number.isInteger(value) ? value / 1e6
+      : typeof value === 'string' ? Date.parse(value) : NaN;
+    if (!Number.isFinite(millis) || millis < startTime || millis >= endTime) throw new Error('Invalid Axiom timestamp');
+    return { ...row, [timestampField]: new Date(millis).toISOString() };
+  });
 }
 
 const apiQuery = `['${policy.dataset}'] | where type == 'api_request' and environment == 'production'`;
@@ -61,8 +71,8 @@ const aggregate = " | summarize requests=count(), errors=countif(status >= 500),
 export async function apiMetrics(context) {
   const cutoff = context.now - policy.windowMinutes * 60_000;
   const [current, baseline] = await Promise.all([
-    queryAxiom(apiQuery + aggregate, cutoff, context.now, context),
-    queryAxiom(apiQuery + aggregate, context.now - policy.baselineMinutes * 60_000, cutoff, context),
+    queryAxiom(apiQuery + aggregate, cutoff, context.now, context, 'lastSeen'),
+    queryAxiom(apiQuery + aggregate, context.now - policy.baselineMinutes * 60_000, cutoff, context, 'lastSeen'),
   ]);
   return evaluateApi(current, baseline, context.now);
 }
@@ -70,7 +80,7 @@ export async function apiMetrics(context) {
 export async function cronMetrics(context) {
   context.state.cronMonitoringStartedAt ??= context.now;
   const rows = await queryAxiom(apiQuery + " | where route startswith '/api/internal/' and status >= 200 and status < 300 | summarize lastSuccess=max(_time) by route",
-    context.now - 15 * 86_400_000, context.now, context);
+    context.now - 15 * 86_400_000, context.now, context, 'lastSuccess');
   return evaluateCrons(rows, context.now, context.state.cronMonitoringStartedAt);
 }
 
@@ -111,7 +121,12 @@ export async function deploymentMetrics(context, servingSha) {
 }
 
 export async function quotaMetrics({ env, fetchImpl }) {
+  // Developer API quota access is optional. Partial configuration is an error,
+  // while an absent integration must not page or invent quota measurements.
+  if (![env.UPSTASH_API_KEY, env.UPSTASH_EMAIL, env.UPSTASH_DATABASE_ID, env.UPSTASH_DAILY_COMMAND_LIMIT]
+    .some(value => value?.trim())) return null;
   if (!env.UPSTASH_API_KEY || !env.UPSTASH_EMAIL || !/^[a-zA-Z0-9-]+$/.test(env.UPSTASH_DATABASE_ID ?? '')) throw new Error('Quota visibility configuration missing');
+  if (!Number.isFinite(Number(env.UPSTASH_DAILY_COMMAND_LIMIT)) || Number(env.UPSTASH_DAILY_COMMAND_LIMIT) <= 0) throw new Error('Invalid quota allowance');
   const body = await requestJson(`https://api.upstash.com/v2/redis/stats/${env.UPSTASH_DATABASE_ID}`, {
     headers: { authorization: `Basic ${Buffer.from(`${env.UPSTASH_EMAIL}:${env.UPSTASH_API_KEY}`).toString('base64')}` },
   }, fetchImpl);
@@ -152,7 +167,7 @@ export async function workflowMetrics(file, name, context) {
   const conclusions = ['success', 'failure', 'timed_out', 'action_required', 'cancelled', 'stale', 'startup_failure', 'skipped', 'neutral'];
   // GitHub's name can be the dynamic run-name. The file-scoped endpoint and
   // returned workflow path identify the observer's trusted release stream.
-  if (!runs.length || runs.some(run => run.path !== `.github/workflows/${file}`
+  if ((!eas && !runs.length) || runs.some(run => run.path !== `.github/workflows/${file}`
       || (!eas && run.head_branch !== 'main')
       || !(eas ? ['push', 'workflow_dispatch'] : file === 'deploy.yml'
         ? ['workflow_run', 'workflow_dispatch'] : ['schedule', 'workflow_dispatch']).includes(run.event)
@@ -162,9 +177,39 @@ export async function workflowMetrics(file, name, context) {
         : !activeStatuses.includes(run.status) || run.conclusion !== null))) {
     throw new Error('Verified workflow identity unavailable');
   }
-  const run = runs.filter(item => item.status === 'completed' && !['skipped', 'neutral'].includes(item.conclusion))
-    .sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at) || b.id - a.id)[0];
   const scope = `workflow:${name}`;
+  const previous = context.state?.incidents[scope];
+  if (eas) {
+    const cutoff = context.now - policy.easWorkflowMaxAgeDays * 86_400_000;
+    if (!Number.isFinite(cutoff) || !(policy.easWorkflowMaxAgeDays > 0)) throw new Error('Invalid EAS observation window');
+    // EAS Actions is an intermittent release path, not an always-on service.
+    // Expire inactive history through normal state/recovery delivery. Active
+    // attempts and recent persisted receipts still retain the #737 safeguards.
+    const previousAt = previous?.workflowUpdatedAt ? Date.parse(previous.workflowUpdatedAt) : previous?.since;
+    if (runs.every(item => item.status === 'completed' && Date.parse(item.updated_at) < cutoff)
+        && (!previous?.active || (Number.isFinite(previousAt) && previousAt < cutoff))) return [];
+    if (!runs.length) return null;
+  }
+  const completed = runs.filter(item => item.status === 'completed' && !['skipped', 'neutral'].includes(item.conclusion))
+    .sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at) || b.id - a.id);
+  let run;
+  for (const candidate of completed) {
+    if (file === 'deploy.yml' && candidate.conclusion === 'success') {
+      const result = await github(`actions/runs/${candidate.id}/attempts/${candidate.run_attempt}/jobs?per_page=100`, context);
+      if (!Array.isArray(result.jobs) || !result.jobs.length || result.jobs.length !== result.total_count
+          || result.jobs.some(job => job.run_id !== candidate.id || job.run_attempt !== candidate.run_attempt || !Array.isArray(job.steps))) {
+        throw new Error('Complete release attempt jobs required');
+      }
+      // The health command also exits zero on supersession. Only its gated
+      // release_ready marker proves automatic recovery; manual releases still
+      // fail closed on supersession and use the original health step.
+      if (!result.jobs.some(job => ['smoke', 'production-ota'].includes(job.name) && job.conclusion === 'success'
+          && job.steps.some(step => step.name === (job.name === 'smoke' ? 'Confirm verified release'
+            : 'Verify serving identity after smoke') && step.conclusion === 'success'))) continue;
+    }
+    run = candidate;
+    break;
+  }
   if (run && run.conclusion !== 'success') {
     return [{ ...alert(scope, scope, name === 'Dev maintenance' ? 'P2' : 'P1', `${name} failed; inspect Actions run ${run.id}, attempt ${run.run_attempt}.`),
       workflowUpdatedAt: run.updated_at, workflowRunId: run.id }];
@@ -172,8 +217,10 @@ export async function workflowMetrics(file, name, context) {
   // Pending work is neither a recovery nor a broken observer. Omit its scope
   // so shared incidents and reminder delivery survive until an outcome exists.
   if (runs.some(item => item.status !== 'completed')) return null;
-  if (!run) throw new Error('Verified workflow identity unavailable');
-  const previous = context.state?.incidents[scope];
+  if (!run) {
+    if (completed.length && file === 'deploy.yml') return null;
+    throw new Error('Verified workflow identity unavailable');
+  }
   // Legacy v1 incidents have no workflow watermark. Require a success after
   // their observed start rather than assuming an older result is recovery.
   if (previous?.active && !previous.workflowUpdatedAt
@@ -202,7 +249,15 @@ export async function collectObservations({ env, fetchImpl, now, state }) {
     if (result.status === 'fulfilled') {
       if (result.value !== null) observations.push({ scope, alerts: result.value });
     }
-    else observerAlerts.push(alert(`observer:${scope}`, 'observer', 'P2', `${scope} monitoring failed or is unconfigured; inspect the monitoring setup contract.`));
+    else {
+      // Only local schema labels or an HTTP status may leave the provider
+      // boundary. Never copy arbitrary exception text, response bodies or URLs.
+      const status = result.reason?.httpStatus;
+      const detail = Number.isInteger(status) && status >= 100 && status <= 599 ? `HTTP ${status}`
+        : ['Incomplete Axiom query', 'Malformed Axiom table', 'Invalid Axiom timestamp', 'Invalid API metric schema'].includes(result.reason?.message)
+          ? result.reason.message : 'request or configuration error';
+      observerAlerts.push(alert(`observer:${scope}`, 'observer', 'P2', `${scope} monitoring failed (${detail}); inspect the monitoring setup contract.`));
+    }
   });
   observations.push({ scope: 'observer', alerts: observerAlerts });
   return observations;

@@ -28,6 +28,12 @@ if ! command -v tesseract >/dev/null 2>&1 || ! tesseract --version >/dev/null 2>
   printf '{"name":"media-integration","status":"fail","summary":"required screenshot OCR is unavailable","fix":"install tesseract with English data, then rerun npm run verify"}\n'
   exit 1
 fi
+# The host-isolation case acquires this lock itself. An idle native lease held
+# by the invoking worker would otherwise turn that handoff into a timeout.
+if ! command -v lockf >/dev/null 2>&1 || ! lockf -t 0 "$HOME/fitsy-refactor/loop/sim.lock" true >/dev/null 2>&1; then
+  printf '{"name":"media-integration","status":"fail","summary":"canonical native lock is busy or unavailable","fix":"release only your own idle native lease, or wait for its active owner; verify lockf access before rerunning the media lane"}\n'
+  exit 1
+fi
 if ! FITSY_MEDIA_INTEGRATION=1 npm test --workspace=@fitsy/scripts -- --runInBand --runTestsByPath verify/product-flow.test.ts sim/xctest-attachments.test.ts sim/slack-video.test.ts sim/evidence-access.test.ts >&2; then
   printf '{"name":"media-integration","status":"fail","summary":"real-media integration tests failed","fix":"run the named local suites with FFmpeg and fix the failure"}\n'
   exit 1

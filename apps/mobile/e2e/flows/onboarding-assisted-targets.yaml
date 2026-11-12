@@ -109,22 +109,9 @@ env:
 - tapOn:
     id: welcome-continue
 - assertVisible: "Estimated from your answers.*"
-# The fourth goal starts below the scroll viewport, behind the fixed footer.
-# Scroll the form first so Maestro cannot tap the footer at its stale AX bounds.
-- swipe:
-    start: "50%,70%"
-    end: "50%,35%"
-- waitForAnimationToEnd
-- tapOn:
-    id: meal-goal-build_muscle
-- assertVisible:
-    id: meal-goal-build_muscle
-    selected: true
-- swipe:
-    start: "50%,35%"
-    end: "50%,70%"
-- waitForAnimationToEnd
-# Read the calculated targets rather than hardcoding the previous formula.
+# The goal buttons were removed from this screen: the goal was already chosen
+# on welcome/goal and this screen is calories/macros only. Read the calculated
+# targets rather than hardcoding the previous formula.
 - copyTextFrom:
     id: meal-target-calories
 - assertTrue: ${Number(maestro.copiedText) > 0}
@@ -185,20 +172,8 @@ env:
 - assertVisible: "A little context.*A better choice.*"
 - tapOn:
     id: welcome-continue
-- extendedWaitUntil:
-    visible:
-      id: onboarding-widget-card
-    timeout: 15000
-- assertVisible:
-    id: onboarding-widget-example
-- assertVisible: "1. Long-press your Home Screen."
-- assertVisible: "2. Tap \\+ \\(or Edit → Add Widget\\)."
-- assertVisible: "3. Search fitsy and add the widget."
-- assertVisible:
-    id: welcome-skip
-- takeScreenshot: onboarding-widget-card
-- tapOn:
-    id: welcome-skip
+# The widget screen moved to the end of onboarding (after payment); continue
+# now reaches the preview directly.
 - extendedWaitUntil:
     visible:
       id: coachmark-next
@@ -229,6 +204,9 @@ env:
     id: coachmark-next
 - assertVisible: "5 OF 5"
 - tapOn: "Find my meal"
+# Preview is map-first; switch to list for the search/hero assertions below.
+- tapOn:
+    id: map-search-entry
 - copyTextFrom:
     id: discovery-search
 - assertTrue: ${maestro.copiedText === 'pizza'}
@@ -257,9 +235,6 @@ env:
 - tapOn:
     id: welcome-back
 - assertVisible: ${String(output.assistedCalories)}
-- assertVisible:
-    id: meal-goal-build_muscle
-    selected: true
 - tapOn:
     id: welcome-back
 - assertVisible: "How active are you.*"
@@ -272,20 +247,15 @@ env:
 - assertVisible: "A little context.*A better choice.*"
 - tapOn:
     id: welcome-continue
+# The widget screen moved to the end of onboarding (after payment); continue
+# now reaches the preview directly. The tour is already seen from the first
+# visit, so this lands straight on the map; switch to list for the assertion.
 - extendedWaitUntil:
     visible:
-      id: onboarding-widget-card
-    timeout: 15000
-- assertVisible:
-    id: onboarding-widget-example
-- assertVisible: "1. Long-press your Home Screen."
-- assertVisible: "2. Tap \\+ \\(or Edit → Add Widget\\)."
-- assertVisible: "3. Search fitsy and add the widget."
-- assertVisible:
-    id: welcome-skip
-- takeScreenshot: onboarding-widget-card
+      id: map-search-entry
+    timeout: 30000
 - tapOn:
-    id: welcome-skip
+    id: map-search-entry
 - extendedWaitUntil:
     visible:
       id: discovery-hero

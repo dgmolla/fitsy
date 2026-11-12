@@ -86,6 +86,7 @@ Allowlist additions, unrelated removals, deletion of the allowlist and unreadabl
 Changes under `scripts/sim/`, the product-flow verification controls or the loop's host recovery controls run the blocking local `media-integration` lane in `npm run verify`.
 Install `ffprobe` and `ffmpeg` locally before that run.
 The media preflight also requires working `ps` process ownership inspection; a sandbox denial fails before native fixture children start.
+Release your own idle native lease before this lane; its nonblocking canonical-lock probe fails early if the host-isolation case cannot acquire that lock itself, without releasing another owner's resources.
 The lane runs real decoder, XCTest attachment and host credential-isolation cases, then records `.evidence/verify/media-integration.json` with the candidate SHA and source/test hash.
 Hosted L2 runs deterministic tests without media tools.
 After committing, rerun `node scripts/verify/run.mjs --only=media-integration --runs=local` so the receipt names the PR head.
@@ -100,17 +101,24 @@ Navigation, auth, billing, native configuration, release and unmapped mobile-fac
 The artifact explains each omitted flow; local execution and final acceptance consume the same selection, and explicit lists can only expand mandatory coverage.
 Inspect `npm run verify:product-plan` for the selected final journeys and applicable MCP categories.
 Verification-only package script edits do not require a simulator; native dependencies, build profiles and release changes retain full coverage.
-Every mobile or web UI edit triggers local coverage: proven screen-local copy/style edits use launch-and-render smoke, navigation/state/forms use affected E2E flows, and shared UI or app shells use the full suite.
+Executable mobile or web UI edits trigger local coverage: proven screen-local copy/style edits use launch-and-render smoke, navigation/state/forms use affected E2E flows, and ambiguous shared UI or app shells use the full suite.
+Discovery availability/default edits have a source-based entry mapping: compare the complete modules after normalizing only known iOS availability guards and the map/list initializer, then select `map-search`, `map-search-location-denied` and `onboarding-guided-preview`.
+Those maintained journeys cover map/list/Shuffle entry, denied-location recovery and the shared preview; final acceptance retains auth, billing and changed-journey primary/recovery walkthroughs.
+Known DEV API/auth/Test Store configuration changes retain those integration checks; unknown configuration, renderer/state/preview-guard changes, native or release inputs, missing history and unavailable routing policy keep conservative full selection.
+A comment-only Discovery edit does not change executable inputs, and a proven simulator outer-budget-only edit does not create new product behavior; control changes still require their own tests, media checks and independent review.
+The special mapping does not reuse an old whole-bundle pass or waive any selected assertion.
 Render smoke reuses maintained flow setup through a mapped render assertion, then saves a screenshot; uncertain changes retain E2E coverage.
 The `needs-sim` label forces flows and its addition or removal reruns classification.
 CI prints the scope and reason and uploads the full plan as `selection.json` in the `sim-scope` artifact.
 The classifier and baseline scripts run with read-only credentials and no persisted checkout token.
 The separate `sim-scope.yml` workflow publishes a successful `Sim scope` status on the current PR head from protected code, after validating the source run and artifact.
-Its description is `scope=<scope> flows=<count>` to stay within GitHub's 140-character limit; the local poller reads exact flow names and checkpoints from the linked Verify run's artifact.
+Its description is `scope=<scope> flows=<count>` to stay within GitHub's 140-character limit; the linked Verify run retains exact flow names and checkpoints.
 That status records selection, not a native test result.
 The final Verify job retains its existing applicability and failure semantics.
-Simulator runs locally on the maintainer Mac via the sim-review poller, which posts the Simulator status; merges wait for it when scope is not none.
-The poller uses the saved YAML flows in `apps/mobile/e2e/flows/` through Maestro, with Maestro MCP available for interactive diagnosis.
+The hosted [Simulator workflow](../../ci-simulator.md) executes the shared impact selection on the serial Mac runner and reports the actual selected result.
+PR and main events use the same product mapping; control-only changes retain three smoke journeys, while unknown product impact and explicit full-suite labels remain conservative.
+The runner uses the saved YAML flows in `apps/mobile/e2e/flows/` through Maestro, with Maestro MCP available for the separate final acceptance walkthroughs.
+The retired local Simulator publisher stays paused; the existing final `product-flow/local` publisher remains a separate acceptance gate.
 The pre-push hook stays a cheap static and focused-test gate.
 
 Load the dev environment on the Mac and activate a compatible existing binary or use a supported build with measured capacity through the native procedure below.
@@ -148,6 +156,34 @@ The existing local `product-flow/local` gate retains its independent source-boun
 
 Use an owned worktree, `npm run dev:env`, and an explicit simulator UDID.
 Keep public configuration in the ignored mobile environment file.
+Before allocating native collection, run the final publisher's read-only preflight on the committed, pushed PR head:
+
+```sh
+node --env-file=apps/mobile/.env.development.local scripts/sim/publish-product-flow.mjs <PR_NUMBER> --preflight
+```
+
+The final-candidate runner calls this same preflight automatically and consumes its label-aware impact plan.
+Automatic collection requires an owned branch and passes it explicitly to `gh pr view --repo`; the standalone preflight accepts an explicit PR number.
+It checks the actual child process loading `apps/mobile/.env.development.local`, matching configuration hashes, clean published source, current main ancestry and the applicable source-bound media receipt before touching a simulator or archiving a previous report.
+Each external preflight command has a 30-second timeout; unavailable or mismatched inputs fail visibly before collection.
+An unreadable historical report selects conservative fresh coverage and remains untouched for the collector's existing archive recovery; ordinary publication still rejects malformed evidence.
+The collector carries that unknown requirement and preflight's public-configuration obligations into the new report's existing acceptance keys, so finish, check and publication cannot narrow required walkthroughs after recovery.
+For a missing canonical environment, use `npm run dev:env` against the existing `fitsy-api` project and verify the child load; do not create a cloud project to repair local setup.
+Preflight prints the selected flows, walkthrough categories and required proof, without writing a commit status, uploading an archive or claiming native acceptance.
+Recheck these inputs at final publication as usual; a successful preflight does not reserve a remote head or establish a future pass.
+
+Choose the evidence consumer before executing journeys.
+The `ci.mjs` aggregate is not a final-candidate report and cannot supply unrecorded per-flow before/after XCTest closeouts or interactive MCP traces.
+When final publication is required, collect through `product-flow.mjs run --mode=final-candidate` once instead of first collecting another CI-style full replay for the same coverage.
+Map each test group to its original source/run, relevant behavioral/build/configuration/environment delta and reuse/targeted/rerun decision; list policy-required repetition separately from new product coverage.
+If a required observation is missing, retain that gap explicitly and obtain an exact acceptance decision before reducing required execution.
+
+Existing final-report reuse remains strict: a passing final-candidate report must match source/test inputs, app/native/JS and served bundle, effective public configuration, backend deployment, simulator, fixture, selected flow sources and recording choice.
+The report may contain additional completed flows, in any order, when every currently requested flow has the same source hash.
+Do not rerun a covered selection merely to remove extra valid proof; every retained flow and walkthrough still passes validation and remains in the publication archive.
+The existing validator also checks freshness, real command assertions, screenshot/capture/closeout artifacts and primary/recovery walkthrough traces; the installed artifact and current served bundle are rechecked before reuse.
+Preserve the original timestamps and provenance when reusing evidence.
+A matching native cache key only permits binary reuse, and unchanged individual modules only retain their historical behavioral observations; neither turns an old whole-run result into a pass on a changed bundle or supplies a missing report.
 The builder generates an embedded Release app, disables downloaded OTA updates, and records source/native/JS/configuration identities.
 A keyless build proves navigation only and cannot cover billing.
 Never publish credentials or personal data in evidence.
@@ -177,7 +213,11 @@ export FITSY_SIM_OWNER=my-task MAESTRO_BIN="$HOME/.maestro/bin/maestro"
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build <UDID>
 # Run final acceptance against the current candidate:
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs run <UDID> --mode=final-candidate
-# Capture affected primary and recovery paths through Maestro MCP, then:
+# Prepare each required category using the original run environment.
+node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs prepare-walkthrough <UDID> auth
+# Capture actual primary/recovery Maestro MCP observations, stop its driver, then:
+node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs finish-walkthrough mcp/auth.jsonl
+# Repeat for the remaining categories, then finish the complete observation set.
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs finish .evidence/walkthrough.json
 ```
 
@@ -195,6 +235,10 @@ Development runs remain separate from final publication even when recorded.
 
 The walkthrough JSON is an array with one entry per category: `category`, `expected`, `observed`, `branches: ["primary", "recovery"]`, `result: "pass"`, and `trace` relative to `.evidence/product-flow/`.
 Traces are JSONL: one `{at, command: {name}, result: {content}}` object per line, recording actual Maestro MCP actions and screen observations.
+For Debug Test Store walkthroughs, the optional executed-flow argument to `prepare-walkthrough` selects that journey's existing fixture without replacing the original caller environment.
+Use the returned XCTest capture path for MCP, and complete each category with `finish-walkthrough` before preparing another.
+The caller retains original identities, records actual Metro transitions and verifies restoration of the original configuration and bundle; private publication includes these receipts and their before/after attachment snapshots.
+Keep the verified restored Metro alive through publication and actual protected merge.
 Retain direct `tap_on`, `input_text`, `back` or `launch_app` interactions and `inspect_view_hierarchy` observations; a syntax check or scripted flow invocation alone does not establish an interactive walkthrough.
 Identify run-owned synthetic fixtures with `FITSY_FIXTURE`; reviewers judge scenario relevance and visual quality.
 
@@ -254,7 +298,7 @@ Do not change branch protection as part of local review tooling cleanup.
 The implementer cannot supply its own independent verdict.
 
 The retained `scripts/route-reviewers.sh` maps changed paths to roles.
-The runner always includes correctness and maps API/mobile to danger-zone, CTO to workflow-security, product-manager to spec-conformance, and design/GTM to docs-sanity.
+The runner always includes correctness and maps API/mobile to danger-zone, CTO to ci-impact, product-manager to spec-conformance, and design/GTM to docs-sanity.
 `REVIEW.md` retains the severity definitions, evidence requirements and complete-domain JSON contract.
 Missing domains, contradictory verdicts, malformed output, timeouts and provider failures never establish approval.
 Only CONFIRMED P0/P1 findings block the review result.

@@ -25,6 +25,14 @@ function getJwks() {
 export interface JwtPayload {
   sub: string;
   email: string;
+  isAnonymous?: boolean;
+}
+
+export interface VerifyTokenOptions {
+  /** Accept an anonymous Supabase session's JWT. Only the guided-preview
+   * route opts into this (#801); every other caller keeps the strict,
+   * real-account-only default. */
+  allowAnonymous?: boolean;
 }
 
 /**
@@ -33,16 +41,24 @@ export interface JwtPayload {
  * projects being accepted.
  * Returns the decoded payload on success; throws on failure.
  */
-export async function verifyToken(token: string): Promise<JwtPayload> {
+export async function verifyToken(token: string, options: VerifyTokenOptions = {}): Promise<JwtPayload> {
   const supabaseUrl = getSupabaseUrl();
   const { payload } = await jwtVerify(token, getJwks(), {
     issuer: `${supabaseUrl}/auth/v1`,
     audience: "authenticated",
     requiredClaims: ["sub", "exp", "iat"],
   });
-  if (typeof payload.sub !== "string" || !payload.sub.trim()
-    || typeof payload["email"] !== "string" || !payload["email"].trim()
-    || payload["role"] !== "authenticated" || payload["is_anonymous"] === true) {
+  if (typeof payload.sub !== "string" || !payload.sub.trim() || payload["role"] !== "authenticated") {
+    throw new Error("A signed-in Supabase account is required");
+  }
+  if (payload["is_anonymous"] === true) {
+    if (!options.allowAnonymous) throw new Error("A signed-in Supabase account is required");
+    // Anonymous sessions carry no email or provider claims; this is the one
+    // route that accepts them, so there's nothing to check beyond the
+    // signature and issuer already verified above.
+    return { sub: payload.sub, email: "", isAnonymous: true };
+  }
+  if (typeof payload["email"] !== "string" || !payload["email"].trim()) {
     throw new Error("A signed-in Supabase account is required");
   }
   // The public anon key also permits direct calls to Supabase Auth. Enforce

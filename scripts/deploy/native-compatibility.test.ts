@@ -294,10 +294,12 @@ test.each(['production', 'testflight'])('actual %s helper prevents unsafe public
   // Evaluate the actual surviving B job guard and run the actual helper: its
   // API-only source must not suppress publication of A's unapplied mobile JS.
   git('checkout', '-q', '--detach', apiHead);
-  const runSurvivor = (smoke: string) => {
+  const runSurvivor = (smoke: string, releaseReady = 'true') => {
     const condition = workflow.jobs.ota.if.replaceAll('always()', 'true')
       .replaceAll('needs.changes.outputs.mobile', "'false'")
+      .replaceAll('needs.smoke.outputs.release_ready', `'${releaseReady}'`)
       .replaceAll('needs.smoke.result', `'${smoke}'`);
+    expect(condition).not.toMatch(/\bneeds\./);
     return spawnSync('bash', ['-e', '-c', `if [[ ${condition} ]]; then bash scripts/deploy/ota.sh 'surviving API push'; fi`], {
       cwd: root, encoding: 'utf8', env: { ...cleanEnv, PATH: `${bin}:${process.env.PATH}`,
         EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: 'expected.apps.googleusercontent.com' },
@@ -313,12 +315,21 @@ test.each(['production', 'testflight'])('actual %s helper prevents unsafe public
     expect(runSurvivor(smoke).status).toBe(0);
     expect(readFileSync(log, 'utf8')).toBe(safeCalls);
   }
+  // A benign superseded release succeeds without proving serving health.
+  for (const releaseReady of ['', 'false']) {
+    const superseded = runSurvivor('success', releaseReady);
+    expect(superseded.status).toBe(0);
+    expect(superseded.stdout).toBe('');
+    expect(readFileSync(log, 'utf8')).toBe(safeCalls);
+  }
   // A later docs-only survivor includes B's API change but has api=false.
   write('docs/queue.md', 'docs-only push C'); git('add', '.'); git('commit', '-qm', 'docs-only push C');
   git('update-ref', 'refs/remotes/origin/main', git('rev-parse', 'HEAD'));
   const smokeCondition = workflow.jobs.smoke.if.replaceAll('always()', 'true')
     .replaceAll('needs.changes.outputs.api', "'false'")
+    .replaceAll('needs.changes.outputs.release_sha', `'${git('rev-parse', 'HEAD')}'`)
     .replaceAll('needs.changes.result', "'success'");
+  expect(smokeCondition).not.toMatch(/\bneeds\./);
   const smokeDecision = spawnSync('bash', ['-c', `[[ ${smokeCondition} ]]`], { cwd: root });
   expect(smokeDecision.status).toBe(0);
   expect(runSurvivor('success').stdout).toContain(`verified: ${channel} branch serves group test-group`);

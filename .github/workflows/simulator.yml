@@ -21,6 +21,8 @@ jobs:
     outputs:
       required: ${{ steps.plan.outputs.required }}
       scope: ${{ steps.plan.outputs.scope }}
+      timeout_minutes: ${{ steps.plan.outputs.timeout_minutes }}
+      worker_timeout_seconds: ${{ steps.plan.outputs.worker_timeout_seconds }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -37,7 +39,7 @@ jobs:
       needs.select.outputs.required == 'true' &&
       (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: [self-hosted, macOS, fitsy-sim]
-    timeout-minutes: 30
+    timeout-minutes: ${{ fromJSON(needs.select.outputs.timeout_minutes) }}
     concurrency:
       group: fitsy-simulator
       cancel-in-progress: false
@@ -51,8 +53,10 @@ jobs:
       EXTRA_PACKAGER_ARGS: --max-workers 1
       FITSY_XCTEST_SIM_UDID: ${{ vars.FITSY_SIM_UDID }}
       FITSY_SIM_OWNER: actions-${{ github.run_id }}-${{ github.run_attempt }}
-      FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS: '1800'
+      FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS: ${{ needs.select.outputs.worker_timeout_seconds }}
     steps:
+      - name: Record job start so the worker's own timeout margin is measured from it, not from after setup
+        run: echo "FITSY_JOB_STARTED_AT=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0

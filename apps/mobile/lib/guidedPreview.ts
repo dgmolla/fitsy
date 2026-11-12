@@ -25,7 +25,9 @@ export async function fetchGuidedPreview(area: { lat: number; lng: number }, cra
   if (userId && !options.refresh && cached && Date.now() - cached.at < CACHE_MS) {
     return cached.response;
   }
-  const response = guidedPreviewResponseSchema.parse(await api.get(`/api/restaurants/preview?${params}`, true, { signal: options.signal }, userId));
+  // The guided preview is the one onboarding route an anonymous session may
+  // call authenticated - account creation moves to the paywall boundary (#801).
+  const response = guidedPreviewResponseSchema.parse(await api.get(`/api/restaurants/preview?${params}`, true, { signal: options.signal, allowAnonymous: true }, userId));
   if (options.signal?.aborted) throw new Error('Preview request cancelled');
   cache.delete(key);
   cache.set(key, { at: Date.now(), response });

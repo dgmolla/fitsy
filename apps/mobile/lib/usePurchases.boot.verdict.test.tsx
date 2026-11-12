@@ -47,6 +47,19 @@ describe('boot verdict', () => {
     expect(result.current.introEligibility).toEqual({ monthly: false });
   });
 
+  it('boots an anonymous session (#801) as never_subscribed without calling the server', async () => {
+    // A relaunch mid-onboarding must not wipe local progress: boot derives
+    // its userId from the real session only, so an anonymous session (which
+    // has a real user.id) never reaches the authenticated status endpoint
+    // and 401s into the API client's session-expired cleanup.
+    mockAuth.session = { user: { id: 'anon-1', is_anonymous: true } };
+    const { result } = renderProvider();
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    expect(result.current.entitled).toBe(false);
+    expect(mockApi.fetchSubscriptionStatus).not.toHaveBeenCalled();
+    expect(mockApi.syncSubscription).not.toHaveBeenCalled();
+  });
+
   it('reads the stored verdict (status, not sync), stores it, caches it, and only then becomes ready', async () => {
     mockApi.fetchSubscriptionStatus.mockResolvedValue({ active: true, status: 'active', expiresAt: null, verdict: 'active', lastRcVerifiedAt: new Date().toISOString() });
     const { result } = renderProvider();

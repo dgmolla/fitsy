@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "ownerDirection": "https://github.com/dgmolla/fitsy/issues/755#issuecomment-6713988813",
+  "designIteration": 4,
+  "captures": [
+    {
+      "file": "normal-map-after-shuffle.png",
+      "absolutePath": "/Users/dawitmolla/fitsy-wt/issue-755-evidence/chosen-c-shuffle-b7aacb29/normal-map-after-shuffle.png",
+      "caption": "iPhone 15: chosen C alternate, Macros and visible Shuffle with actual meal/confidence overlay.",
+      "sourceSHA": "b7aacb293b679ef826583ad8ad4a21d2b0a9fc56",
+      "jsInputHash": "7f9180647d2b301d217466b75de69fd1b53e57e994f3478bf8bd088ef949852d",
+      "servedBundleHash": "19934fd7dde3ee971a046b425f59def0d50cff4412651b2e7e1479b92536d727",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "nativeAppHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "device": {
+        "udid": "98638215-7437-4A09-BF9F-C9E699E303B6",
+        "name": "iPhone 15",
+        "runtime": "iOS 17.5"
+      },
+      "captureStartedAt": "2026-11-07T23:00:47.058000+00:00",
+      "captureDurationMs": 128,
+      "sha256": "5e9d0108b7f7d8c5b13b3786ef4e5f32e1b62b049918e2f30506f5221c57607b",
+      "bytes": 2437713,
+      "width": 1178,
+      "height": 2556,
+      "unedited": true
+    },
+    {
+      "file": "normal-list-after-shuffle.png",
+      "absolutePath": "/Users/dawitmolla/fitsy-wt/issue-755-evidence/chosen-c-shuffle-b7aacb29/normal-list-after-shuffle.png",
+      "caption": "iPhone 15: editable list with one Map control and visible Shuffle in white search.",
+      "sourceSHA": "b7aacb293b679ef826583ad8ad4a21d2b0a9fc56",
+      "jsInputHash": "7f9180647d2b301d217466b75de69fd1b53e57e994f3478bf8bd088ef949852d",
+      "servedBundleHash": "19934fd7dde3ee971a046b425f59def0d50cff4412651b2e7e1479b92536d727",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "nativeAppHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "device": {
+        "udid": "98638215-7437-4A09-BF9F-C9E699E303B6",
+        "name": "iPhone 15",
+        "runtime": "iOS 17.5"
+      },
+      "captureStartedAt": "2026-11-07T23:00:49.580000+00:00",
+      "captureDurationMs": 122,
+      "sha256": "79322f7c628dd9b99cabb865b8ef40f6b37c8b19bf51cf3a66475e6736e05c9e",
+      "bytes": 2377657,
+      "width": 1178,
+      "height": 2556,
+      "unedited": true
+    },
+    {
+      "file": "small-map-after-shuffle.png",
+      "absolutePath": "/Users/dawitmolla/fitsy-wt/issue-755-evidence/chosen-c-shuffle-b7aacb29/small-map-after-shuffle.png",
+      "caption": "iPhone SE (3rd generation): chosen C alternate, Macros and visible Shuffle with actual meal/confidence overlay.",
+      "sourceSHA": "b7aacb293b679ef826583ad8ad4a21d2b0a9fc56",
+      "jsInputHash": "7f9180647d2b301d217466b75de69fd1b53e57e994f3478bf8bd088ef949852d",
+      "servedBundleHash": "19934fd7dde3ee971a046b425f59def0d50cff4412651b2e7e1479b92536d727",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "nativeAppHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "device": {
+        "udid": "B2635EF1-A1BA-4712-978C-49486F4C14DB",
+        "name": "iPhone SE (3rd generation)",
+        "runtime": "iOS 17.5"
+      },
+      "captureStartedAt": "2026-11-07T23:08:08.062000+00:00",
+      "captureDurationMs": 53,
+      "sha256": "fda6767dba59e97b5a4d3b48537948d0209ba8e8080a92db3907a66a91666f6c",
+      "bytes": 868546,
+      "width": 750,
+      "height": 1334,
+      "unedited": true
+    },
+    {
+      "file": "small-list-after-shuffle.png",
+      "absolutePath": "/Users/dawitmolla/fitsy-wt/issue-755-evidence/chosen-c-shuffle-b7aacb29/small-list-after-shuffle.png",
+      "caption": "iPhone SE (3rd generation): editable list with one Map control and visible Shuffle in white search.",
+      "sourceSHA": "b7aacb293b679ef826583ad8ad4a21d2b0a9fc56",
+      "jsInputHash": "7f9180647d2b301d217466b75de69fd1b53e57e994f3478bf8bd088ef949852d",
+      "servedBundleHash": "19934fd7dde3ee971a046b425f59def0d50cff4412651b2e7e1479b92536d727",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "nativeAppHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "device": {
+        "udid": "B2635EF1-A1BA-4712-978C-49486F4C14DB",
+        "name": "iPhone SE (3rd generation)",
+        "runtime": "iOS 17.5"
+      },
+      "captureStartedAt": "2026-11-07T23:08:10.002000+00:00",
+      "captureDurationMs": 53,
+      "sha256": "bc3ba51912c4e9142be06510275249e35f31ab6475eb9e27923c21c69fe42620",
+      "bytes": 961348,
+      "width": 750,
+      "height": 1334,
+      "unedited": true
+    }
+  ],
+  "historicalNote": "A/B and baseline-C captures remain in prior galleries; none are relabeled as current acceptance."
+}

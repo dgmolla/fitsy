@@ -53,10 +53,94 @@ function fixture() {
     exploration: [{ category: 'billing', result: 'pass', expected: 'cancel returns to paywall', observed: 'paywall remains usable', branches: ['primary', 'recovery'], trace: 'trace.json', sha256: sha(trace) }],
   };
 }
-function validate(report: ReturnType<typeof fixture>, mode = 'final-candidate') {
+function validate(report: ReturnType<typeof fixture>, mode = 'final-candidate', fixtureConfigurations: Record<string, string> = {}, env = fixtureEnv()) {
   writeFileSync(join(dir, 'report.json'), JSON.stringify(report));
-  return evaluate(`gate.validate(JSON.parse((await import('node:fs')).readFileSync(${JSON.stringify(join(dir, 'report.json'))}, 'utf8')), {required:true, categories:['billing'], flows:['cold-start-welcome','signin-options','billing-cancel']}, 'current-inputs', ${JSON.stringify(dir)}, Date.now(), ${JSON.stringify(dir)}, 'current-inputs', ${JSON.stringify(mode)})`);
+  return evaluate(`gate.validate(JSON.parse((await import('node:fs')).readFileSync(${JSON.stringify(join(dir, 'report.json'))}, 'utf8')), {required:true, categories:['billing'], flows:['cold-start-welcome','signin-options','billing-cancel']}, 'current-inputs', ${JSON.stringify(dir)}, Date.now(), ${JSON.stringify(dir)}, 'current-inputs', ${JSON.stringify(mode)}, [], ${JSON.stringify(fixtureConfigurations)})`, env);
 }
+
+deterministicTest('walkthrough fixture transitions retain original proof and reject altered, incomplete or stale bindings', () => {
+  const original = fixture();
+  original.videoRequested = false;
+  for (const flow of original.flows) { delete (flow as { video?: string }).video; delete (flow as { videoHash?: string }).videoHash; }
+  const start = Date.parse(original.startedAt);
+  const at = (offset: number) => new Date(start + offset).toISOString();
+  const report = { ...original, configHash: sha('free'), jsHash: sha('js'), backendDeployment: 'dev-deployment',
+    bundleHash: sha('free-bundle'), walkthroughProtocol: 1,
+    metro: { pid: 101, processIdentity: 'original-process', root: dir, port: 8099, route: '/bundle',
+      jsHash: sha('js'), configHash: sha('free'), bundleHash: sha('free-bundle') },
+    walkthroughSessions: [] as { category: string; receipt: string; sha256: string; artifacts: string[] }[] };
+  const trace = ['tap_on', 'inspect_view_hierarchy'].map(name => JSON.stringify({ at: at(4000),
+    command: { name }, result: { content: [{ type: 'text', text: 'Paywall visible' }] } })).join('\n');
+  writeFileSync(join(dir, 'trace.json'), trace);
+  report.exploration[0]!.sha256 = sha(trace);
+  const snapshot = JSON.stringify({ udid: report.simulator, files: 0, bytes: 0, videos: 0 });
+  writeFileSync(join(dir, 'before.json'), snapshot); writeFileSync(join(dir, 'after.json'), snapshot);
+  const session = { version: 1, state: 'complete', category: 'billing', flow: null as string | null, fixture: 'default',
+    ...Object.fromEntries(['inputHash', 'jsHash', 'appHash', 'simulator', 'os', 'backendRevision', 'backendDeployment', 'storeMode']
+      .map(key => [key, report[key as keyof typeof report]])),
+    nativeHash: report.nativeSourceHash, configHash: report.configHash,
+    callerBefore: report.metro, metro: report.metro, bundleHash: report.bundleHash,
+    restoredMetro: { ...report.metro, pid: 202, processIdentity: 'restored-process' },
+    startedAt: at(1000), readyAt: at(2000), completedAt: at(5000), restoredAt: at(6000),
+    entitlement: { fixture: 'empty-store', sandbox: true, storeMode: 'test-store', accountHash: sha('free-account'), verifiedAt: at(1500) },
+    trace: 'trace.json', traceHash: sha(trace),
+    attachmentBefore: 'before.json', attachmentBeforeHash: sha(snapshot), attachmentAfter: 'after.json', attachmentAfterHash: sha(snapshot),
+    captureReceipt: original.flows[0]!.captureReceipt, captureReceiptHash: original.flows[0]!.captureReceiptHash,
+    attachmentCloseout: original.flows[0]!.attachmentCloseout, attachmentCloseoutHash: original.flows[0]!.attachmentCloseoutHash };
+  const artifacts = [session.attachmentBefore, session.attachmentAfter, session.captureReceipt, session.attachmentCloseout];
+  const saveSession = (value: unknown = session) => {
+    const bytes = JSON.stringify(value); writeFileSync(join(dir, 'session.json'), bytes);
+    report.walkthroughSessions = [{ category: 'billing', receipt: 'session.json', sha256: sha(bytes), artifacts }];
+  };
+  saveSession();
+  // Portable lifecycle validation must not inherit the Mac's media decoders.
+  const accepted = validate(report, 'final-candidate', {}, { ...fixtureEnv(), PATH: dir });
+  expect({ status: accepted.status, stderr: accepted.stderr }).toEqual({ status: 0, stderr: '' });
+  expect(report.metro.pid).toBe(101);
+  const restored = evaluate(`gate.walkthroughState(${JSON.stringify(report)}, ${JSON.stringify(dir)}).metro`);
+  expect(JSON.parse(restored.stdout).pid).toBe(202);
+  const attacks: Array<[object, RegExp]> = [
+    [{ inputHash: 'stale' }, /walkthrough inputHash/],
+    [{ appHash: 'another-app' }, /walkthrough appHash/],
+    [{ nativeHash: 'another-native' }, /walkthrough native identity/],
+    [{ backendDeployment: 'another-deployment' }, /walkthrough backendDeployment/],
+    [{ configHash: sha('entitled') }, /fixture configuration/],
+    [{ callerBefore: { ...report.metro, pid: 999 } }, /transition chain/],
+    [{ restoredMetro: { ...session.restoredMetro, configHash: sha('entitled') } }, /Metro\/configuration\/bundle/],
+    [{ restoredMetro: { ...session.restoredMetro, bundleHash: sha('other') } }, /Metro\/configuration\/bundle/],
+    [{ restoredMetro: { ...session.restoredMetro, processIdentity: '' } }, /Metro\/configuration\/bundle/],
+    [{ readyAt: at(4500) }, /outside their fixture session/],
+    [{ traceHash: sha('altered') }, /session trace/],
+    [{ attachmentBeforeHash: sha('invented') }, /attachmentBefore/],
+    [{ entitlement: null }, /verified empty store/],
+  ];
+  for (const [change, failure] of attacks) {
+    saveSession({ ...session, ...change });
+    const result = validate(report); expect(result.status).toBe(1); expect(result.stderr).toMatch(failure);
+  }
+  saveSession();
+  report.walkthroughSessions[0]!.artifacts = [];
+  expect(validate(report).stderr).toContain('publication omits fixture evidence');
+  saveSession();
+  expect(validate({ ...report, walkthroughPending: { state: 'ready' } } as typeof report).stderr).toContain('transition is unfinished');
+  report.walkthroughSessions = [];
+  expect(validate(report).stderr).toContain('missing or mismatched walkthrough fixture session');
+
+  // A different fixture is accepted only when the executed journey proves it,
+  // and its entitlement must remain active through the actual observation.
+  const flow = report.flows[2]!;
+  const identity = JSON.stringify({ fixture: 'entitled-dev', configHash: sha('entitled') });
+  writeFileSync(join(dir, 'fixture-identity.json'), identity);
+  Object.assign(flow, { identity: 'fixture-identity.json', identityHash: sha(identity) });
+  const entitled = { ...session, flow: flow.name, fixture: 'entitled-dev', configHash: sha('entitled'),
+    metro: { ...report.metro, pid: 303, processIdentity: 'entitled-process', configHash: sha('entitled'), bundleHash: sha('entitled-bundle') },
+    bundleHash: sha('entitled-bundle'), entitlement: { sandbox: true, storeMode: 'test-store', accountHash: sha('account'), verifiedAt: at(1500), expiresAt: at(9000) } };
+  saveSession(entitled);
+  const check = () => evaluate(`gate.walkthroughState(${JSON.stringify(report)}, ${JSON.stringify(dir)}).metro`);
+  expect(check().status).toBe(0);
+  saveSession({ ...entitled, entitlement: { ...entitled.entitlement, expiresAt: at(3000) } });
+  expect(check().stderr).toContain('not active throughout');
+});
 
 deterministicTest('an affected journey passes without unrelated baselines but cannot substitute another tagged journey', () => {
   const report = fixture();
@@ -69,6 +153,85 @@ deterministicTest('an affected journey passes without unrelated baselines but ca
   const missing = check(['billing-cancel', 'billing-recovery']);
   expect(missing.status).toBe(1);
   expect(missing.stderr).toContain('missing affected flow: billing-recovery');
+});
+
+deterministicTest('retained exception metadata cannot omit a journey without fresh authority', () => {
+  const report = { ...fixture(), releaseExceptionId: '6716597294',
+    exceptions: [{ flow: 'billing-cancel', status: 'EXCEPTED' }] };
+  report.flows = report.flows.filter(flow => flow.name !== 'billing-cancel');
+  const result = validate(report);
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain('release exceptions do not match current owner/source admission');
+});
+
+deterministicTest('an independently admitted Apple exception cannot pass itself or hide another required flow', () => {
+  const exception = { flow: 'subscription-restore-expired', status: 'EXCEPTED', fixture: 'apple-history', store: 'apple-simulator' };
+  const report = { ...fixture(), exceptions: [exception] };
+  report.videoRequested = false;
+  for (const flow of report.flows) { delete (flow as { video?: string }).video; delete (flow as { videoHash?: string }).videoHash; }
+  const check = () => {
+    writeFileSync(join(dir, 'report.json'), JSON.stringify(report));
+    return evaluate(`gate.validate(JSON.parse((await import('node:fs')).readFileSync(${JSON.stringify(join(dir, 'report.json'))}, 'utf8')),
+      {required:true,categories:['billing'],flows:['cold-start-welcome','signin-options','billing-cancel','subscription-restore-expired']},
+      'current-inputs',${JSON.stringify(dir)},Date.now(),${JSON.stringify(dir)},'current-inputs','final-candidate',${JSON.stringify([exception])})`);
+  };
+  expect(check().stdout).toContain('1 explicitly excepted, not passed');
+  const removed = report.flows.pop()!;
+  expect(check().stderr).toContain('missing affected flow: billing-cancel');
+  report.flows.push(removed, { ...removed, name: exception.flow });
+  expect(check().stderr).toContain('an excepted journey cannot also be reported passed');
+});
+
+deterministicTest('fixture-tagged journeys require their own unchanged source, store and served-bundle identity', () => {
+  const report = { ...fixture(), jsHash: sha('javascript'), backendDeployment: 'dev-deployment' };
+  report.videoRequested = false;
+  for (const flow of report.flows) { delete (flow as { video?: string }).video; delete (flow as { videoHash?: string }).videoHash; }
+  const flow = report.flows[2]!;
+  const source = readFileSync(join(dir, flow.source), 'utf8').replace('tags: [billing]', 'tags: [billing, "fixture:empty-store", "store:test-store"]');
+  writeFileSync(join(dir, flow.source), source); flow.sourceHash = sha(source);
+  expect(validate(report).stderr).toContain('missing journey fixture identity');
+  const identity = { version: 1, inputHash: report.inputHash, jsHash: report.jsHash, appHash: report.appHash,
+    simulator: report.simulator, os: report.os, backendRevision: report.backendRevision, backendDeployment: report.backendDeployment,
+    nativeHash: report.nativeSourceHash, fixture: 'empty-store', storeMode: 'test-store', configHash: sha('fixture'),
+    bundleHash: sha('served-bundle'), initialBundleHash: sha('served-bundle') };
+  const check = () => validate(report, 'final-candidate', { 'billing-cancel': sha('fixture') });
+  const writeIdentity = () => {
+    const text = JSON.stringify(identity); writeFileSync(join(dir, 'identity.json'), text);
+    Object.assign(flow, { identity: 'identity.json', identityHash: sha(text) });
+  };
+  writeIdentity();
+  expect(check().status).toBe(0);
+  identity.fixture = 'expired-subscription'; writeIdentity();
+  expect(check().stderr).toContain('wrong fixture or store');
+  identity.fixture = 'empty-store'; identity.storeMode = 'apple-simulator'; writeIdentity();
+  expect(check().stderr).toContain('wrong fixture or store');
+  identity.storeMode = 'test-store'; identity.jsHash = sha('other-source'); writeIdentity();
+  expect(check().stderr).toContain('journey jsHash differs');
+  identity.jsHash = report.jsHash; identity.configHash = sha('different-fixture'); writeIdentity();
+  expect(check().stderr).toContain('wrong fixture configuration');
+  identity.configHash = sha('fixture'); identity.bundleHash = sha('different-bundle'); writeIdentity();
+  expect(check().stderr).toContain('missing native/configuration/bundle fixture proof');
+
+  const envFile = join(dir, 'empty.env'), manifest = join(dir, 'fixtures.json');
+  writeFileSync(envFile, 'EXPO_PUBLIC_DEV_LOGIN_EMAIL=empty@example.test\nEXPO_PUBLIC_DEV_LOGIN_PASSWORD=fixture-only\n');
+  writeFileSync(manifest, JSON.stringify({ version: 1, fixtures: { 'empty-store': { envFile, prepare: ['/usr/bin/true'] } } }));
+  const env = { ...fixtureEnv(), FITSY_E2E_FIXTURES: manifest };
+  const captured = evaluate(`await (async () => {
+    const fixtures = await import(${JSON.stringify(resolve(__dirname, '../sim/journey-fixtures.mjs'))});
+    return fixtures.withFixtureEnvironment(fixtures.journeyFixture({tags:['fixture:empty-store','store:test-store']}),
+      () => gate.publicConfigIdentity(${JSON.stringify(dir)}).configHash);
+  })()`, env);
+  expect(captured.status).toBe(0);
+  identity.configHash = JSON.parse(captured.stdout); identity.bundleHash = identity.initialBundleHash; writeIdentity();
+  const actualCheck = () => {
+    writeFileSync(join(dir, 'report.json'), JSON.stringify(report));
+    return evaluate(`await gate.validateAcceptance(JSON.parse((await import('node:fs')).readFileSync(${JSON.stringify(join(dir, 'report.json'))}, 'utf8')),
+      {required:true,categories:['billing'],flows:['cold-start-welcome','signin-options','billing-cancel']},
+      'current-inputs',${JSON.stringify(dir)},Date.now(),${JSON.stringify(dir)},'current-inputs')`, env);
+  };
+  expect(actualCheck().status).toBe(0);
+  writeFileSync(envFile, 'EXPO_PUBLIC_DEV_LOGIN_EMAIL=empty@example.test\nEXPO_PUBLIC_DEV_LOGIN_PASSWORD=changed-fixture\n');
+  expect(actualCheck().stderr).toContain('wrong fixture configuration');
 });
 
 deterministicTest.each(['truncated', 'skipped', 'optional-required', 'warned', 'warned-optional-required'])('mandatory source assertions reject a %s successful receipt', kind => {
@@ -138,6 +301,79 @@ deterministicTest('optional and conditional omissions agree across runner and fi
 mediaTest('accepts identified baseline and billing outcomes with matching artifacts', () => {
   const result = validate(fixture()); expect(result.status).toBe(0); expect(JSON.parse(result.stdout).status).toBe('pass');
 });
+mediaTest('final walkthrough validation decodes genuine JPEG and PNG while rejecting corrupt or expired pixels', () => {
+  const report = { ...fixture(), configHash: sha('free'), jsHash: sha('js'), backendDeployment: 'dev-deployment',
+    bundleHash: sha('free-bundle'), walkthroughProtocol: 1,
+    metro: { pid: 101, processIdentity: 'original-process', root: dir, port: 8099, route: '/bundle',
+      jsHash: sha('js'), configHash: sha('free'), bundleHash: sha('free-bundle') },
+    walkthroughSessions: [] as { category: string; receipt: string; sha256: string; artifacts: string[] }[],
+    walkthroughPending: undefined as unknown };
+  const observation = report.exploration[0]!;
+  const events = readFileSync(join(dir, observation.trace), 'utf8').split('\n').map(line => JSON.parse(line));
+  const snapshot = JSON.stringify({ udid: report.simulator, entries: [] });
+  writeFileSync(join(dir, 'before.json'), snapshot); writeFileSync(join(dir, 'after.json'), snapshot);
+  const session = { version: 1, state: 'complete', category: 'billing', flow: null, fixture: 'default',
+    ...Object.fromEntries(['inputHash', 'jsHash', 'appHash', 'simulator', 'os', 'backendRevision', 'backendDeployment', 'storeMode']
+      .map(key => [key, report[key as keyof typeof report]])),
+    nativeHash: report.nativeSourceHash, configHash: report.configHash, callerBefore: report.metro,
+    metro: report.metro, bundleHash: report.bundleHash,
+    restoredMetro: { ...report.metro, pid: 202, processIdentity: 'restored-process' },
+    startedAt: report.startedAt, readyAt: report.startedAt, completedAt: '', restoredAt: '',
+    entitlement: { fixture: 'empty-store', sandbox: true, storeMode: 'test-store', accountHash: sha('free-account'), verifiedAt: report.startedAt },
+    trace: observation.trace, traceHash: '', attachmentBefore: 'before.json', attachmentBeforeHash: sha(snapshot),
+    attachmentAfter: 'after.json', attachmentAfterHash: sha(snapshot),
+    captureReceipt: report.flows[0]!.captureReceipt, captureReceiptHash: report.flows[0]!.captureReceiptHash,
+    attachmentCloseout: report.flows[0]!.attachmentCloseout, attachmentCloseoutHash: report.flows[0]!.attachmentCloseoutHash };
+  const saveSession = () => {
+    const bytes = JSON.stringify(session); writeFileSync(join(dir, 'session.json'), bytes);
+    report.walkthroughSessions = [{ category: 'billing', receipt: 'session.json', sha256: sha(bytes),
+      artifacts: [session.attachmentBefore, session.attachmentAfter, session.captureReceipt, session.attachmentCloseout] }];
+  };
+  const pngBytes = readFileSync(resolve(__dirname, '../sim/fixtures/active-saved-meal.png'));
+  const jpeg = (name: string) => {
+    const output = join(dir, `${name}.jpg`);
+    execFileSync('ffmpeg', ['-v', 'error', '-i', resolve(__dirname, `../sim/fixtures/${name}.png`),
+      '-frames:v', '1', '-q:v', '2', output], { timeout: 15_000, stdio: ['ignore', 'pipe', 'pipe'] });
+    return readFileSync(output);
+  };
+  const activeJpeg = jpeg('active-saved-meal'), expiredJpeg = jpeg('subscription-expired');
+  const check = (mimeType: string, pixels: Buffer) => {
+    const trace = [...events, { at: new Date().toISOString(), command: { name: 'take_screenshot' },
+      result: { content: [{ type: 'image', mimeType, data: pixels.toString('base64') }] } }]
+      .map(event => JSON.stringify(event)).join('\n');
+    writeFileSync(join(dir, observation.trace), trace); observation.sha256 = sha(trace);
+    report.finishedAt = new Date().toISOString();
+    session.traceHash = observation.sha256; session.completedAt = report.finishedAt; session.restoredAt = report.finishedAt;
+    saveSession();
+    return validate(report);
+  };
+  for (const [mime, pixels] of [['image/jpeg', activeJpeg], ['image/png', pngBytes]] as const) {
+    const result = check(mime, pixels);
+    expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: '' });
+  }
+  expect(check('image/jpeg', activeJpeg).status).toBe(0);
+  const archive = join(dir, 'regression-only.tar.gz');
+  const archived = evaluate(`await (async () => {
+    const {createPublicationArchive} = await import(${JSON.stringify(resolve(__dirname, '../sim/publish-product-flow.mjs'))});
+    const report = JSON.parse((await import('node:fs')).readFileSync(${JSON.stringify(join(dir, 'report.json'))}, 'utf8'));
+    await createPublicationArchive(report, ['billing'], ${JSON.stringify(dir)}, ${JSON.stringify(archive)});
+    return gate.digest((await import('node:child_process')).execFileSync('tar', ['-xOf', ${JSON.stringify(archive)}, 'trace.json']));
+  })()`);
+  expect(archived.status).toBe(0); expect(JSON.parse(archived.stdout)).toBe(observation.sha256);
+  report.walkthroughPending = { state: 'ready' };
+  expect(validate(report).stderr).toContain('walkthrough fixture transition is unfinished');
+  report.walkthroughPending = undefined;
+  session.restoredMetro.configHash = sha('stale'); saveSession();
+  expect(validate(report).stderr).toContain('invalid walkthrough Metro/configuration/bundle identity');
+  session.restoredMetro.configHash = report.configHash; saveSession();
+  report.exploration = [];
+  expect(validate(report).stderr).toContain('walkthrough fixture session has no verified observation');
+  report.exploration = [observation];
+  expect(check('image/png', activeJpeg).stderr).toContain('matching complete PNG or JPEG');
+  expect(check('image/jpeg', activeJpeg.subarray(0, -2)).stderr).toContain('matching complete PNG or JPEG');
+  expect(check('image/jpeg', Buffer.from('ffd8ff0000ffd9', 'hex')).stderr).toContain('Screenshot OCR command failed');
+  expect(check('image/jpeg', expiredJpeg).stderr).toContain('Unexpected subscription-expired screenshot');
+}, 30_000);
 deterministicTest('development proof retains assertions but never satisfies final publication', () => {
   const report = fixture();
   report.evidenceMode = 'development';
@@ -456,4 +692,97 @@ test('repoEnv keeps the isolated scratch git config selection but drops reposito
   const result = evaluate('Object.fromEntries(Object.entries(gate.repoEnv()).filter(([key]) => key.startsWith("GIT_")))', env);
   expect(result.status).toBe(0);
   expect(JSON.parse(result.stdout)).toEqual({ GIT_CONFIG_GLOBAL: '/scratch/gitconfig', GIT_CONFIG_NOSYSTEM: '1' });
+});
+
+describe('baseUpdateDeltaIsSafe (#773/#794): reuse a report across an unrelated main update', () => {
+  function gitRepo() {
+    mkdirSync(join(dir, 'apps/mobile'), { recursive: true });
+    mkdirSync(join(dir, 'scripts/sim'), { recursive: true });
+    mkdirSync(join(dir, 'scripts/verify'), { recursive: true });
+    fixtureGit(['init', '-q', dir]);
+    fixtureGit(['-C', dir, 'config', 'user.email', 'fixture@example.test']);
+    fixtureGit(['-C', dir, 'config', 'user.name', 'Fixture']);
+    writeFileSync(join(dir, 'apps/mobile/app.tsx'), 'export default null;\n');
+    fixtureGit(['-C', dir, 'add', '-A']);
+    fixtureGit(['-C', dir, 'commit', '-qm', 'base']);
+    const headAtCollection = execFileSync('git', ['-C', dir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+    const configHash = JSON.parse(evaluate(`gate.publicConfigIdentity(${JSON.stringify(dir)})`).stdout).configHash;
+    return { headAtCollection, configHash };
+  }
+  function baseReport(extra: Record<string, unknown>) {
+    return { cleanAtCollection: true, ...extra };
+  }
+  function check(report: Record<string, unknown>) {
+    return JSON.parse(evaluate(`gate.baseUpdateDeltaIsSafe(${JSON.stringify(report)}, ${JSON.stringify(dir)})`).stdout);
+  }
+
+  test('a tooling-only delta (the actual #794 case: scripts/sim + scripts/verify, no mobile/api source) is safe to reuse', () => {
+    const { headAtCollection, configHash } = gitRepo();
+    writeFileSync(join(dir, 'scripts/sim/claim-fix.mjs'), 'export const x = 1;\n');
+    writeFileSync(join(dir, 'scripts/verify/registry.yml'), 'checks: []\n');
+    fixtureGit(['-C', dir, 'add', '-A']);
+    fixtureGit(['-C', dir, 'commit', '-qm', 'tooling-only main update']);
+    expect(check(baseReport({ headAtCollection, configHash }))).toBe(true);
+  });
+
+  test('an unmapped mobile-facing delta is never reused, even with everything else valid', () => {
+    const { headAtCollection, configHash } = gitRepo();
+    writeFileSync(join(dir, 'apps/mobile/app.tsx'), 'export default function Screen() { return null; }\n');
+    fixtureGit(['-C', dir, 'add', '-A']);
+    fixtureGit(['-C', dir, 'commit', '-qm', 'mobile screen changed on main']);
+    expect(check(baseReport({ headAtCollection, configHash }))).toBe(false);
+  });
+
+  test('a high-sensitivity path (e.g. scripts/deploy, a release path) forces the conservative default (not reusable)', () => {
+    const { headAtCollection, configHash } = gitRepo();
+    mkdirSync(join(dir, 'scripts/deploy'), { recursive: true });
+    writeFileSync(join(dir, 'scripts/deploy/release-helper.mjs'), 'export const x = 1;\n');
+    fixtureGit(['-C', dir, 'add', '-A']);
+    fixtureGit(['-C', dir, 'commit', '-qm', 'release-path script changed on main']);
+    expect(check(baseReport({ headAtCollection, configHash }))).toBe(false);
+  });
+
+  test('no delta at all (identical HEAD) is never reused: a real mismatch, not a base update', () => {
+    const { headAtCollection, configHash } = gitRepo();
+    expect(check(baseReport({ headAtCollection, configHash }))).toBe(false);
+  });
+
+  test('a dirty working tree right now is never reused, even with an otherwise-safe delta', () => {
+    const { headAtCollection, configHash } = gitRepo();
+    writeFileSync(join(dir, 'scripts/sim/claim-fix.mjs'), 'export const x = 1;\n');
+    fixtureGit(['-C', dir, 'add', '-A']);
+    fixtureGit(['-C', dir, 'commit', '-qm', 'tooling-only main update']);
+    writeFileSync(join(dir, 'uncommitted.txt'), 'oops\n');
+    expect(check(baseReport({ headAtCollection, configHash }))).toBe(false);
+  });
+
+  test('collection was not clean: never reused regardless of the delta', () => {
+    const { headAtCollection, configHash } = gitRepo();
+    writeFileSync(join(dir, 'scripts/sim/claim-fix.mjs'), 'export const x = 1;\n');
+    fixtureGit(['-C', dir, 'add', '-A']);
+    fixtureGit(['-C', dir, 'commit', '-qm', 'tooling-only main update']);
+    expect(check(baseReport({ headAtCollection, configHash, cleanAtCollection: false }))).toBe(false);
+  });
+
+  test('a diverged (non-ancestor) history is never reused', () => {
+    const { headAtCollection, configHash } = gitRepo();
+    // Rewrite history at the same position: the amended commit is a sibling
+    // of the original, not its descendant, so it can never be an ancestor.
+    fixtureGit(['-C', dir, 'commit', '-q', '--amend', '-m', 'rewritten base (e.g. after a force-push)']);
+    expect(check(baseReport({ headAtCollection, configHash }))).toBe(false);
+  });
+
+  test('a changed public config is never reused even with an otherwise safe delta', () => {
+    const { headAtCollection } = gitRepo();
+    writeFileSync(join(dir, 'scripts/sim/claim-fix.mjs'), 'export const x = 1;\n');
+    fixtureGit(['-C', dir, 'add', '-A']);
+    fixtureGit(['-C', dir, 'commit', '-qm', 'tooling-only main update']);
+    expect(check(baseReport({ headAtCollection, configHash: 'stale-config-hash' }))).toBe(false);
+  });
+
+  test('missing headAtCollection or cleanAtCollection (an older report shape) safely falls through', () => {
+    const { configHash } = gitRepo();
+    expect(check({ configHash })).toBe(false);
+    expect(check({ configHash, headAtCollection: null })).toBe(false);
+  });
 });

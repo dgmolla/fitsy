@@ -16,18 +16,21 @@ import { trackOnboardingScreenView } from '@/lib/analytics';
 import { useDiscoveryState } from '@/lib/useDiscoveryState';
 import { s } from './DiscoveryScreen.styles';
 import { Masthead, MacroStrip, SearchBar } from './DiscoveryChrome';
-import { HeroCard, RestaurantSection } from './DiscoveryCards';
+import { HeroCard, PreviewTourButton, RestaurantSection } from './DiscoveryCards';
 import { ShuffleButton } from './ShuffleButton';
-import { DiscoveryViewToggle } from './DiscoveryViewToggle';
 import { useMapSearchFlag } from '@/lib/useMapSearchFlag';
 import { useFloatingNavClearance } from '@/lib/floatingNav';
-// Keep the native map module out of the disabled experiment's execution path.
+import { DiscoveryViewToggle } from './DiscoveryViewToggle';
+// Load the native map only on eligible iOS entries.
 const DiscoveryMap = React.lazy(async () => require('./DiscoveryMap') as typeof import('./DiscoveryMap'));
 const FREE_RESULT_COUNT = 3;
 export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { onboardingPreview?: boolean; onPreviewBack?: () => void }) {
   const tabBarClearance = useFloatingNavClearance();
   const { mapDebug } = useLocalSearchParams<{ mapDebug?: string }>();
-  const mapEnabled = useMapSearchFlag(mapDebug === '1') && !onboardingPreview;
+  // The onboarding preview is map-first by product requirement, not by experiment
+  // rollout: it must not wait on the async remote flag a Debug/test-store build
+  // may never resolve before the real "Continue" navigation lands here.
+  const mapEnabled = useMapSearchFlag(mapDebug === '1' || onboardingPreview);
   const [view, setView] = useState<'map' | 'list'>('map');
   const showMap = mapEnabled && view === 'map';
   const discovery = useDiscoveryState({ onboardingPreview });
@@ -43,6 +46,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
   const [tourLayoutVersion, refreshTourLayout] = useReducer((version: number) => version + 1, 0);
   const onTourLayoutChange = () => { if (tourVisible) refreshTourLayout(); };
   const prepareTourStep = useCallback((step: CoachMarkStep) => new Promise<void>(resolve => {
+    if (showMap) { resolve(); return; }
     // The location chip is fixed above the list; all other anchors scroll with it.
     if (step.key === 'location') { resolve(); return; }
     const timer = setTimeout(resolve, 250);
@@ -54,19 +58,26 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
         setTimeout(resolve, 100);
       });
     });
-  }), []);
+  }), [showMap]);
   const closeTour = () => { finishTour(); listRef.current?.scrollToOffset({ offset: 0, animated: false }); };
-  const renderSearchBar = (action?: React.ReactNode) => <SearchBar value={query} onChangeText={setQuery} onClear={handleClearQuery} containerRef={tourSearchRef} action={action} />;
+  const renderSearchBar = (action?: React.ReactNode) => <SearchBar value={query} onChangeText={setQuery} onClear={handleClearQuery} containerRef={tourSearchRef} action={action} frosted={mapEnabled} />;
+  const previewGoBack = onPreviewBack ?? (navigation.canGoBack() ? () => router.back() : undefined);
+  // The map preview is the real map screen, not an onboarding step: no
+  // progress-bar chrome there, just a small back control inline with the tip.
+  const previewNav = isOnboardingPreview && !showMap && <WelcomeNav progress={0.75} backTestID="preview-back" onBack={previewGoBack} />;
+  const previewIntro = isOnboardingPreview && <View style={s.previewIntro} testID="preview-guide">
+    {showMap && previewGoBack && <Pressable onPress={previewGoBack} style={s.previewMapBack} accessibilityRole="button" accessibilityLabel="Go back" testID="preview-back">
+      <Ionicons name="chevron-back" size={20} color={EDITORIAL.textMid} />
+    </Pressable>}
+    <Text style={s.previewHint}>{onboardingPitch(tried).preview}</Text>
+    {mapEnabled && !showMap && <DiscoveryViewToggle map={false} onPress={() => setView('map')} />}
+    <PreviewTourButton ready={tourReady} onPress={startTour} />
+  </View>;
   const header = (
     <>
-      {isOnboardingPreview && <View style={s.previewIntro} testID="preview-guide">
-        <Text style={s.previewHint}>{onboardingPitch(tried).preview}</Text>
-        {tourReady && <Pressable onPress={startTour} style={s.previewTourButton} accessibilityRole="button" accessibilityLabel="Show me how Fitsy works" accessibilityHint="Replay the five preview tips" testID="preview-show-tour">
-          <Ionicons name="help-circle-outline" size={20} color={EDITORIAL.green} />
-        </Pressable>}
-      </View>}
+      {previewIntro}
       <MacroStrip macros={inputs} onEdit={() => setFilterVisible(true)} editRef={tourEditRef} />
-      {renderSearchBar(!isOnboardingPreview && <ShuffleButton disabled={!canShuffle} onPress={handleShuffle} />)}
+      {renderSearchBar(!isOnboardingPreview && <ShuffleButton style={mapEnabled && s.mapShuffle} disabled={!canShuffle} onPress={handleShuffle} />)}
       {!canSearch && (
         <View style={s.inlineEmpty}>
           <Ionicons name="search-outline" size={32} color={EDITORIAL.greenAccent} />
@@ -176,11 +187,13 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
       style={{ flex: 1, backgroundColor: EDITORIAL.cream }}
     >
       {showMap ? <Suspense fallback={<ActivityIndicator accessibilityLabel="Loading map" />}>
-        <DiscoveryMap discovery={discovery} onShowList={() => setView('list')} />
+        <DiscoveryMap discovery={discovery} onShowList={() => setView('list')}
+          previewHeader={isOnboardingPreview ? <>{previewNav}{previewIntro}</> : undefined}
+          onTourLayoutChange={onTourLayoutChange} />
       </Suspense> : <>
-      {isOnboardingPreview && <WelcomeNav progress={0.75} backTestID="preview-back" onBack={onPreviewBack ?? (navigation.canGoBack() ? () => router.back() : undefined)} />}
-      <Masthead preview={isOnboardingPreview} locationRef={tourLocationRef} locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker} />
-      {mapEnabled && <View style={{ paddingHorizontal: 16 }}><DiscoveryViewToggle map={false} onPress={() => setView('map')} /></View>}
+      {previewNav}
+      <Masthead preview={isOnboardingPreview} locationRef={tourLocationRef} locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker}
+        mapControl={mapEnabled && !isOnboardingPreview ? { onPress: () => setView('map') } : undefined} />
       {!loading && error !== null && (
         <View style={s.errorBanner}>
           <Text style={s.errorText}>{error}</Text>
@@ -217,6 +230,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
             />
           }
         /></View>
+      </>}
       <CoachMarks
         visible={tourVisible && locked === true}
         steps={tourSteps}
@@ -227,7 +241,6 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
         doneLabel="Find my meal"
         onStepShown={(step) => { tourStepShown(step.key); trackOnboardingScreenView(`preview_tour_${step.key}`); }}
       />
-      </>}
       <FilterPopup
         visible={filterVisible}
         values={inputs}
