@@ -1,7 +1,6 @@
 import s from "@/app/landing-sections.module.css";
-import { WaitlistForm } from "@/components/landing/WaitlistForm";
+import { ComingSoon } from "@/components/landing/ComingSoon";
 import { priceAnswer, type DisplayPricing } from "@/lib/pricing";
-import { LAUNCH_CITY, LAUNCH_DATE_ISO, LAUNCH_DATE_LABEL } from "@/lib/launch";
 
 /**
  * Static landing-page sections below the feature grid. Server components:
@@ -169,28 +168,24 @@ export function Faq({ pricing }: { pricing: DisplayPricing | null }) {
 }
 
 /**
- * Closing CTA. Anchored as #waitlist: every "Join the waitlist" link on the
- * site (stats splash, footer, restaurant pages) lands here. At App Store
- * launch this becomes the store badge again (see lib/appLinks.ts).
+ * Closing "Coming soon" status (#764). At App Store launch this becomes the
+ * store badge again, tracked separately on #444.
  */
 export function Closing() {
   return (
     <section className={s.closing} id="waitlist">
       <div className={s.container}>
-        <span className={s.eyebrow}>
-          Launching <time dateTime={LAUNCH_DATE_ISO}>{LAUNCH_DATE_LABEL}</time>
-        </span>
+        <span className={s.eyebrow}>Coming soon</span>
         <h2 className={`${s.sectionTitle} ${s.closingTitle}`}>
           Eat out.
           <br />
           <em>Stay on plan.</em>
         </h2>
         <p className={s.sectionLead}>
-          Fitsy opens in {LAUNCH_CITY} on {LAUNCH_DATE_LABEL}. Join the
-          waitlist to be first in. More cities follow.
+          Fitsy is almost ready. Los Angeles first, more cities follow.
         </p>
         <div className={s.closingCtas}>
-          <WaitlistForm align="center" />
+          <ComingSoon align="center" />
         </div>
         <p className={s.closingFine}>
           iPhone first. Android coming later.
@@ -200,7 +195,7 @@ export function Closing() {
   );
 }
 
-export function FooterCols({ waitlistHref }: { waitlistHref: string }) {
+export function FooterCols() {
   return (
     <footer className={s.footerCols}>
       <div className={s.footerColsInner}>
@@ -209,13 +204,12 @@ export function FooterCols({ waitlistHref }: { waitlistHref: string }) {
             fitsy<span className={s.logoDot}>.</span>
           </span>
           <p className={s.footerTag}>
-            Find food that fits your macros. Launching in {LAUNCH_CITY} on{" "}
-            {LAUNCH_DATE_LABEL}.
+            Find food that fits your macros. Coming soon.
           </p>
         </div>
         <div className={s.footerCol}>
           <h4>Product</h4>
-          <a href={waitlistHref}>Join the waitlist</a>
+          <span>Coming soon</span>
           <a href="/restaurants">Browse restaurants</a>
         </div>
         <div className={s.footerCol}>

@@ -6,7 +6,7 @@ import { Faq } from "./Sections";
 jest.mock("next/cache", () => ({ unstable_cache: (fn: () => unknown) => fn }));
 jest.mock("@/lib/errorAlert", () => ({ reportServerError: jest.fn() }));
 jest.mock("@/app/landing-sections.module.css", () => ({}));
-jest.mock("@/components/landing/WaitlistForm", () => ({ WaitlistForm: () => null }));
+jest.mock("@/app/coming-soon.module.css", () => ({}));
 
 describe("landing FAQ pricing", () => {
   it("renders safe copy after the exact ASC agreement failure", async () => {

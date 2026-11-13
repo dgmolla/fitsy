@@ -11,7 +11,6 @@ import {
   formatTag,
 } from "@/lib/seoUtils";
 import { Nav } from "@/components/Nav";
-import { WAITLIST_URL } from "@/lib/appLinks";
 
 export const revalidate = 86400;
 
@@ -377,7 +376,7 @@ export default async function RestaurantPage({
         )}
         <FaqItem
           q={`Is ${restaurant.name} good for macro tracking?`}
-          a={`${restaurant.name} is macro-friendly with detailed nutrition data for its entire menu. Join the Fitsy waitlist to get personalized meal recommendations based on your specific protein, carb, and fat targets when the app launches.`}
+          a={`${restaurant.name} is macro-friendly with detailed nutrition data for its entire menu. Fitsy is coming soon to iPhone, Los Angeles first, with personalized meal recommendations based on your specific protein, carb, and fat targets.`}
         />
       </section>
 
@@ -417,9 +416,9 @@ function CtaBanner({ restaurantName }: { restaurantName: string }) {
             Set your protein, carb, and fat targets. Fitsy ranks every dish.
           </p>
         </div>
-        <a href={WAITLIST_URL} className={styles.ctaButton}>
-          Join the waitlist
-        </a>
+        <span className={styles.ctaButton}>
+          Coming soon
+        </span>
       </div>
     </div>
   );

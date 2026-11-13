@@ -212,7 +212,7 @@
 .logoDot { composes: logoDot from "./landing.module.css"; }
 .footerTag { font-size: 0.9375rem; color: var(--text-mid); max-width: 260px; line-height: 1.5; }
 .footerCol h4 { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.6875rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-soft); margin-bottom: 0.875rem; }
-.footerCol a { display: block; font-size: 0.9rem; color: var(--text-mid); text-decoration: none; margin-bottom: 0.5rem; }
+.footerCol a, .footerCol span { display: block; font-size: 0.9rem; color: var(--text-mid); text-decoration: none; margin-bottom: 0.5rem; }
 .footerCol a:hover { color: var(--green); }
 .footerBottom { max-width: 1200px; margin: 3rem auto 0; padding-top: 1.25rem; border-top: 1px solid var(--border); display: flex; justify-content: space-between; font-size: 0.8125rem; color: var(--text-soft); }
 
