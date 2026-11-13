@@ -57,9 +57,28 @@ test.each([
   expect(select([path])).toMatchObject({ risk: 'medium', scope: 'flow', required: true, flows });
 });
 
+// #821: PR #820's auth/onboarding files (minus apps/api/lib/auth.ts and
+// services/authService.ts, which independently carry a high review tier via
+// risk-tiers.yml and so still correctly force full coverage regardless of
+// this narrowing) used to send the whole change to scope:full through the
+// old combined auth/signin/session keyword bucket. They now resolve to the
+// same narrow sign-in/onboarding/paywall-access set Dawit named in the issue.
+test('PR #820\'s non-review-gated auth/onboarding files select the narrow flow set, not the full 28', () => {
+  const result = select([
+    'apps/mobile/app/welcome/signin.tsx',
+    'apps/mobile/lib/authClient.ts',
+    'apps/mobile/lib/guidedPreview.ts',
+  ]);
+  expect(result.scope).toBe('flow');
+  expect(result.flows).toEqual(['cold-start-welcome', 'meal-target-energy-sync', 'onboarding-assisted-targets',
+    'onboarding-guided-preview', 'onboarding-out-of-area', 'onboarding-returning-account', 'onboarding-returning-preview',
+    'onboarding-search-highlight', 'onboarding-target-ranked-search', 'paywall-access', 'signin-options']);
+  expect(result.reason).toContain('apps/mobile/app/welcome/signin.tsx');
+  expect(result.reason).not.toContain('Navigation, auth, billing, native configuration or release path');
+});
+
 test.each([
   'apps/mobile/app/_layout.tsx', 'apps/mobile/app/(tabs)/_layout.tsx',
-  'apps/mobile/app/auth/login.tsx', 'apps/mobile/app/welcome/signin.tsx',
   'apps/mobile/app/welcome/payment.tsx', 'apps/mobile/components/PaywallView.tsx',
   'apps/mobile/lib/useEntitlementVerdict.ts', 'apps/mobile/lib/useOwnedHardwareBack.ts',
   'apps/mobile/lib/nativeIntent.ts', 'apps/mobile/lib/supabase.ts',
@@ -116,7 +135,7 @@ test.each([[], ['docs/guide.md'], ['scripts/example.ts'], ['apps/mobile/lib/menu
 
 test('needs-sim preserves an affected selection and cannot reduce a high selection', () => {
   expect(select(['apps/mobile/lib/menuFilters.ts'], { labels: ['needs-sim'] }).scope).toBe('flow');
-  expect(select(['apps/mobile/lib/authClient.ts'], { labels: ['needs-sim'] }).flows).toEqual(allFlows);
+  expect(select(['apps/mobile/lib/useEntitlementVerdict.ts'], { labels: ['needs-sim'] }).flows).toEqual(allFlows);
 });
 
 test.each([null, ['apps/mobile/app/welcome/goal.tsx', '.github/workflows/verify.yml']].map(files => ({ files })))(
@@ -370,7 +389,7 @@ test.each([
   { path: 'apps/mobile/app/welcome/goal.tsx', after: screen('Your goal', 8, 'setGoal("lose_fat")'), mode: 'e2e', scope: 'flow' },
   { path: 'apps/mobile/components/ContinueButton.tsx', after: screen('Continue'), mode: 'e2e', scope: 'full' },
   { path: 'apps/mobile/app/_layout.tsx', after: screen('Fitsy'), mode: 'e2e', scope: 'full' },
-  { path: 'apps/mobile/app/auth/login.tsx', after: screen('Sign in'), mode: 'e2e', scope: 'full' },
+  { path: 'apps/mobile/app/auth/login.tsx', after: screen('Sign in'), mode: 'e2e', scope: 'flow' },
   { path: 'apps/mobile/app/welcome/payment.tsx', after: screen('Subscribe'), mode: 'e2e', scope: 'full' },
   { path: 'apps/web/app/page.tsx', after: screen('Welcome'), mode: 'e2e', scope: 'full' },
 ])('actual UI diff selects $scope $mode coverage for $path', entry => {

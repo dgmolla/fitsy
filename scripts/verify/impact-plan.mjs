@@ -73,6 +73,17 @@ export const allTestGroups = ['api', 'scripts', 'mobile'];
 const documentationPath = path => /^[^/]+\.md$/.test(path) ||
   /^(docs|proj-mgmt)\/.*\.(md|mdx|rst|txt|png|jpe?g|svg|webp)$/.test(path);
 
+// #821: these specific auth paths affect only sign-in/onboarding/paywall-access
+// journeys (mapped narrowly below in screenFlows), not the full simulator set.
+// Billing/payment/subscription/navigation paths that happen to share the word
+// "auth"/"session" (e.g. purchaseSession.ts, authInput.ts, widgetAuth.ts) are
+// deliberately left out, so they keep requiring full coverage unchanged. A
+// mobile component under apps/mobile/components/ (e.g. AuthForm.tsx) would
+// never narrow anyway - the separate shared-UI rule below already requires
+// full coverage for any apps/mobile/components/ change - so it's not listed
+// here even though it's reasonably "sign-in code".
+const narrowAuthPath = /^apps\/api\/(?:lib\/auth\.ts|services\/authService\.ts)$|^apps\/mobile\/app\/auth\/|^apps\/mobile\/app\/welcome\/signin\.tsx$|^apps\/mobile\/lib\/(?:authClient|useAuthLifecycle|discoverySignIn)\.ts$/;
+
 // Flow names are the existing Maestro sources, not another scenario registry.
 const screenFlows = [
   [/^apps\/mobile\/(app\/widget\.|components\/WidgetSync\.|lib\/widget)/,
@@ -103,6 +114,9 @@ const screenFlows = [
     /^(meal-target-energy-sync|onboarding-(assisted-targets|guided-preview|out-of-area|search-highlight|target-ranked-search)|menu-load-recovery)$/, ['discovery']],
   [/^apps\/api\/app\/api\/restaurants\//,
     /^(chain-menu-serving|log-meal|map-search(-location-denied)?|menu-load-recovery|menu-macro-serving|paywall-access|shuffle)$/, ['billing', 'discovery']],
+  // #821: narrowed from the full flow set - a core sign-in/session path only
+  // reaches the sign-in, onboarding and paywall-access journeys.
+  [narrowAuthPath, /^(signin-options|paywall-access|onboarding-.*)$/, ['auth', 'onboarding']],
 ];
 // Product acceptance consumes the same path map as local and hosted selection.
 export function mappedCategories(path) {
@@ -121,7 +135,8 @@ const highSimulatorPath = path =>
   /^apps\/mobile\/(?:ios\/|android\/|plugins\/|(?:app\.config\.[^/]+|app\.json|eas\.json|package\.json|(?:metro|babel)\.config\.[^/]+)$|app\/(?:.*\/)?(?:_layout|index|\+native-intent)\.)/.test(path) ||
   /^apps\/mobile\/(?:lib\/(?:onboardingEntry|onboardingResume|onboardingPreviewEntry|onboardingCompletion|requireWelcomeGoal|pendingMealClaim|macroStorage)|components\/(?:OnboardingAccountSummary|PreviewRestaurantCard))\./.test(path) ||
   /^(?:scripts\/deploy\/|\.eas\/|\.github\/workflows\/(?:deploy|release|eas-build)[^/]*\.ya?ml$)/.test(path) ||
-  (mobileContract(path) && !path.startsWith('apps/mobile/e2e/') && /auth|signin|session|supabase|jwt|payment|paywall|purchase|entitlement|subscription|revenuecat|resubscribe|trial|teaserGate|LockedUnlock|reviewAccess|navigation|nativeIntent|hardwareBack|OwnedHardwareBack|RouteContinuation/i.test(path));
+  (mobileContract(path) && !path.startsWith('apps/mobile/e2e/') && !narrowAuthPath.test(path) &&
+    /auth|signin|session|supabase|jwt|payment|paywall|purchase|entitlement|subscription|revenuecat|resubscribe|trial|teaserGate|LockedUnlock|reviewAccess|navigation|nativeIntent|hardwareBack|OwnedHardwareBack|RouteContinuation/i.test(path));
 
 export function simulatorFlows(cwd = repository) {
   try {
