@@ -297,7 +297,8 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
   // screen or the other, so toggling never flickers or reloads the map.
   return (
     <View testID="discovery-screen" style={{ flex: 1, backgroundColor: EDITORIAL.cream }}>
-      <View style={{ flex: 1 }} accessibilityElementsHidden={view === 'list'} importantForAccessibility={view === 'list' ? 'no-hide-descendants' : 'auto'}>
+      <View style={{ flex: 1 }} collapsable={false}
+        accessibilityElementsHidden={view === 'list'} importantForAccessibility={view === 'list' ? 'no-hide-descendants' : 'auto'}>
         <Suspense fallback={<ActivityIndicator accessibilityLabel="Loading map" />}>
           <DiscoveryMap discovery={discovery} onShowList={() => switchView('list')}
             previewHeader={isOnboardingPreview ? <>{previewNav}{previewIntro}</> : undefined}
