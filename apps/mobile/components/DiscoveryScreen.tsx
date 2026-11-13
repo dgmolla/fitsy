@@ -39,8 +39,13 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
   // fade-in is animated, as a lightweight transition rather than a hard cut.
   const switchView = useCallback((next: 'map' | 'list') => {
     setView(next);
+    // Native-driver timing on a reused Animated.Value can race its own detach
+    // when retriggered within one JS tick (rapid back-to-back toggles), leaving
+    // opacity stuck at 0. Run this fade on the JS thread instead - it's a single
+    // 150ms opacity tween, not a cost worth the native-bridge race.
+    viewFade.stopAnimation();
     viewFade.setValue(0);
-    Animated.timing(viewFade, { toValue: 1, duration: VIEW_FADE_MS, useNativeDriver: true }).start();
+    Animated.timing(viewFade, { toValue: 1, duration: VIEW_FADE_MS, useNativeDriver: false }).start();
   }, [viewFade]);
   const discovery = useDiscoveryState({ onboardingPreview });
   const { navigation, isOnboardingPreview, tried, inputs, filterMode, query, setQuery, canSearch, hasQuery, location,
