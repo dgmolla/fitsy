@@ -43,20 +43,20 @@ jobs:
       - id: t
         run: node scripts/verify/impact-plan.mjs --github-output
       # #846 follow-up (AI review, CONFIRMED P2): a change needing no
-      # simulator work can still require local media-integration evidence
-      # (scripts/verify/media-integration.mjs). Computed as its own step,
-      # not inside impact-plan.mjs's own CLI, to avoid a circular import -
-      # media-integration.mjs already imports isMain from impact-plan.mjs,
-      # so having impact-plan.mjs import back from it deadlocks Node's ESM
-      # loader under top-level await.
+      # simulator work can still require local media-integration evidence.
+      # Both imports resolve to the dependency-free impact-plan.mjs (classify
+      # never runs npm ci) - media-integration.mjs re-exports the same
+      # function but also imports product-flow.mjs's chain down to
+      # screen-guard.mjs's js-yaml require, which isn't installed here.
+      # A real node failure must fail the job, not silently default: piping
+      # a crashing command through `echo "x=$(...)"` swallows its exit code.
       - id: media
         run: |
-          echo "media=$(node --input-type=module -e "
-            import { changedFiles } from './scripts/verify/impact-plan.mjs';
-            import { mediaIntegrationRequired } from './scripts/verify/media-integration.mjs';
+          node --input-type=module -e "
+            import { changedFiles, mediaIntegrationRequired } from './scripts/verify/impact-plan.mjs';
             const { files } = changedFiles();
-            console.log(files ? mediaIntegrationRequired(files) : true);
-          ")" >> "$GITHUB_OUTPUT"
+            console.log('media=' + (files ? mediaIntegrationRequired(files) : true));
+          " >> "$GITHUB_OUTPUT"
       # Candidate scripts and baseline checks receive read-only access.
       - name: Install gitleaks (docs PRs can leak secrets too)
         run: curl -sL "$(curl -s https://api.github.com/repos/gitleaks/gitleaks/releases/latest | grep browser_download_url | grep linux_x64.tar.gz | head -1 | cut -d '"' -f4)" | tar xz -C /usr/local/bin gitleaks || echo "gitleaks install failed; grep fallback covers"
