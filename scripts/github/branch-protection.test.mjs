@@ -13,13 +13,14 @@ test('Verify covers every job and rejects failed, cancelled, missing or unexpect
   const command = aggregate.split('        run: |\n')[1].replace(/^ {10}/gm, '');
   const run = (needs, event) => spawnSync('bash', ['-e', '-c', command], {
     env: { ...process.env, NEEDS_JSON: JSON.stringify(needs), GITHUB_EVENT_NAME: event }, encoding: 'utf8' }).status;
-  for (const event of ['pull_request', 'push']) for (const flags of [['true', 'true', 'true'], ['true', 'true', 'false'], ['false', 'false', 'false']]) {
+  for (const event of ['pull_request', 'push']) for (const flags of [['true', 'true', 'true', 'true'], ['true', 'true', 'false', 'false'], ['false', 'false', 'false', 'true']]) {
     const needs = Object.fromEntries(names.map(name => [name, { result: 'success' }]));
-    needs.classify.outputs = Object.fromEntries(['code', 'tests', 'build'].map((key, i) => [key, flags[i]]));
+    needs.classify.outputs = Object.fromEntries(['code', 'tests', 'build', 'simulator'].map((key, i) => [key, flags[i]]));
     const flagKeys = { static: 'code', test: 'tests', 'test-other': 'tests', build: 'build' };
     for (const name of ['static', 'test', 'test-other', 'build'])
       needs[name].result = needs.classify.outputs[flagKeys[name]] === 'true' ? 'success' : 'skipped';
     needs['domain-check'].result = event === 'pull_request' ? 'success' : 'skipped';
+    needs['mark-non-product'].result = event === 'pull_request' && needs.classify.outputs.simulator !== 'true' ? 'success' : 'skipped';
     assert.equal(run(needs, event), 0);
     for (const name of names) for (const result of ['failure', 'cancelled', 'skipped', undefined]) {
       if (result !== needs[name].result) assert.notEqual(run({ ...needs, [name]: { ...needs[name], result } }, event), 0, `${event}: ${name} ${result}`);

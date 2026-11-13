@@ -33,6 +33,7 @@ jobs:
       tests: ${{ steps.t.outputs.tests }}
       build: ${{ steps.t.outputs.build }}
       docs_only: ${{ steps.t.outputs.docs_only }}
+      simulator: ${{ steps.t.outputs.simulator }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -111,6 +112,31 @@ jobs:
           include-hidden-files: true
           retention-days: 7
           if-no-files-found: warn
+
+  # #843: product-flow/local is a required check, but it's only ever posted
+  # by the app lane's local Maestro walkthrough for a PR that actually
+  # touches the mobile app - a tooling/docs/marketing PR would otherwise
+  # wait forever on a status that never arrives once it's required. This
+  # job posts the same "not applicable" disposition
+  # scripts/sim/publish-product-flow.mjs already uses for that exact case,
+  # using only classify's own already-computed output value - never
+  # checking out or executing any PR-branch code - so the statuses:write
+  # permission it needs never runs alongside untrusted code, unlike
+  # classify itself, which stays read-only.
+  mark-non-product:
+    name: product-flow/local (non-product)
+    needs: classify
+    if: github.event_name == 'pull_request' && needs.classify.outputs.simulator != 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+    steps:
+      - name: Mark product-flow/local not applicable
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api "repos/${{ github.repository }}/statuses/${{ github.event.pull_request.head.sha }}" --input - <<< \
+            '{"state":"success","context":"product-flow/local","description":"Not applicable: no mobile-facing product changes"}'
 
   domain-check:
     name: Single-domain PR check # Preserve the required status context while reporting cross-layer scope.
@@ -254,7 +280,7 @@ jobs:
 
   verify:
     name: Verify
-    needs: [classify, static, domain-check, test, test-other, build]
+    needs: [classify, static, domain-check, test, test-other, build, mark-non-product]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
@@ -271,5 +297,6 @@ jobs:
             .test.result == expected(.classify.outputs.tests) and
             ."test-other".result == expected(.classify.outputs.tests) and
             .build.result == expected(.classify.outputs.build) and
-            ."domain-check".result == (if $event == "pull_request" then "success" else "skipped" end)
+            ."domain-check".result == (if $event == "pull_request" then "success" else "skipped" end) and
+            ."mark-non-product".result == (if $event == "pull_request" and .classify.outputs.simulator != "true" then "success" else "skipped" end)
           ' <<<"$NEEDS_JSON"
