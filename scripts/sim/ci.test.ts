@@ -94,9 +94,9 @@ test.each([
   expect(backToMap).toBeGreaterThan(search + 2);
   expect(commands.slice(search + 3, backToMap)).toEqual(expect.arrayContaining([
     { assertNotVisible: { id: 'discovery-map' } },
-    { assertVisible: { id: 'discovery-macro-strip' } },
+    { assertVisible: { id: 'discovery-goals' } },
     { assertVisible: { id: 'discovery-search', text: 'pizza' } },
-    { assertVisible: { id: 'shuffle-button' } },
+    { assertVisible: { id: 'discovery-shuffle-button' } },
   ]));
   expect(commands.slice(backToMap + 1, backToMap + 5)).toEqual([
     { extendedWaitUntil: { visible: { id: 'map-pin-0' }, timeout: 30000 } },
@@ -115,7 +115,7 @@ test('single Map control retains city selection, explicit pan confirmation and t
   const start = commands.findIndex(step => step.takeScreenshot === 'map-list-single');
   expect(start).toBeGreaterThan(-1);
   expect(commands.slice(start - 2, start + 3)).toEqual([
-    { assertNotVisible: { id: 'discovery-location' } }, { assertVisible: { id: 'discovery-macro-strip' } },
+    { assertNotVisible: { id: 'discovery-location' } }, { assertVisible: { id: 'discovery-goals' } },
     { takeScreenshot: 'map-list-single' }, { tapOn: { id: 'discovery-view-toggle' } },
     { assertVisible: { id: 'discovery-location' } },
   ]);

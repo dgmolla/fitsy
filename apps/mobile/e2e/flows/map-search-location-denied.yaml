@@ -46,7 +46,7 @@ env:
 - assertNotVisible:
     id: discovery-map
 - assertVisible:
-    id: discovery-macro-strip
+    id: discovery-goals
 - tapOn:
     id: discovery-search
 - inputText: pizza
@@ -58,12 +58,12 @@ env:
 - assertNotVisible:
     id: discovery-map
 - assertVisible:
-    id: discovery-macro-strip
+    id: discovery-goals
 - assertVisible:
     id: discovery-search
     text: pizza
 - assertVisible:
-    id: shuffle-button
+    id: discovery-shuffle-button
 - tapOn:
     id: discovery-view-toggle
 - extendedWaitUntil:
