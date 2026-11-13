@@ -30,8 +30,14 @@ export interface OnboardingData {
 
 let pendingWrite: Promise<void> = Promise.resolve();
 
+// An anonymous session (#801) is a real Supabase user id, but locally saved
+// onboarding data isn't "owned" by a throwaway identity - treat it the same
+// as no session, so the existing unowned -> real-account claim path below
+// (claimAnonymousOnboardingData) keeps working unmodified once a real
+// account exists.
 async function currentOwner(): Promise<string | null> {
-  return (await supabase.auth.getSession()).data.session?.user?.id ?? null;
+  const session = (await supabase.auth.getSession()).data.session;
+  return session && !session.user.is_anonymous ? session.user.id : null;
 }
 
 type OwnedOnboarding = OnboardingData & { _owner?: string | null };

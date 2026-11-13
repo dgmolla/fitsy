@@ -85,7 +85,7 @@ test.each([0, 7])('opt-in recording preserves exit %s and publishes alongside sc
   expect(receipt()).toMatchObject({ status: 'saved', video: previews()[0], bytes: 18 });
   expect(readFileSync(join(dir, 'screen.png'), 'utf8')).toBe('existing screenshot');
   const recorder = JSON.parse(readFileSync(join(root, 'recorder.json'), 'utf8'));
-  expect(recorder.args.slice(0, 5)).toEqual(['simctl', 'io', udid, 'recordVideo', '--type=mp4']);
+  expect(recorder.args.slice(0, 5)).toEqual(['simctl', 'io', udid, 'recordVideo', '--codec=h264']);
   expect(existsSync(join(root, 'recorder-stopped'))).toBe(true);
   expect(readdirSync(dir).some(file => file.startsWith('.slack-video-'))).toBe(false);
   expect(() => process.kill(recorder.pid, 0)).toThrow();

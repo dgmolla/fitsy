@@ -73,6 +73,17 @@ export const allTestGroups = ['api', 'scripts', 'mobile'];
 const documentationPath = path => /^[^/]+\.md$/.test(path) ||
   /^(docs|proj-mgmt)\/.*\.(md|mdx|rst|txt|png|jpe?g|svg|webp)$/.test(path);
 
+// #821: these specific auth paths affect only sign-in/onboarding/paywall-access
+// journeys (mapped narrowly below in screenFlows), not the full simulator set.
+// Billing/payment/subscription/navigation paths that happen to share the word
+// "auth"/"session" (e.g. purchaseSession.ts, authInput.ts, widgetAuth.ts) are
+// deliberately left out, so they keep requiring full coverage unchanged. A
+// mobile component under apps/mobile/components/ (e.g. AuthForm.tsx) would
+// never narrow anyway - the separate shared-UI rule below already requires
+// full coverage for any apps/mobile/components/ change - so it's not listed
+// here even though it's reasonably "sign-in code".
+const narrowAuthPath = /^apps\/api\/(?:lib\/auth\.ts|services\/authService\.ts)$|^apps\/mobile\/app\/auth\/|^apps\/mobile\/app\/welcome\/signin\.tsx$|^apps\/mobile\/lib\/(?:authClient|useAuthLifecycle|discoverySignIn)\.ts$/;
+
 // Flow names are the existing Maestro sources, not another scenario registry.
 const screenFlows = [
   [/^apps\/mobile\/(app\/widget\.|components\/WidgetSync\.|lib\/widget)/,
@@ -104,6 +115,13 @@ const screenFlows = [
   [/^apps\/api\/app\/api\/restaurants\//,
     /^(chain-menu-serving|log-meal|map-search(-location-denied)?|menu-load-recovery|menu-macro-serving|paywall-access|shuffle)$/, ['billing', 'discovery']],
 ];
+// #821: narrows simulatorSelection's flow set for the same paths, without
+// changing mappedCategories()/review-category routing, which already has its
+// own deliberate, different categorization for these exact files (e.g.
+// app/auth/reviewer.tsx and lib/authClient.ts are tagged auth+billing by the
+// product-flow.mjs `rules` table, not auth+onboarding) - a separate concern
+// screenFlows must not shadow.
+const narrowAuthFlows = [[narrowAuthPath, /^(signin-options|paywall-access|onboarding-.*)$/]];
 // Product acceptance consumes the same path map as local and hosted selection.
 export function mappedCategories(path) {
   const matches = screenFlows.filter(([pattern]) => pattern.test(path));
@@ -121,13 +139,26 @@ const highSimulatorPath = path =>
   /^apps\/mobile\/(?:ios\/|android\/|plugins\/|(?:app\.config\.[^/]+|app\.json|eas\.json|package\.json|(?:metro|babel)\.config\.[^/]+)$|app\/(?:.*\/)?(?:_layout|index|\+native-intent)\.)/.test(path) ||
   /^apps\/mobile\/(?:lib\/(?:onboardingEntry|onboardingResume|onboardingPreviewEntry|onboardingCompletion|requireWelcomeGoal|pendingMealClaim|macroStorage)|components\/(?:OnboardingAccountSummary|PreviewRestaurantCard))\./.test(path) ||
   /^(?:scripts\/deploy\/|\.eas\/|\.github\/workflows\/(?:deploy|release|eas-build)[^/]*\.ya?ml$)/.test(path) ||
-  (mobileContract(path) && !path.startsWith('apps/mobile/e2e/') && /auth|signin|session|supabase|jwt|payment|paywall|purchase|entitlement|subscription|revenuecat|resubscribe|trial|teaserGate|LockedUnlock|reviewAccess|navigation|nativeIntent|hardwareBack|OwnedHardwareBack|RouteContinuation/i.test(path));
+  (mobileContract(path) && !path.startsWith('apps/mobile/e2e/') && !narrowAuthPath.test(path) &&
+    /auth|signin|session|supabase|jwt|payment|paywall|purchase|entitlement|subscription|revenuecat|resubscribe|trial|teaserGate|LockedUnlock|reviewAccess|navigation|nativeIntent|hardwareBack|OwnedHardwareBack|RouteContinuation/i.test(path));
 
 export function simulatorFlows(cwd = repository) {
   try {
     return readdirSync(resolve(cwd, 'apps/mobile/e2e/flows')).filter(name => /^[a-z0-9-]+\.yaml$/.test(name))
       .map(name => name.replace(/\.yaml$/, '')).sort();
   } catch { return []; } // The runner rejects a required but missing/empty catalog.
+}
+
+export function simulatorBudget(selection, cwd = repository) {
+  const { scope, flows } = selection || {}, catalog = simulatorFlows(cwd);
+  if (!['none', 'smoke', 'flow', 'full'].includes(scope) || !Array.isArray(flows) ||
+      new Set(flows).size !== flows.length || flows.some(name => typeof name !== 'string' || !catalog.includes(name)) ||
+      (scope === 'flow' && !flows.length) || (['none', 'smoke'].includes(scope) && flows.length))
+    throw new Error('Invalid simulator budget selection');
+  // Three maintained journeys fit the short regime. Larger selections need
+  // the existing full-run budget for setup, fixture/Metro transitions and cleanup.
+  const timeoutMinutes = scope === 'full' || flows.length > 3 ? 90 : 30;
+  return { timeoutMinutes, workerTimeoutSeconds: timeoutMinutes * 60 };
 }
 
 // Retain the path tiers as simulator policy without reviving the retired review
@@ -201,8 +232,232 @@ export function presentationOnly(before, after) {
 
 function sourceVersions(path, range, cwd, env) {
   return [git(['show', `${range.base}:${path}`], cwd, env),
-    env.CI || env.GITHUB_EVENT_NAME ? git(['show', `${range.head}:${path}`], cwd, env)
+    env.CI || env.GITHUB_EVENT_NAME || range.head !== git(['rev-parse', 'HEAD'], cwd, env)
+      ? git(['show', `${range.head}:${path}`], cwd, env)
       : readFileSync(resolve(cwd, path), 'utf8').trimEnd()];
+}
+
+// This setup serves every entitled fixture, including hosted, local and MCP
+// callers. Recognize only the bounded initial observation retry, and derive its
+// union from unchanged, unambiguous YAML headers instead of a fixed flow count.
+function entitlementObservationImpact(path, range, cwd, env) {
+  const [before, after] = sourceVersions(path, range, cwd, env);
+  const initial = '# Observe the launch transition before XCTest reads the first Welcome element.\n' +
+    '- waitForAnimationToEnd:\n    timeout: 10000\n- extendedWaitUntil:\n    visible:\n      id: welcome-login\n    timeout: 60000';
+  const retry = '# Retry only the first read when XCTest rejects a stale launch-time AX element.\n' +
+    '# Authentication and purchase actions remain outside this read-only retry.\n' +
+    '- retry:\n    maxRetries: 2\n    commands:\n      - waitForAnimationToEnd:\n          timeout: 10000\n' +
+    '      - extendedWaitUntil:\n          visible:\n            id: welcome-login\n          timeout: 60000';
+  if (!before.includes(initial) || before.replace(initial, retry) !== after) return null;
+  const callers = ['scripts/sim/ci.mjs', 'scripts/sim/product-flow.mjs'];
+  for (const file of [...callers, 'scripts/sim/active-entitlement.mjs', 'scripts/sim/journey-fixtures.mjs',
+    'scripts/sim/runner-controls.mjs', 'scripts/verify/product-flow.mjs']) {
+    const versions = sourceVersions(file, range, cwd, env);
+    if (versions[0] !== versions[1]) return null;
+  }
+  for (const revision of [range.base, env.CI || env.GITHUB_EVENT_NAME || range.head !== git(['rev-parse', 'HEAD'], cwd, env) ? range.head : null]) {
+    const actual = git(['grep', '-l', '-E', 'prepareEntitledEvidence|active-entitlement\\.yaml',
+      ...(revision ? [revision] : []), '--', 'scripts', 'apps/mobile'], cwd, env)
+      .split('\n').map(file => revision ? file.slice(revision.length + 1) : file)
+      .filter(file => simulatorSource(file) && file !== 'scripts/verify/impact-plan.mjs').sort();
+    if (!isDeepStrictEqual(actual, callers)) return null;
+  }
+  const catalog = simulatorFlows(cwd), flows = [];
+  const baseCatalog = git(['ls-tree', '-r', '--name-only', range.base, '--', 'apps/mobile/e2e/flows'], cwd, env)
+    .split('\n').filter(file => /^apps\/mobile\/e2e\/flows\/[a-z0-9-]+\.yaml$/.test(file))
+    .map(file => file.split('/').at(-1).replace(/\.yaml$/, '')).sort();
+  if (!catalog.length || !isDeepStrictEqual(catalog, baseCatalog)) return null;
+  for (const name of catalog) {
+    const headers = sourceVersions(`apps/mobile/e2e/flows/${name}.yaml`, range, cwd, env).map(text => text.split(/^---\s*$/m)[0]);
+    if (headers[0] !== headers[1]) return null;
+    // Only the existing simple inline/block tag lists are understood here.
+    // Aliases, escapes, duplicate keys and other YAML forms retain FULL.
+    const tags = [...headers[0].matchAll(/^tags: *(\[[^\n]*\]|(?:\n +- [^\n]+)+)$/gm)];
+    if (tags.length !== 1 || /^(?:tags\s*:|['"]|<<\s*:)|(?:^|\s)[&*][a-z0-9_-]/im.test(headers[0].replace(tags[0][0], ''))) return null;
+    const values = (tags[0][1].startsWith('[') ? tags[0][1].slice(1, -1).split(',') : tags[0][1].trim().split('\n').map(line => line.trim().slice(2)))
+      .map(value => value.trim());
+    if (values.some(value => !/^(?:[a-z0-9:-]+|'[a-z0-9:-]+'|"[a-z0-9:-]+")$/.test(value))) return null;
+    const parsed = values.map(value => value.replace(/^['"]|['"]$/g, ''));
+    if (parsed.filter(tag => tag.startsWith('fixture:')).length > 1) return null;
+    if (parsed.includes('fixture:entitled-dev')) flows.push(name);
+  }
+  return flows.length ? flows : null;
+}
+
+// Recognize the bounded list-to-map preview adaptation, not arbitrary edits to
+// these shared components. Reconstruct the expected candidate from its actual
+// base: every byte outside the listed adaptations must remain unchanged.
+// This deliberately falls back to full after either implementation evolves.
+function discoveryPreviewImpact(source, configKeys, range, cwd, env) {
+  if (!range || range.unknown || configKeys.length) return null;
+  const components = ['DiscoveryScreen.tsx', 'DiscoveryMap.tsx', 'DiscoveryMap.styles.ts', 'DiscoveryMapCard.tsx', 'DiscoveryCards.tsx']
+    .map(name => `apps/mobile/components/${name}`);
+  const entitlementHelper = 'apps/mobile/e2e/helpers/active-entitlement.yaml';
+  if (!components.every(path => source.includes(path)) || source.some(path => !components.includes(path) &&
+      path !== 'scripts/verify/impact-plan.mjs' && path !== entitlementHelper &&
+      !/^apps\/mobile\/e2e\/flows\/onboarding-(guided|returning)-preview\.yaml$/.test(path))) return null;
+  const flows = ['map-search', 'map-search-location-denied', 'onboarding-assisted-targets', 'onboarding-guided-preview',
+    'onboarding-out-of-area', 'onboarding-returning-preview', 'onboarding-search-highlight', 'onboarding-target-ranked-search',
+    'paywall-access', 'subscription-expired-routing'];
+  try {
+    if (source.includes(entitlementHelper)) {
+      const entitled = entitlementObservationImpact(entitlementHelper, range, cwd, env);
+      if (!entitled) return null;
+      flows.push(...entitled.filter(flow => !flows.includes(flow)));
+      flows.sort();
+    }
+    // These are the actual shared card and screen callers, including ordinary
+    // paywall A and resubscribe. A new caller invalidates this bounded mapping.
+    const callers = [...components.filter(path => !path.endsWith('.styles.ts')), 'apps/mobile/components/DiscoveryChrome.tsx',
+      'apps/mobile/components/PaywallHero.tsx', 'apps/mobile/app/welcome/preview.tsx',
+      'apps/mobile/app/welcome/resubscribe.tsx', 'apps/mobile/app/(tabs)/search.tsx'].sort();
+    for (const revision of [range.base, env.CI || env.GITHUB_EVENT_NAME || range.head !== git(['rev-parse', 'HEAD'], cwd, env) ? range.head : null]) {
+      const actual = git(['grep', '-l', '-E', 'Discovery(Screen|Map|Cards)', ...(revision ? [revision] : []), '--', 'apps/mobile'], cwd, env)
+        .split('\n').map(path => revision ? path.slice(revision.length + 1) : path)
+        .filter(path => simulatorSource(path) && /\.tsx?$/.test(path)).sort();
+      if (!isDeepStrictEqual(actual, callers)) return null;
+    }
+    for (const path of components) {
+      const [before, after] = sourceVersions(path, range, cwd, env);
+      let expected = before;
+      const replace = (from, to) => { expected = expected.replace(from, to); };
+      if (path.endsWith('/DiscoveryCards.tsx')) {
+        replace('paywallPreview = false, nameStyle', 'paywallPreview = false, hideDishName = false, nameStyle');
+        replace('locked: boolean; paywallPreview?: boolean;', 'locked: boolean; paywallPreview?: boolean; hideDishName?: boolean;');
+        replace(/(\{!locked && bm && )(<Text style=\{\[hero\.dishName,[^\n]+<\/Text>)(\})/,
+          '$1(hideDishName ? <PreviewDishName restaurantId={result.id} /> : $2)$3');
+        replace('function previewRowLabel', 'export function previewRowLabel');
+        replace('  const m = result.bestMatch;\n', "  const m = result.bestMatch;\n  const published = m?.nutritionBasis === 'published';\n");
+        replace('`, ${m.calories} kcal', "`, ${published ? 'Published' : 'Estimated'} nutrition, ${m.confidence.toLowerCase()} confidence, ${published ? '' : 'approximately '}${m.calories} kcal");
+        // The preview help slot keeps its width (it renders only in the onboarding preview row).
+        replace('import { StyleSheet, Text, TouchableOpacity, View,', 'import { Pressable, StyleSheet, Text, TouchableOpacity, View,');
+        replace("import { LinearGradient } from 'expo-linear-gradient';\n", "import { LinearGradient } from 'expo-linear-gradient';\nimport { Ionicons } from '@expo/vector-icons';\n");
+        const previewTourButton = "// The help slot keeps its width while results load, so the guide copy never\n// re-wraps and the search field below it does not jump under a tap.\nexport function PreviewTourButton({ ready, onPress }: { ready: boolean; onPress: () => void }) {\n  if (!ready) return <View style={s.previewTourButton} testID=\"preview-show-tour-slot\" accessibilityElementsHidden importantForAccessibility=\"no-hide-descendants\" />;\n  return <Pressable onPress={onPress} style={s.previewTourButton} accessibilityRole=\"button\" accessibilityLabel=\"Show me how Fitsy works\" accessibilityHint=\"Replay the five preview tips\" testID=\"preview-show-tour\">\n    <Ionicons name=\"help-circle-outline\" size={20} color={EDITORIAL.green} />\n  </Pressable>;\n}";
+        if (after.endsWith('\n\n' + previewTourButton)) expected = expected.replace(/\n*$/, '\n\n' + previewTourButton);
+      } else if (path.endsWith('/DiscoveryMapCard.tsx')) {
+        replace('HeroMealContent, mealAccessibilitySummary', 'HeroMealContent, mealAccessibilitySummary, previewRowLabel');
+        replace('{ result, locked, onPress', '{ result, locked, hideDishName = false, onboardingPreview = false, onPress');
+        replace('  style?: StyleProp<ViewStyle>;', '  hideDishName?: boolean; onboardingPreview?: boolean;\n  style?: StyleProp<ViewStyle>;');
+        replace('accessibilityLabel={`${label}${mealAccessibilitySummary(result, locked)}`}',
+          'accessibilityLabel={hideDishName ? previewRowLabel(result) : `${label}${mealAccessibilitySummary(result, locked)}`}');
+        replace('locked={locked} nameStyle', 'locked={locked} hideDishName={hideDishName} nameStyle');
+        replace('>View menu →</Text>', ">{onboardingPreview ? 'See full menu with Pro →' : 'View menu →'}</Text>");
+      } else if (path.endsWith('/DiscoveryMap.styles.ts')) {
+        replace('  searchRow:', "  previewHeader: { backgroundColor: EDITORIAL.cream, marginBottom: 8, borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },\n" +
+          "  previewUnlock: { marginHorizontal: 16, minHeight: 44, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center',\n" +
+          '    borderRadius: 24, backgroundColor: EDITORIAL.cream },\n  searchRow:');
+      } else if (path.endsWith('/DiscoveryMap.tsx')) {
+        replace('export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: Discovery; onShowList: () => void }) {',
+          'export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, onTourLayoutChange }: {\n' +
+          '  discovery: Discovery; onShowList: () => void; previewHeader?: React.ReactNode; onTourLayoutChange?: () => void;\n}) {');
+        expected = expected.replaceAll('tabBarClearance', 'bottomClearance');
+        replace('  const bottomClearance = useFloatingNavClearance();',
+          '  const tabBarClearance = useFloatingNavClearance();\n  const bottomClearance = d.isOnboardingPreview ? insets.bottom : tabBarClearance;');
+        replace('(d.locked ? d.results.slice(0, 3)', '(d.locked || d.isOnboardingPreview ? d.results.slice(0, 3)');
+        replace('[d.canSearch, d.loading, d.locked, d.results]', '[d.canSearch, d.loading, d.locked, d.isOnboardingPreview, d.results]');
+        replace('[firstId, lat, lng]', '[firstId, lat, lng, d.tourVisible]');
+        replace('    void openRestaurantOrPaywall', '    if (d.isOnboardingPreview) { void d.unlockPreview(result); return; }\n    void openRestaurantOrPaywall');
+        replace('&& !d.location.loading && !d.error;', '&& !d.location.loading && !d.error && !d.outOfArea;');
+        replace('d.nextCursor && !d.locked && !d.loading', 'd.nextCursor && !d.locked && !d.isOnboardingPreview && !d.loading');
+        for (const height of ['Top', 'Tray']) replace(`onLayout={event => set${height}Height(event.nativeEvent.layout.height)}`,
+          `onLayout={event => { set${height}Height(event.nativeEvent.layout.height); onTourLayoutChange?.(); }}`);
+        replace('      <View style={s.searchRow}>', '      {previewHeader && <View style={s.previewHeader}>{previewHeader}</View>}\n      <View style={s.searchRow}>');
+        for (const [style, ref] of [['searchEntry', 'Search'], ['location', 'Location'], ['goals', 'Edit']])
+          replace(`<Pressable style={s.${style}}`, `<Pressable ref={d.tour${ref}Ref} collapsable={false} style={s.${style}}`);
+        replace('<ShuffleButton style={s.shuffle} disabled={!d.canShuffle} onPress={d.handleShuffle} />',
+          '{!d.isOnboardingPreview && <ShuffleButton style={s.shuffle} disabled={!d.canShuffle} onPress={d.handleShuffle} />}');
+        replace('          </> : <>\n            <Text style={s.heading}>{emptyTitle}', "          </> : d.outOfArea ? <>\n" +
+          "            <Text style={s.heading}>We're not in your area yet</Text>\n" +
+          '            <Text style={s.body}>Fitsy is launching in Los Angeles first - your city is next on the list.</Text>\n' +
+          '            <Pressable style={s.action} onPress={d.handleJoinWaitlist} testID="discovery-join-waitlist" accessibilityRole="button">\n' +
+          '              <Text style={s.link}>Keep me posted</Text>\n            </Pressable>\n          </> : <>\n            <Text style={s.heading}>{emptyTitle}');
+        replace('onLayout={restoreCarousel}', 'onLayout={() => { restoreCarousel(); onTourLayoutChange?.(); }}');
+        replace('<View key={result.id} testID=', '<View key={result.id} ref={position === 0 ? d.tourHeroRef : undefined} collapsable={false} testID=');
+        replace('locked={d.locked === true} style=', 'locked={d.locked === true && !d.isOnboardingPreview}\n' +
+          '              onboardingPreview={d.isOnboardingPreview} hideDishName={d.isOnboardingPreview && position > 0}\n              style=');
+        replace('          {more && <View style={s.moreCard}>{more}</View>}\n        </ScrollView>}\n',
+          '          {more && <View style={s.moreCard}>{more}</View>}\n        </ScrollView>}\n' +
+          '        {d.isOnboardingPreview && !d.loading && !d.refreshing && !d.error && !d.outOfArea &&\n' +
+          '          <Pressable ref={d.tourMoreRef} collapsable={false} style={s.previewUnlock} testID="locked-value-cta"\n' +
+          '            onPress={() => { void d.unlockPreview(); }} accessibilityRole="button"\n' +
+          "            accessibilityLabel={cards.length ? 'Explore full menus. Explore full menus with Pro.' : 'Keep exploring. Try another dish or area. Explore Pro plans.'}>\n" +
+          "            <Text style={s.link}>{cards.length ? 'Explore full menus with Pro →' : 'Explore Pro plans →'}</Text>\n          </Pressable>}\n");
+      } else {
+        replace('// Load the native map only after entering it, keeping list startup unchanged.',
+          "import { DiscoveryViewToggle } from './DiscoveryViewToggle';\n// Load the native map only on eligible iOS entries.");
+        replace("useMapSearchFlag(mapDebug === '1') && !onboardingPreview", "useMapSearchFlag(mapDebug === '1')");
+        replace("useState<'map' | 'list'>(__DEV__ ? 'map' : 'list')", "useState<'map' | 'list'>('map')");
+        replace('new Promise<void>(resolve => {\n', 'new Promise<void>(resolve => {\n    if (showMap) { resolve(); return; }\n');
+        replace('  }), []);', '  }), [showMap]);');
+        const nav = before.match(/\{isOnboardingPreview && <WelcomeNav [^\n]+\/>\}/)?.[0];
+        const intro = before.match(/      \{isOnboardingPreview && <View style=\{s.previewIntro\}[\s\S]*?      <\/View>\}/)?.[0];
+        if (!nav || !intro) return null;
+        replace(nav, '{previewNav}');
+        replace(intro, '      {previewIntro}');
+        const movedIntro = intro.slice(7, -1).replace(/^    /gm, '').replace(
+          '    {tourReady &&', "    {mapEnabled && !showMap && <DiscoveryViewToggle map={false} onPress={() => setView('map')} />}\n    {tourReady &&");
+        replace('  const header = (', `  const previewNav = ${nav.slice(1, -1)};\n  const previewIntro = ${movedIntro};\n  const header = (`);
+        replace("<DiscoveryMap discovery={discovery} onShowList={() => setView('list')} />",
+          "<DiscoveryMap discovery={discovery} onShowList={() => setView('list')}\n" +
+          '          previewHeader={isOnboardingPreview ? <>{previewNav}{previewIntro}</> : undefined}\n          onTourLayoutChange={onTourLayoutChange} />');
+        replace('mapControl={mapEnabled ?', 'mapControl={mapEnabled && !isOnboardingPreview ?');
+        replace('      <CoachMarks\n', '      </>}\n      <CoachMarks\n');
+        replace('      </>}\n      <FilterPopup', '      <FilterPopup');
+        replace("import { HeroCard, RestaurantSection } from './DiscoveryCards';", "import { HeroCard, PreviewTourButton, RestaurantSection } from './DiscoveryCards';");
+        replace("    {tourReady && <Pressable onPress={startTour} style={s.previewTourButton} accessibilityRole=\"button\" accessibilityLabel=\"Show me how Fitsy works\" accessibilityHint=\"Replay the five preview tips\" testID=\"preview-show-tour\">\n      <Ionicons name=\"help-circle-outline\" size={20} color={EDITORIAL.green} />\n    </Pressable>}", '    <PreviewTourButton ready={tourReady} onPress={startTour} />');
+      }
+      if (before === after || expected !== after) return null;
+    }
+  } catch { return null; }
+  return { flows, acceptanceCategories: ['auth', 'billing', 'changed-journey', 'discovery', 'notifications', 'onboarding'],
+    reason: 'Source-mapped bounded Discovery map preview and unchanged ordinary card consumers' +
+      (source.includes(entitlementHelper) ? '; initial setup observation retry includes every entitled-fixture journey' : '; all other product behavior preserved') };
+}
+
+function discoveryEntryImpact(source, configKeys, range, cwd, env) {
+  if (!range || range.unknown || !source.length || configKeys.some(key =>
+    !/^EXPO_PUBLIC_(?:API_URL|SUPABASE_URL|SUPABASE_ANON_KEY|DEV_LOGIN_EMAIL|DEV_LOGIN_PASSWORD|REVENUECAT_TEST_KEY)$/.test(key))) return null;
+  // These journeys cover the entry's map/list/Shuffle controls, denied-location
+  // recovery and the shared onboarding preview. Renderer/state changes do not
+  // qualify. Compare the rest of each real module, not only changed path names.
+  const comments = text => text.replace(/^ *\/\/[^\n]*$|^ *\/\*\*[^@\n]*?\*\/$/gm,
+    (line, offset) => sourceCodeAt(text, offset) ? '' : line);
+  const compact = text => text.split('\n').filter(line => line.trim()).join('\n');
+  let entryChanged = false, productPath = false;
+  try {
+    for (const path of source) {
+      if (/^scripts\/(?:sim|verify)\//.test(path)) continue; // Changed controls retain their own tests/review.
+      const versions = sourceVersions(path, range, cwd, env);
+      if (!/^apps\/mobile\/(?:components\/Discovery(?:Map|Screen)\.tsx|lib\/use(?:MapSearch|Shuffle)Flag\.ts)$/.test(path)) return null;
+      productPath = true;
+      const clean = versions.map(text => compact(comments(text)));
+      if (clean[0] === clean[1]) continue;
+      const normalize = text => {
+        if (path.endsWith('/DiscoveryScreen.tsx')) return text.replace(
+          /const \[view, setView\] = useState<'map' \| 'list'>\((?:'(?:map|list)'|__DEV__ \? '(?:map|list)' : '(?:map|list)')\);/,
+          'const [view, setView] = <initial-view>;');
+        if (!/\/use(?:MapSearch|Shuffle)Flag\.ts$/.test(path)) return text;
+        if (path.endsWith('/useMapSearchFlag.ts')) return compact(text
+          .replace(/^  const (?:allowed = (?:__DEV__ && )?Platform\.OS === 'ios'|production = !__DEV__);$/gm, '')
+          .replace(/^    if \(!allowed(?: \|\| production)?\) return;$/m, '')
+          .replace(/^  \}, \[allowed(?:, production)?\]\);$/m, '  }, [<availability>]);')
+          .replace(/^  return allowed && \((?:production \|\| )?debugOverride \|\| enabled\);$/m,
+            '  return <availability>;'));
+        return compact(text
+          .replace(/^import \{ Platform \} from 'react-native';$/m, '')
+          .replace(/^  const productionIOS = !__DEV__ && Platform\.OS === 'ios';$/m, '')
+          .replace(/^    if \(productionIOS\) return;$/m, '')
+          .replace(/^  \}, \[(?:productionIOS)?\]\);$/m, '  }, [<availability>]);')
+          .replace(/^  return (?:productionIOS \|\| )?\(__DEV__ && debugOverride\) \|\| enabled;$/m,
+            '  return <availability>;'));
+      };
+      if (normalize(clean[0]) === clean[0] || normalize(clean[0]) !== normalize(clean[1])) return null;
+      entryChanged = true;
+    }
+  } catch { return null; } // Missing source, new modules and ambiguous edits keep the ordinary conservative selection.
+  if (!productPath || (!entryChanged && configKeys.length)) return null;
+  return { flows: entryChanged ? ['map-search', 'map-search-location-denied', 'onboarding-guided-preview'] : [],
+    acceptanceCategories: entryChanged ? ['auth', 'billing', 'changed-journey'] : [] };
 }
 
 export function verificationScriptsOnly(path, range, cwd, env) {
@@ -278,10 +533,20 @@ export function simulatorSelection(files, { cwd = repository, env = process.env,
   if (files === null) return full('Comparison history unavailable; all journeys may be affected');
   if (unknownContext) return full('Event context unavailable; simulator overrides cannot be ruled out');
   if (release) return full('Release candidate requires the full simulator flow set');
-  if (configKeys.length) return full(`Public native configuration changed: ${configKeys.join(', ')}`);
   const source = files.filter(path => simulatorSource(path) && !verificationScriptsOnly(path, range, cwd, env));
   const highPath = source.find(highSimulatorPath);
   if (highPath) return full(`Navigation, auth, billing, native configuration or release path: ${highPath}`);
+  const entry = discoveryPreviewImpact(source, configKeys, range, cwd, env) || discoveryEntryImpact(source, configKeys, range, cwd, env);
+  if (entry && entry.flows.every(flow => all.includes(flow)) && (entry.flows.length || !labels.includes('needs-sim'))) {
+    let reviewTier;
+    try { reviewTier = simulatorReviewTier(source, cwd, env); }
+    catch { return full('Review routing or risk tiers unavailable; cannot establish a narrower simulator scope'); }
+    if (reviewTier === 'high') return { ...full('High canonical review tier affects a mobile-facing contract'), reviewTier };
+    return { ...result(entry.flows.length ? 'medium' : 'low', entry.flows.length ? 'flow' : 'none', entry.flows,
+      entry.flows.length ? entry.reason || 'Source-mapped Discovery availability/default change; map/list/Shuffle, denied location and onboarding preview cover the affected entry'
+        : 'Only Discovery comments changed; executable product inputs are unchanged', reviewTier), acceptanceCategories: entry.acceptanceCategories };
+  }
+  if (configKeys.length) return full(`Public native configuration changed: ${configKeys.join(', ')}`);
   const sharedUI = source.find(sharedUIPath);
   if (sharedUI) return full(`Shared UI or app shell requires the full smoke suite: ${sharedUI}`);
   const contracts = source.filter(path => mobileContract(path) && !serviceHealthPath(path));
@@ -299,7 +564,8 @@ export function simulatorSelection(files, { cwd = repository, env = process.env,
     for (const path of contracts) {
       const direct = /^apps\/mobile\/e2e\/flows\/([a-z0-9-]+)\.yaml$/.exec(path);
       const mapped = direct ? all.filter(name => name === direct[1])
-        : all.filter(name => screenFlows.some(([pattern, flow]) => pattern.test(path) && flow.test(name)));
+        : all.filter(name => screenFlows.some(([pattern, flow]) => pattern.test(path) && flow.test(name)) ||
+            narrowAuthFlows.some(([pattern, flow]) => pattern.test(path) && flow.test(name)));
       if (!mapped.length) return { ...full(`Unmapped mobile-facing path: ${path}; full coverage required`), reviewTier };
       for (const name of mapped) flows.add(name);
     }

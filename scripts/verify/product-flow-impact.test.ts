@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -25,6 +25,299 @@ test.each([
   const result = evaluate(paths);
   expect(result.status).toBe(0);
   expect(JSON.parse(result.stdout)).toMatchObject({ required, categories });
+});
+
+test('real Discovery entry changes select three journeys across CLI and publication, while uncertain changes retain full coverage', () => {
+  copyProductFlowControls(directory);
+  symlinkSync(resolve(__dirname, '../../node_modules'), join(directory, 'node_modules'));
+  writeFileSync(join(directory, '.gitignore'), 'node_modules\n.evidence/\n');
+  const paths = ['apps/mobile/components/DiscoveryMap.tsx', 'apps/mobile/components/DiscoveryScreen.tsx',
+    'apps/mobile/lib/useMapSearchFlag.ts'];
+  for (const path of paths) {
+    mkdirSync(dirname(join(directory, path)), { recursive: true });
+    copyFileSync(resolve(__dirname, '../..', path), join(directory, path));
+  }
+  const git = (...args: string[]) => execFileSync('git', ['-c', 'gc.auto=0', '-c', 'maintenance.auto=false', ...args],
+    { cwd: directory, env: env() });
+  git('init', '-q'); git('config', 'user.name', 'Entry impact fixture'); git('config', 'user.email', 'fixture@example.test');
+  git('config', 'core.hooksPath', '/dev/null'); git('add', '.'); git('commit', '-qm', 'base');
+  git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  const map = join(directory, paths[0]!), screen = join(directory, paths[1]!);
+  const originalMap = readFileSync(map, 'utf8'), originalScreen = readFileSync(screen, 'utf8');
+  const flag = join(directory, paths[2]!), originalFlag = readFileSync(flag, 'utf8');
+  const cli = (file: string) => spawnSync(process.execPath, [file, '--plan'], { cwd: directory, env: env(), encoding: 'utf8' });
+  writeFileSync(map, '// Clarify the unchanged renderer.\n' + originalMap);
+  expect(JSON.parse(cli('scripts/verify/product-flow.mjs').stdout)).toMatchObject({ required: false, flows: [] });
+  const changedScreen = originalScreen.replace(/useState<'map' \| 'list'>\([^\n]+\);/,
+    originalScreen.includes("useState<'map' | 'list'>('list')") ? "useState<'map' | 'list'>('map');" : "useState<'map' | 'list'>('list');");
+  expect(changedScreen).not.toBe(originalScreen);
+  writeFileSync(screen, changedScreen);
+  const expected = ['map-search', 'map-search-location-denied', 'onboarding-guided-preview'];
+  const final = cli('scripts/verify/product-flow.mjs');
+  expect(final.status).toBe(0);
+  expect(JSON.parse(final.stdout)).toMatchObject({ flows: expected, categories: ['auth', 'billing', 'changed-journey'] });
+  const local = cli('scripts/verify/impact-plan.mjs');
+  expect(JSON.parse(local.stdout).simulator).toEqual(JSON.parse(final.stdout).simulator);
+  const published = spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import {publicationPlan} from ${JSON.stringify(resolve(__dirname, '../sim/publish-product-flow.mjs'))};
+     process.stdout.write(JSON.stringify(publicationPlan(${JSON.stringify(join(directory, '.evidence/product-flow'))},
+       ${JSON.stringify(join(directory, 'missing-build.json'))})));`],
+  { cwd: directory, env: { ...env(), FITSY_PRODUCT_ROOT: directory }, encoding: 'utf8' });
+  expect(published.status).toBe(0);
+  expect(JSON.parse(published.stdout).simulator).toEqual(JSON.parse(final.stdout).simulator);
+  const collection = spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import {collectionPublicConfigKeys} from ${JSON.stringify(resolve(__dirname, '../sim/product-flow.mjs'))};
+     import {publicConfigIdentity,requiredPublicConfigKeys,candidatePlan} from ${JSON.stringify(modulePath)};
+     import {publicationPlan} from ${JSON.stringify(resolve(__dirname, '../sim/publish-product-flow.mjs'))};
+     import {mkdirSync,writeFileSync} from 'node:fs';
+     const dir=${JSON.stringify(join(directory, '.evidence/product-flow'))}, file=dir+'/report.json';
+     const current=publicConfigIdentity(), build={...current,appHash:'synthetic-app'};
+     const keys=collectionPublicConfigKeys(file,build,current,${final.stdout});
+     const report={...build,evidenceMode:'final-candidate',result:'awaiting-walkthrough',publicConfigAcceptance:{keys}};
+     mkdirSync(dir,{recursive:true}); writeFileSync(file,JSON.stringify(report));
+     process.stdout.write(JSON.stringify({keys,finish:candidatePlan(requiredPublicConfigKeys(report,build,current)),
+       publication:publicationPlan(dir,${JSON.stringify(join(directory, 'missing-build.json'))})}));`],
+  { cwd: directory, env: { ...env(), FITSY_PRODUCT_ROOT: directory }, encoding: 'utf8' });
+  expect(collection.status).toBe(0);
+  expect(JSON.parse(collection.stdout)).toMatchObject({ keys: [],
+    finish: { flows: expected, categories: ['auth', 'billing', 'changed-journey'] },
+    publication: { flows: expected, categories: ['auth', 'billing', 'changed-journey'] } });
+  git('add', '.'); git('commit', '-qm', 'entry change');
+  mkdirSync(join(directory, '.evidence'), { recursive: true });
+  const base = git('rev-parse', 'origin/main').toString().trim(), head = git('rev-parse', 'HEAD').toString().trim();
+  git('checkout', '-q', '--detach', base);
+  const historical = spawnSync(process.execPath, ['scripts/verify/impact-plan.mjs', `--base=${base}`, `--head=${head}`, '--simulator'],
+    { cwd: directory, env: env(), encoding: 'utf8' });
+  expect(historical.status).toBe(0);
+  expect(JSON.parse(historical.stdout)).toMatchObject({ scope: 'flow', flows: expected });
+  git('checkout', '-q', '--detach', head);
+  for (const mutate of [
+    () => writeFileSync(map, originalMap + '\nexport const newRendererBehavior = true;\n'),
+    () => writeFileSync(screen, changedScreen.replace('const showMap = mapEnabled', 'const showMap = !mapEnabled')),
+    // The Shuffle-style policy would let remote flags enable Android Map.
+    // It is not equivalent to Map's existing iOS-only availability boundary.
+    () => writeFileSync(flag, originalFlag
+      .replace(/const allowed = (?:__DEV__ && )?Platform\.OS === 'ios';/, "const productionIOS = !__DEV__ && Platform.OS === 'ios';")
+      .replace('  const production = !__DEV__;\n', '')
+      .replace(/if \(!allowed(?: \|\| production)?\) return;/, 'if (productionIOS) return;')
+      .replace(/\[allowed(?:, production)?\]/, '[productionIOS]')
+      .replace(/return allowed && \((?:production \|\| )?debugOverride \|\| enabled\);/,
+        'return productionIOS || (__DEV__ && debugOverride) || enabled;')),
+  ]) {
+    mutate();
+    expect(JSON.parse(cli('scripts/verify/product-flow.mjs').stdout).simulator.scope).toBe('full');
+    writeFileSync(map, originalMap); writeFileSync(screen, changedScreen); writeFileSync(flag, originalFlag);
+  }
+  const unknownConfig = spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import {candidatePlan} from ${JSON.stringify(modulePath)}; process.stdout.write(JSON.stringify(candidatePlan(['<unknown>'])));`],
+  { cwd: directory, env: { ...env(), FITSY_PRODUCT_ROOT: directory }, encoding: 'utf8' });
+  expect(JSON.parse(unknownConfig.stdout).simulator.scope).toBe('full');
+  const routing = join(directory, 'scripts/verify/risk-tiers.yml'), routingSource = readFileSync(routing, 'utf8');
+  writeFileSync(routing, 'invalid policy');
+  expect(JSON.parse(cli('scripts/verify/product-flow.mjs').stdout).simulator.scope).toBe('full');
+  writeFileSync(routing, routingSource);
+  writeFileSync(screen, originalScreen);
+  writeFileSync(map, originalMap + '\nexport const literal = `\n// before\n`;\n');
+  git('add', '.'); git('commit', '-qm', 'template literal baseline'); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  writeFileSync(map, originalMap + '\nexport const literal = `\n// after\n`;\n');
+  expect(JSON.parse(cli('scripts/verify/product-flow.mjs').stdout).simulator.scope).toBe('full');
+});
+
+test.each([false, true])('bounded preview adaptation (entitlement startup retry: %s) reaches every consumer and rejects unknown changes', retryStartup => {
+  copyProductFlowControls(directory);
+  symlinkSync(resolve(__dirname, '../../node_modules'), join(directory, 'node_modules'));
+  writeFileSync(join(directory, '.gitignore'), 'node_modules\n.evidence/\n');
+  const write = (path: string, content: string) => {
+    mkdirSync(dirname(join(directory, path)), { recursive: true }); writeFileSync(join(directory, path), content);
+  };
+  // Small source contracts keep this fixture independent of the current app
+  // revision. The real candidate is also checked through the same CLI at push.
+  const modules: Record<string, [string, string]> = {
+    'DiscoveryScreen.tsx': [
+      `import { HeroCard } from './DiscoveryCards';
+const [view, setView] = useState<'map' | 'list'>(__DEV__ ? 'map' : 'list');
+  const header = (
+      {isOnboardingPreview && <View style={s.previewIntro} testID="preview-guide">
+        <Text style={s.previewHint}>{onboardingPitch(tried).preview}</Text>
+      </View>}
+  );
+      {isOnboardingPreview && <WelcomeNav progress={0.75} backTestID="preview-back" onBack={onPreviewBack} />}`,
+      `import { HeroCard } from './DiscoveryCards';
+const [view, setView] = useState<'map' | 'list'>('map');
+  const previewNav = isOnboardingPreview && <WelcomeNav progress={0.75} backTestID="preview-back" onBack={onPreviewBack} />;
+  const previewIntro = isOnboardingPreview && <View style={s.previewIntro} testID="preview-guide">
+    <Text style={s.previewHint}>{onboardingPitch(tried).preview}</Text>
+  </View>;
+  const header = (
+      {previewIntro}
+  );
+      {previewNav}`],
+    'DiscoveryMap.tsx': [
+      `import { DiscoveryMapCard } from './DiscoveryMapCard';
+  const cards = d.locked ? d.results.slice(0, 3) : d.results;
+  const more = d.nextCursor && !d.locked && !d.loading;
+  function open(result) {
+    void openRestaurantOrPaywall(d.locked, navigate, d.onLockedTap);
+  }`,
+      `import { DiscoveryMapCard } from './DiscoveryMapCard';
+  const cards = d.locked ? d.results.slice(0, 3) : d.results;
+  const more = d.nextCursor && !d.locked && !d.isOnboardingPreview && !d.loading;
+  function open(result) {
+    if (d.isOnboardingPreview) { void d.unlockPreview(result); return; }
+    void openRestaurantOrPaywall(d.locked, navigate, d.onLockedTap);
+  }`],
+    'DiscoveryMap.styles.ts': [
+      `export const s = StyleSheet.create({
+  searchRow: { gap: 8 },
+});`,
+      `export const s = StyleSheet.create({
+  previewHeader: { backgroundColor: EDITORIAL.cream, marginBottom: 8, borderBottomLeftRadius: 20, borderBottomRightRadius: 20 },
+  previewUnlock: { marginHorizontal: 16, minHeight: 44, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center',
+    borderRadius: 24, backgroundColor: EDITORIAL.cream },
+  searchRow: { gap: 8 },
+});`],
+    'DiscoveryMapCard.tsx': [
+      `import { HeroMealContent, mealAccessibilitySummary } from './DiscoveryCards';
+const card = <HeroMealContent result={result} locked={locked} nameStyle={s.name} />;`,
+      `import { HeroMealContent, mealAccessibilitySummary, previewRowLabel } from './DiscoveryCards';
+const card = <HeroMealContent result={result} locked={locked} hideDishName={hideDishName} nameStyle={s.name} />;`],
+    'DiscoveryCards.tsx': [
+      "import { hero } from './DiscoveryScreen.styles';\n" +
+      'export function HeroMealContent({ result, locked, paywallPreview = false, nameStyle }) { return result; }\n' +
+      'function previewRowLabel(result: RestaurantResult): string {\n' +
+      '  const m = result.bestMatch;\n' +
+      '  return `${result.name}${m ? `, ${m.calories} kcal, protein ${m.proteinG}g` : ""}`;\n}',
+      "import { hero } from './DiscoveryScreen.styles';\n" +
+      'export function HeroMealContent({ result, locked, paywallPreview = false, hideDishName = false, nameStyle }) { return result; }\n' +
+      'export function previewRowLabel(result: RestaurantResult): string {\n' +
+      "  const m = result.bestMatch;\n  const published = m?.nutritionBasis === 'published';\n" +
+      "  return `${result.name}${m ? `, ${published ? 'Published' : 'Estimated'} nutrition, ${m.confidence.toLowerCase()} confidence, ${published ? '' : 'approximately '}${m.calories} kcal, protein ${m.proteinG}g` : \"\"}`;\n}"],
+  };
+  const prefix = 'apps/mobile/components/';
+  for (const [name, versions] of Object.entries(modules)) write(prefix + name, versions[0]);
+  for (const path of ['components/DiscoveryChrome.tsx', 'components/PaywallHero.tsx', 'app/welcome/preview.tsx',
+    'app/welcome/resubscribe.tsx', 'app/(tabs)/search.tsx']) {
+    write('apps/mobile/' + path, readFileSync(resolve(__dirname, '../../apps/mobile', path), 'utf8'));
+  }
+  const helper = 'apps/mobile/e2e/helpers/active-entitlement.yaml';
+  const repairedHelper = readFileSync(resolve(__dirname, '../..', helper), 'utf8');
+  const originalHelper = repairedHelper.replace(/# Retry only the first read[^\n]*\n# Authentication[^\n]*\n- retry:[\s\S]*?(?=\n- tapOn:)/,
+    '# Observe the launch transition before XCTest reads the first Welcome element.\n' +
+    '- waitForAnimationToEnd:\n    timeout: 10000\n- extendedWaitUntil:\n    visible:\n      id: welcome-login\n    timeout: 60000');
+  expect(originalHelper).not.toBe(repairedHelper);
+  write(helper, originalHelper);
+  for (const path of ['scripts/sim/ci.mjs', 'scripts/sim/product-flow.mjs',
+    'scripts/sim/active-entitlement.mjs', 'scripts/sim/journey-fixtures.mjs', 'scripts/sim/runner-controls.mjs'])
+    write(path, readFileSync(resolve(__dirname, '../..', path), 'utf8'));
+  const git = (...args: string[]) => execFileSync('git', ['-c', 'gc.auto=0', '-c', 'maintenance.auto=false', ...args],
+    { cwd: directory, env: env(), encoding: 'utf8' }).trim();
+  git('init', '-q'); git('config', 'user.name', 'Preview impact fixture'); git('config', 'user.email', 'fixture@example.test');
+  git('config', 'core.hooksPath', '/dev/null'); git('add', '.'); git('commit', '-qm', 'base');
+  git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  const base = git('rev-parse', 'HEAD');
+  const restore = () => {
+    for (const [name, versions] of Object.entries(modules)) write(prefix + name, versions[1]);
+    write(helper, retryStartup ? repairedHelper : originalHelper);
+  };
+  restore();
+  const cli = (file = 'scripts/verify/product-flow.mjs', args: string[] = ['--plan']) => {
+    const result = spawnSync(process.execPath, [file, ...args], { cwd: directory, env: env(), encoding: 'utf8' });
+    expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: '' });
+    return JSON.parse(result.stdout);
+  };
+  const expected = ['map-search', 'map-search-location-denied', 'onboarding-assisted-targets', 'onboarding-guided-preview',
+    'onboarding-out-of-area', 'onboarding-returning-preview', 'onboarding-search-highlight', 'onboarding-target-ranked-search',
+    'paywall-access', 'subscription-expired-routing'];
+  if (retryStartup) expected.push('floating-nav', 'launch-analytics', 'log-meal', 'shuffle', 'widget-setup');
+  expected.sort();
+  const plan = cli();
+  expect(plan).toMatchObject({ flows: expected,
+    categories: ['auth', 'billing', 'changed-journey', 'discovery', 'notifications', 'onboarding'], simulator: { scope: 'flow' } });
+  expect(cli('scripts/verify/impact-plan.mjs').simulator).toEqual(plan.simulator);
+  const consumers = spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import {candidatePlan,selectedFlows} from ${JSON.stringify(modulePath)};
+     import {publicationPlan} from ${JSON.stringify(resolve(__dirname, '../sim/publish-product-flow.mjs'))};
+     const plan=candidatePlan(); process.stdout.write(JSON.stringify({collection:selectedFlows(plan),finish:plan,
+       publication:publicationPlan(${JSON.stringify(join(directory, '.evidence/product-flow'))},${JSON.stringify(join(directory, 'missing-build.json'))})}));`],
+  { cwd: directory, env: { ...env(), FITSY_PRODUCT_ROOT: directory }, encoding: 'utf8' });
+  expect({ status: consumers.status, stderr: consumers.stderr }).toEqual({ status: 0, stderr: '' });
+  expect(JSON.parse(consumers.stdout)).toMatchObject({ collection: expected, finish: { flows: expected }, publication: { flows: expected } });
+  git('add', '.'); git('commit', '-qm', 'preview adaptation');
+  if (retryStartup) {
+    for (const [from, to] of [
+      ['maxRetries: 2', 'maxRetries: 3'],
+      ['timeout: 60000', 'timeout: 60001'],
+      ["ALLOW_TEST_PURCHASE === '1'", 'true'],
+      ['      - waitForAnimationToEnd:', '      - tapOn: Dev Login\n      - waitForAnimationToEnd:'],
+      ['- assertNotVisible:\n    id: resubscribe-restore', ''],
+    ] as const) {
+      expect(repairedHelper).toContain(from);
+      write(helper, repairedHelper.replace(from, to));
+      expect(cli().simulator.scope).toBe('full'); restore();
+    }
+    const flow = 'apps/mobile/e2e/flows/onboarding-guided-preview.yaml', original = readFileSync(join(directory, flow), 'utf8');
+    write(flow, original.replace('fixture:unsubscribed-dev', 'fixture:entitled-dev'));
+    expect(cli().simulator.scope).toBe('full'); write(flow, original);
+  }
+  for (const [name, from, to] of [
+    ['DiscoveryMap.tsx', 'slice(0, 3)', 'slice(0, 4)'],
+    ['DiscoveryMap.tsx', 'd.unlockPreview(result)', 'navigate(result)'],
+    ['DiscoveryMap.tsx', 'openRestaurantOrPaywall(d.locked', 'openRestaurantOrPaywall(false'],
+    ['DiscoveryCards.tsx', 'paywallPreview = false', 'paywallPreview = true'],
+    ['DiscoveryCards.tsx', 'approximately ', ''],
+    ['DiscoveryCards.tsx', '${result.name}', '${m.name}'],
+    ['DiscoveryMapCard.tsx', 'locked={locked}', 'locked={false}'],
+    ['DiscoveryMap.styles.ts', 'searchRow: { gap: 8 }', 'searchRow: { gap: 0 }'],
+    ['DiscoveryScreen.tsx', 'onBack={onPreviewBack}', 'onBack={completeOnboarding}'],
+  ]) {
+    const original = modules[name!]![1]; expect(original).toContain(from);
+    write(prefix + name, original.replace(from!, to!));
+    expect(cli().simulator.scope).toBe('full'); restore();
+  }
+  for (const path of ['apps/mobile/lib/useDiscoveryState.ts', 'apps/mobile/lib/newProducer.ts', 'scripts/sim/ci.mjs',
+    'scripts/sim/active-entitlement.mjs', 'scripts/sim/journey-fixtures.mjs', 'scripts/sim/runner-controls.mjs',
+    'apps/mobile/components/PaywallHero.tsx', 'apps/mobile/app/_layout.tsx', 'packages/shared/src/contracts/search.ts']) {
+    const target = join(directory, path), original = (() => { try { return readFileSync(target, 'utf8'); } catch { return null; } })();
+    write(path, (original || '') + '\nexport const changed = true;\n');
+    expect(cli().simulator.scope).toBe('full');
+    if (original === null) rmSync(target); else write(path, original);
+  }
+  expect(cli('scripts/verify/impact-plan.mjs', ['--release-candidate']).simulator.scope).toBe('full');
+  expect(cli('scripts/verify/impact-plan.mjs', ['--base=unavailable-history']).simulator.scope).toBe('full');
+  rmSync(join(directory, prefix + 'DiscoveryMapCard.tsx'));
+  expect(cli().simulator.scope).toBe('full'); restore();
+  const unknownConfig = spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import {candidatePlan} from ${JSON.stringify(modulePath)};
+     process.stdout.write(JSON.stringify(['<unknown>','EXPO_PUBLIC_REVENUECAT_TEST_KEY'].map(key=>candidatePlan([key]).simulator.scope)));`],
+  { cwd: directory, env: { ...env(), FITSY_PRODUCT_ROOT: directory }, encoding: 'utf8' });
+  expect(JSON.parse(unknownConfig.stdout)).toEqual(['full', 'full']);
+  if (retryStartup) {
+    // A real additional fixture consumer must extend the union, not disappear
+    // behind an issue-specific count. Ambiguous YAML retains FULL instead.
+    for (const [tags, scope] of [["[auth, 'fixture:entitled-dev', 'store:test-store']", 'flow'], ['*unknown', 'full'],
+      ['[auth]\n"tags": ["fixture:entitled-dev"]', 'full']]) {
+      git('reset', '--hard', base);
+      git('checkout', '-q', '--detach', base);
+      write('apps/mobile/e2e/flows/additional-entitled.yaml', `appId: com.fitsy.mobile\ntags: ${tags}\n---\n- assertVisible: Search\n`);
+      git('add', '.'); git('commit', '-qm', 'additional existing fixture consumer'); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+      restore();
+      expect(cli().simulator.scope).toBe(scope);
+      if (scope === 'flow') expect(cli().flows).toEqual([...expected, 'additional-entitled'].sort());
+    }
+    git('reset', '--hard', base);
+    git('checkout', '-q', '--detach', base);
+    write('scripts/sim/new-caller.mjs', "export { prepareEntitledEvidence } from './product-flow.mjs';\n");
+    git('add', '.'); git('commit', '-qm', 'additional existing setup caller'); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+    restore();
+    expect(cli().simulator.scope).toBe('full');
+  }
+  // A caller that predates the diff must also prevent the narrow selection.
+  git('reset', '--hard', base);
+  git('checkout', '-q', '--detach', base);
+  write('apps/mobile/app/new-consumer.tsx', "import { HeroCard } from '@/components/DiscoveryCards';\nexport default HeroCard;\n");
+  git('add', '.'); git('commit', '-qm', 'new existing consumer'); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  restore();
+  expect(cli().simulator.scope).toBe('full');
 });
 
 test.each([

@@ -312,7 +312,7 @@ Two complementary execution modes:
 | `apps/mobile/FEATURE_MAP.md` | **new** | screen-by-screen: route, entry, testIDs, what "correct" looks like, known flake. Maintained by a check: every screen under `apps/mobile/app/**` has an entry (T11). |
 | testIDs | **new convention** | every interactive element in a screen has `testID`; a lint rule on `Pressable`/`TouchableOpacity`/`TextInput` without `testID` |
 | Maestro flows | **new** | six flows to start; the Layer 10 loop adds one per escaped mobile defect |
-| Local simulator gate | maintained | `scripts/sim/ci.mjs` runs the selected saved Maestro flows on the maintainer Mac; CI only records scope. |
+| Local simulator gate | maintained | `scripts/sim/ci.mjs` runs the selected saved Maestro flows on the maintainer Mac; the hosted Simulator workflow was removed (#781), so no CI job runs or records simulator scope. |
 | agent-device (callstack) | evaluate | may replace the hand-rolled `sim` CLI; keep the CLI surface identical either way |
 | Maestro MCP | installed CLI | `maestro mcp` exposes local device inspection and automation; saved YAML remains the scripted gate. |
 | Dev client vs Expo Go | **decide** | `eas.json`, `expo-dev-client` dependency, and `worktree-dev.md` say dev client; `CLAUDE.md` and role files say Expo Go. Standardize on the dev client; fix the four docs. |
@@ -533,7 +533,7 @@ Structural, not discretionary (T12).
 - The agent step's env contains `ANTHROPIC_API_KEY` and `GITHUB_TOKEN` only. Supabase, Vercel, EAS, RevenueCat, Slack, PostHog tokens live in the deploy workflows, which run no model.
 - `--allowedTools` per lens: read, `git diff`, `git log`, `scripts/verify/*`, `gh pr comment`. No network tools, no write outside `.evidence/`.
 - Event text (title, body, comments) is passed to the model inside a delimited untrusted block; the lens prompts say so.
-- `.github/**`, `vercel.json`, `eas.json`, `.eas/**`, `scripts/deploy/**` are tier high and get the `workflow-security` lens.
+- `.github/**`, `vercel.json`, `eas.json`, `.eas/**`, `scripts/deploy/**`, `scripts/verify/**`, `scripts/sim/**` are tier high and get the `ci-impact` lens.
 - Pin `claude-code-action` to a SHA; Dependabot on actions.
 - Cloud routines get repo write and the same env allowlist; they cannot deploy (deploys happen only from `main` via the deploy workflow).
 
@@ -569,7 +569,7 @@ Steps 1-4 are the foundation and should land before any routine dispatches work.
 5. **Deploy and rollback** - DONE 2026-09-07 (#241; first live run green): `deploy.yml` with migrate-then-Vercel, `eas update` at 10%, deploy record, `rollback.sh`, `api-e2e.sh` on prod. Fix `eas.json` submit path.
 6. **Contracts and DB tests** - CORE DONE 2026-09-07 (#244, #245, #246; route generators still open): `packages/shared/src/contracts/`, generator for routes, contract tests, seed, first DB tests for search and subscription, migration safety. Own-code-mock lint in shadow.
 7. **Mobile E2E** - CORE DONE 2026-09-07 (#248, #249; flows unexecuted until EXPO_TOKEN or a free local sim; testIDs adopted incrementally via lint): `sim` CLI, FEATURE_MAP, testID lint, six Maestro flows, EAS workflow, `mobile-ui` lens. Dev-client decision documented.
-8. **Remaining lenses and the loop** - INFRA DONE 2026-09-07 (#250, #251); example sections and tuning wait for real incidents as designed: `spec-conformance`, `test-quality` with Stryker in shadow, `danger-zone`, `workflow-security`, `harness-audit`, incident examples, layer-attribution metric on the scoreboard.
+8. **Remaining lenses and the loop** - INFRA DONE 2026-09-07 (#250, #251); example sections and tuning wait for real incidents as designed: `spec-conformance`, `test-quality` with Stryker in shadow, `danger-zone`, `ci-impact`, `harness-audit`, incident examples, layer-attribution metric on the scoreboard.
 9. **Routines** (after 8 is stable for two weeks): issue-to-PR routine on `agent-ready`; alert-to-incident routine with `logs` and `sim` repro; monthly lens-recall replay.
 10. **Ratchet** (ongoing): Stryker floor +5/month while green; shadow checks promoted after two clean weeks; every incident adds to the corpus.
 

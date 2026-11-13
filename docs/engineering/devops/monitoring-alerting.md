@@ -71,7 +71,7 @@ Existing Maestro journeys remain applicable because user interactions are unchan
 | Upstash daily commands | At least 80% of the explicitly configured daily allowance; at least 95% | P2 then P1 |
 | API crons | No successful execution within two schedule intervals plus one hour | P2 |
 | TLS/domain expiration | Within 14 days; within three days | P2 then P1 |
-| Observer failure | Missing configuration, denied query access, malformed/partial provider results, or unavailable provider API | P2; affected prior incidents remain open |
+| Observer failure | Missing required or partially configured optional bindings, denied query access, malformed/partial provider results, or unavailable provider API | P2; affected prior incidents remain open |
 | Deploy/EAS workflow failure | Failed, timed out, cancelled, action-required, stale, or startup-failed production release | P1 |
 | Dev maintenance failure | Failed maintenance workflow | P2 |
 
@@ -84,6 +84,59 @@ Deep health bounds pool acquisition/query waiting and separately exercises writa
 RevenueCat reachability deliberately expects an unauthenticated 401 on a documented subscriber route, without creating a customer or reading an entitlement.
 It does not prove key validity, webhook delivery, App Store connectivity, or successful purchases.
 Shallow public health remains a database/source check and can remain 200 during a Redis outage.
+
+## Triage: when a check alerts
+
+Each entry names the query or endpoint to check first, the most likely causes, and the action. The Axiom queries use the same `['fitsy-pipeline'] | where type == 'api_request' and environment == 'production'` base filter the monitor itself runs (`scripts/verify/production-providers.mjs`'s `apiQuery`).
+
+**API errors / Route latency**
+```
+['fitsy-pipeline'] | where type == 'api_request' and environment == 'production' and _time > ago(5m) | summarize count() by route, status | order by count_ desc
+```
+- One route dominating the error count → check that route's recent deploys/PRs first; a route-specific regression is more likely than a platform-wide one.
+- Errors spread evenly across routes → check `/api/health?deep=1` directly (needs `CRON_SECRET`) to rule out a shared dependency (Supabase, Upstash) before assuming a code issue.
+- `api:telemetry-missing` instead of `api:5xx` → no telemetry arrived at all; check whether `withApiTelemetry` wrapping was removed from a route, or whether Vercel itself is down (check Vercel status page before the app).
+
+**Telemetry availability**
+- Fires only when synthetic probe traffic exists but no `api_request` events reach Axiom - this means the app is serving requests but `AXIOM_TOKEN`/the emit path is broken, not that the app is down. Check `apps/api/instrumentation.ts`/`apps/api/lib/apiEmitter.ts` for a recent change, and confirm `AXIOM_TOKEN` is still valid in the production Vercel env.
+
+**Synthetic requests / Deep health**
+- A single probe failing (not all) → check that specific route/dependency directly: `curl -i https://fitsy.org/api/health` for the shallow check, or the specific dependency (`supabase`/`upstash`/`revenuecat`) named in the deep health body for `?deep=1`.
+- All probes failing at once → the app or its edge is down; check the Vercel dashboard before anything else, and check `Production deployment` (below) for a bad deploy as the likely cause.
+
+**RevenueCat webhook**
+- Check `apps/api/app/api/revenuecat/webhook/route.ts`'s own `console.warn` output in Vercel logs for `stale_event_conflict`/`tiebreak_unavailable`/`purchase_reconciliation_pending` - these are the documented, usually-benign causes of rejected deliveries.
+- If rejections are a new pattern (not these known cases), check whether `REVENUECAT_WEBHOOK_AUTH` was rotated without updating RevenueCat's dashboard-side webhook secret.
+
+**Mobile subscription checks / Mobile JS fatal errors**
+- Query PostHog directly for the `subscription_check`/`client_error` events in the alerting window (same HogQL shape as `scripts/verify/production-providers.mjs`'s `mobileMetrics`) to see the actual `outcome` distribution, not just the aggregate rate.
+- A spike correlated with an app/API deploy → likely a client-server contract break from that release; check the diff for the relevant route or client call.
+- A spike with no correlated deploy → likely an upstream dependency outage surfacing as client-visible errors; cross-check `API errors` for the same window.
+
+**Production deployment**
+- `deploy:error` → check the Vercel deployment's own build log directly; this is a build/deploy failure, not a runtime issue.
+- `deploy:stale` (serving SHA behind main for 30+ min) → check whether a deploy is stuck `BUILDING`/`QUEUED` in Vercel, or whether `Deploy and Dev maintenance are scoped to main` and a recent push didn't trigger a deploy at all.
+
+**Upstash daily commands**
+- Check the Upstash dashboard for the actual daily command graph, not just the percentage in the alert - a sudden spike (vs. gradual growth) points to a specific endpoint or a runaway retry loop, not organic traffic growth.
+- At P1 (95%): rate-limited requests will start failing closed (`AGENTS.md`'s "never fail open" rule) - this is a real near-term user-impact risk, not just a cost warning.
+
+**API crons**
+- Check which `/api/internal/*` route is named in the alert, then check that specific cron's Vercel invocation history (`vercel.json`'s `crons` array) for its actual last execution and error, if any.
+
+**TLS/domain expiration**
+- Check the registrar/certificate provider directly; this almost never needs code changes, just a renewal action by whoever holds the domain/cert account.
+
+**Observer failure**
+- This means the *monitor itself* couldn't complete an observation (missing/malformed config, denied provider access) - not a product incident. Check the specific provider named in the alert's summary and the credentials table above for what's missing or invalid.
+
+**Deploy/EAS workflow failure**
+- Check the named GitHub Actions run directly (`gh run view <id> --log`) - this mirrors the existing release-pipeline incident-filing path, not a new investigation surface.
+
+**Dev maintenance failure**
+- Lower urgency (P2, non-production) - check `.github/workflows/dev-maintenance.yml`'s run log; this affects the dev environment's nightly reset/snapshot, not production.
+
+**Owner for all production-monitor checks:** the app lane owns route/client instrumentation, health checks, policy, and probe implementation (per the ownership table above); the existing release owner owns incident response and GitHub credential/routing activation. Tooling lane owns the monitor *code* (`scripts/verify/production-{monitor,providers,policy,alerts}.mjs`) but not triage of a live page.
 
 ## Configuration and activation
 
@@ -114,6 +167,10 @@ Every trigger requires `refs/heads/main` before checkout or credential-bearing s
 The `fitsy-production-monitor` concurrency group serializes monitoring state updates.
 Every wakeup polls up to 100 recent runs, including active attempts, for each monitored workflow and uses the most recently updated meaningful completed outcome.
 Deploy and Dev maintenance are scoped to main; EAS also admits push-triggered release tags matching its configured `v*.*.*` pattern.
+EAS Actions is an intermittent release path: `easWorkflowMaxAgeDays` limits inactive completed history to seven days because current TestFlight OTAs ship through Deploy instead.
+When no qualifying EAS run or persisted failure receipt is recent and no attempt is active, the next monitor run resolves the old EAS incident through ordinary shared-state delivery.
+This expiry does not prove that an old build succeeded.
+Active retries, recent receipts, malformed history, and unavailable provider queries retain the existing incident protections.
 Candidate-branch dispatches cannot resolve a production incident.
 The file-scoped GitHub endpoint and returned workflow path establish identity; a custom `run-name` is a display value.
 A replaced pending wakeup therefore cannot lose a retained failed outcome, including a rerun of the same run ID.
@@ -126,12 +183,23 @@ Issue state records each channel/direct delivery separately so a failed DM retri
 Failures receive reminders at most every 30 minutes; observed recovery sends one resolved transition.
 An unavailable metric source cannot resolve an incident from that source.
 Skipped, neutral, missing, or unknown workflow conclusions likewise preserve open incidents and reminders until a completed success is observed.
+An automatic Deploy superseded by newer protected main finishes successfully without admitting the old source or continuing its release steps.
+The workflow observer requires the automatic attempt's `Confirm verified release` marker, gated on successful post-smoke `release_ready` output, before accepting a successful Deploy as recovery.
+A successful health step alone can mean supersession, so it cannot hide a retained failure.
+Manual production releases still reject supersession and retain their post-smoke serving-identity check.
 Slack errors remain pending and fail execution; a failed state/query/transport cannot be reported healthy.
 A crash between Slack acceptance and persistence can still repeat a delivery; deterministic message IDs reduce this unavoidable transport ambiguity.
+Production Monitor succeeds in Actions when evaluation and required Slack delivery succeed, even while product incidents remain active and continue their normal alert/reminder lifecycle.
+Observer errors, missing required configuration, crashes, state failures, and delivery failures still fail the job.
+The JSON summary continues to distinguish `alerting` from `healthy`; a green Actions conclusion does not claim production is incident-free.
 
 [Upstash's Developer API](https://upstash.com/docs/devops/developer-api/introduction) requires a native Upstash account.
 Do not manufacture quota counts from successful requests, create a paid store, accept new terms, or widen integration access to bypass that boundary.
-An unavailable quota source remains an explicit observer warning for the cloud owner.
+When all four quota bindings are absent, quota observation is intentionally skipped and creates no `observer:quota` page.
+The next normal run resolves a prior missing-configuration observer page without a manual state edit.
+An existing measured quota incident remains unobserved until configured measurements resume; absence cannot prove its recovery.
+Partially configured bindings, invalid allowances, denied access, and unavailable configured quota sources remain explicit observer failures for the cloud owner.
+With all bindings configured, the existing 80% warning and 95% critical thresholds remain active.
 The daily allowance is operator-supplied because provider plans can change and a shared store includes nonproduction traffic.
 Separate production storage remains a cost decision for Dawit.
 

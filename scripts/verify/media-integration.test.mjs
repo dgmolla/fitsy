@@ -65,8 +65,10 @@ test('canonical media caller rejects unavailable tools and failed isolation befo
       { ps: 0, ffprobe: 1, ffmpeg: 0, summary: /ffprobe/ },
       { ps: 0, ffprobe: 0, ffmpeg: 1, summary: /ffmpeg/ },
       { ps: 0, ffprobe: 0, ffmpeg: 0, tesseract: 1, summary: /screenshot OCR/ },
+      { lockf: 75, summary: /canonical native lock/ },
+      { lockf: 127, summary: /canonical native lock/ },
     ]) {
-      for (const name of ['ps', 'ffprobe', 'ffmpeg', 'tesseract']) {
+      for (const name of ['ps', 'ffprobe', 'ffmpeg', 'tesseract', 'lockf']) {
         writeFileSync(join(bin, name), `#!/bin/sh\nexit ${entry[name] ?? 0}\n`); chmodSync(join(bin, name), 0o755);
       }
       const result = spawnSync('/bin/bash', ['scripts/verify/media-integration.sh'], {
@@ -78,6 +80,7 @@ test('canonical media caller rejects unavailable tools and failed isolation befo
     }
     for (const name of ['ps', 'ffprobe', 'ffmpeg', 'tesseract'])
       writeFileSync(join(bin, name), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+    writeFileSync(join(bin, 'lockf'), '#!/bin/sh\nprintf "%s\\n" "$@" > lockf-args\nexit 0\n', { mode: 0o755 });
     writeFileSync(join(bin, 'npm'), '#!/bin/sh\ntouch fixtures-started\nexit 0\n', { mode: 0o755 });
     const receipt = join(dir, '.evidence/verify/media-integration.json');
     for (const code of [1, 0]) {
@@ -86,6 +89,8 @@ test('canonical media caller rejects unavailable tools and failed isolation befo
         cwd: dir, env: { ...env, PATH: `${bin}:/usr/bin:/bin`, FITSY_PRODUCT_ROOT: dir }, encoding: 'utf8',
       });
       assert.equal(result.status, code, result.stderr);
+      assert.deepEqual(readFileSync(join(dir, 'lockf-args'), 'utf8').trim().split('\n'),
+        ['-t', '0', join(process.env.HOME, 'fitsy-refactor/loop/sim.lock'), 'true']);
       assert.equal(existsSync(join(dir, 'isolation-started')), true);
       assert.equal(existsSync(receipt), code === 0);
       if (code) assert.match(JSON.parse(result.stdout).summary, /recovery isolation test failed/);

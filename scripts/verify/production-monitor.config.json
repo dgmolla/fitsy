@@ -18,6 +18,7 @@
   "mobileMinimumChecks": 10,
   "staleDeploymentMinutes": 30,
   "reminderMinutes": 30,
+  "easWorkflowMaxAgeDays": 7,
   "quotaWarning": 0.8,
   "quotaCritical": 0.95,
   "expiryWarningDays": 14,

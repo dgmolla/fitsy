@@ -2,6 +2,7 @@
 """Real CLI/worktree regressions, with disposable Docker and simctl services."""
 import importlib.util
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -10,6 +11,7 @@ import sys
 import tempfile
 import time
 import unittest
+from types import SimpleNamespace
 from unittest import mock
 
 SCRIPT = Path(__file__).with_name('cleanup.py')
@@ -250,6 +252,244 @@ class CleanupTest(unittest.TestCase):
                 with self.subTest(stamp=stamp), self.assertRaises(ValueError):
                     cleanup.old(stamp)
             cleanup.old(85599)
+
+
+class ApprovedAttachmentsTest(unittest.TestCase):
+    def node_ms(self, path):
+        child = subprocess.Popen(['node', '-e',
+            'console.log(JSON.stringify(require("node:fs").statSync(process.argv[1]).mtimeMs))', str(path)],
+            stdout=subprocess.PIPE, text=True)
+        output, _ = child.communicate(timeout=10)
+        self.assertEqual(child.returncode, 0)
+        return json.loads(output)
+
+    def setUp(self):
+        spec = importlib.util.spec_from_file_location('cleanup', SCRIPT)
+        self.cleanup = importlib.util.module_from_spec(spec); spec.loader.exec_module(self.cleanup)
+        temporary = tempfile.TemporaryDirectory(); self.addCleanup(temporary.cleanup)
+        self.home = Path(temporary.name).resolve()
+        self.evidence = self.home / 'fitsy-wt/issue-755-evidence/private/repair15'
+        representatives = self.evidence / 'attachment-representatives'; representatives.mkdir(parents=True)
+        (self.home / 'fitsy-refactor/loop').mkdir(parents=True)
+        self.directory = self.home / 'Library/Developer/CoreSimulator/Devices' / self.cleanup.ATTACHMENT_DEVICE / \
+            'data/Containers/Data/InternalDaemon' / self.cleanup.ATTACHMENT_CONTAINER / 'Attachments'
+        self.directory.mkdir(parents=True)
+        data = b'\x89PNG\r\n\x1a\nunique preserved pixels'
+        digest = hashlib.sha256(data).hexdigest()
+        representative = representatives / (digest + '.png'); representative.write_bytes(data)
+        self.representative = representative
+        self.selected = []
+        for index in range(2):
+            path = self.directory / f'00000000-0000-0000-0000-{index:012d}'; path.write_bytes(data)
+            s = path.stat()
+            self.selected.append({'path': str(path), 'device': s.st_dev, 'inode': s.st_ino,
+                                  'bytes': len(data), 'modifiedMs': self.node_ms(path), 'video': False,
+                                  'sha256': digest, 'retained': str(representative)})
+        self.unique = self.directory / 'unselected'; self.unique.write_bytes(b'required unique evidence')
+        self.args = SimpleNamespace(records=self.evidence / 'attachment-duplicate-proposal.json', repo=self.home,
+                                    apply=False, dry_run_receipt=self.home / 'dry-run.json')
+        self.proposal = {'owner': {'issue': 755, 'device': self.cleanup.ATTACHMENT_DEVICE},
+                         'selectedFiles': 2, 'selectedBytes': 2 * len(data), 'selected': self.selected,
+                         'retainedRepresentatives': [{'path': str(representative), 'sha256': digest, 'bytes': len(data)}],
+                         'projection': {'conservativeNextFullGiB': 23, 'requiredFloorGiB': 8}}
+        self.write_proposal()
+        self.approval = {'id': int(self.cleanup.ATTACHMENT_APPROVAL), 'user': {'login': 'dgmolla'}, 'body': 'explicit fixture grant'}
+        self.device = {'udid': self.cleanup.ATTACHMENT_DEVICE, 'name': self.cleanup.ATTACHMENT_DEVICE_NAME, 'state': 'Shutdown'}
+        for target, value in [('ATTACHMENT_COUNT', 2), ('ATTACHMENT_BYTES', len(data) * 2),
+                              ('ATTACHMENT_REPRESENTATIVES', 1), ('ATTACHMENT_RETAINED_BYTES', len(data)),
+                              ('ATTACHMENT_APPROVAL_SHA', hashlib.sha256(self.approval['body'].encode()).hexdigest())]:
+            patch = mock.patch.object(self.cleanup, target, value); patch.start(); self.addCleanup(patch.stop)
+        self.opened = False; self.inventory_denied = False
+        def external(*args):
+            if args[0] == 'git': return 'a' * 40 if 'rev-parse' in args else ''
+            if args[0] == 'gh': return json.dumps(self.approval)
+            if args[0] == 'xcrun': return json.dumps({'devices': {'runtime': [self.device]}})
+            raise AssertionError(args)
+        for patch in [mock.patch.object(self.cleanup, 'run', side_effect=external),
+                      mock.patch.object(self.cleanup.Path, 'home', return_value=self.home),
+                      mock.patch.object(self.cleanup.shutil, 'disk_usage', return_value=SimpleNamespace(free=40 * 2**30)),
+                      mock.patch.object(self.cleanup.subprocess, 'run', side_effect=lambda *a, **kw: SimpleNamespace(
+                          returncode=0 if self.opened else 1, stdout='open' if self.opened else '',
+                          stderr='denied' if self.inventory_denied else ''))]:
+            patch.start(); self.addCleanup(patch.stop)
+
+    def write_proposal(self):
+        self.args.records.write_text(json.dumps(self.proposal)); self.args.records.chmod(0o600)
+        self.cleanup.ATTACHMENT_PROPOSAL_SHA = hashlib.sha256(self.args.records.read_bytes()).hexdigest()
+
+    def test_young_unmerged_exception_requires_dry_run_and_preserves_unique_bytes(self):
+        self.args.apply = True
+        with self.assertRaises(FileNotFoundError): self.cleanup.approved_attachments(self.args)
+        self.args.apply = False
+        receipt = self.cleanup.approved_attachments(self.args)
+        self.assertEqual((receipt['status'], receipt['removed']), ('would-delete', 0))
+        self.assertTrue(all(Path(row['path']).exists() for row in self.selected))
+        self.args.dry_run_receipt.write_text(json.dumps(receipt)); self.args.apply = True
+        result = self.cleanup.approved_attachments(self.args)
+        self.assertEqual((result['removed'], result['missing'], result['changed']), (2, 2, 0))
+        self.assertEqual(self.unique.read_bytes(), b'required unique evidence')
+        self.assertTrue(self.representative.exists())
+        self.assertFalse((self.home / '.fitsy-dispatcher').exists())
+
+    def test_changed_or_unpreserved_duplicate_fails_before_any_removal(self):
+        for mutation in ('replacement', 'hash', 'representative', 'symlink', 'path', 'manifest'):
+            with self.subTest(mutation=mutation):
+                path = Path(self.selected[-1]['path']); original = path.read_bytes(); stamp = path.stat()
+                rep = self.representative.read_bytes()
+                if mutation == 'replacement': path.unlink(); path.write_bytes(original)
+                if mutation == 'hash': path.write_bytes(b'x' * len(original)); os.utime(path, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+                if mutation == 'representative': self.representative.write_bytes(b'bad')
+                if mutation == 'symlink': path.unlink(); path.symlink_to(self.representative)
+                if mutation == 'path': self.selected[-1]['path'] = str(self.unique); self.write_proposal()
+                if mutation == 'manifest': self.args.records.write_text('{}')
+                with self.assertRaises((ValueError, OSError, KeyError)): self.cleanup.approved_attachments(self.args)
+                self.assertTrue(Path(self.selected[0]['path']).exists())
+                self.representative.write_bytes(rep)
+                if mutation == 'path': self.selected[-1]['path'] = str(path)
+                if path.is_symlink(): path.unlink()
+                path.write_bytes(original); s = path.stat()
+                self.selected[-1].update(device=s.st_dev, inode=s.st_ino, modifiedMs=self.node_ms(path))
+                self.write_proposal()
+
+    def test_live_owner_writer_uncertain_inventory_and_changed_approval_are_rejected(self):
+        for condition in ('claim', 'simple-lock', 'booted', 'owner', 'writer', 'inventory', 'approval'):
+            with self.subTest(condition=condition):
+                path = self.home / ('.fitsy-sim-claim.json' if condition == 'claim' else 'fitsy-wt/simulator.lock')
+                if condition in ('claim', 'simple-lock'): path.write_text('live')
+                if condition == 'booted': self.device['state'] = 'Booted'
+                if condition == 'owner': self.device['name'] = 'User iPhone'
+                if condition == 'writer': self.opened = True
+                if condition == 'inventory': self.inventory_denied = True
+                if condition == 'approval': self.approval['body'] = 'revoked'
+                with self.assertRaises(ValueError): self.cleanup.approved_attachments(self.args)
+                self.assertTrue(all(Path(row['path']).exists() for row in self.selected))
+                if path.exists(): path.unlink()
+                self.device.update(state='Shutdown', name=self.cleanup.ATTACHMENT_DEVICE_NAME)
+                self.opened = self.inventory_denied = False
+                self.approval['body'] = 'explicit fixture grant'
+
+    def test_canonical_os_lock_blocks_cleanup_but_low_projection_remains_a_native_admission_boundary(self):
+        with mock.patch.object(self.cleanup.fcntl, 'lockf', side_effect=BlockingIOError):
+            with self.assertRaises(BlockingIOError): self.cleanup.approved_attachments(self.args)
+        with mock.patch.object(self.cleanup.shutil, 'disk_usage', return_value=SimpleNamespace(free=20 * 2**30)):
+            result = self.cleanup.approved_attachments(self.args)
+            self.assertFalse(result['full_run_admitted'])
+            self.assertLess(result['projected_remaining_bytes'], result['required_floor_bytes'])
+        self.assertTrue(all(Path(row['path']).exists() for row in self.selected))
+
+    def test_node_snapshot_timestamp_survives_python_stat_float_rounding(self):
+        path = Path(self.selected[1]['path'])
+        stamp = 1794099623907534782
+        os.utime(path, ns=(stamp, stamp))
+        node_ms = self.node_ms(path)
+        self.assertNotEqual(path.stat().st_mtime * 1000, node_ms, 'fixture must exercise the actual cross-language boundary')
+        self.selected[1]['modifiedMs'] = node_ms
+        self.write_proposal()
+        self.assertEqual(self.cleanup.approved_attachments(self.args)['status'], 'would-delete')
+        self.assertTrue(path.exists())
+
+    def test_hash_read_can_update_access_time_without_changing_the_approved_png(self):
+        path = Path(self.selected[0]['path'])
+        before = path.stat()
+        os.utime(path, ns=(1_000_000_000, before.st_mtime_ns))
+        self.assertEqual(self.cleanup.approved_attachments(self.args)['status'], 'would-delete')
+        after = path.stat()
+        self.assertGreater(after.st_atime_ns, 1_000_000_000)
+        self.assertEqual(after.st_mtime_ns, before.st_mtime_ns)
+        self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), self.selected[0]['sha256'])
+
+    def test_preparation_stages_only_duplicate_groups_and_checks_peak_space_before_copying(self):
+        self.unique.write_bytes(b'\x89PNG\r\n\x1a\nuntouched singleton pixels')
+        s = self.unique.stat()
+        snapshot = {'udid': self.cleanup.ATTACHMENT_DEVICE, 'directories': [str(self.directory)],
+                    'entries': [*self.selected, {'path': str(self.unique), 'device': s.st_dev,
+                        'inode': s.st_ino, 'bytes': s.st_size, 'modifiedMs': self.node_ms(self.unique), 'video': False}]}
+        self.args.records = self.home / 'snapshot.json'
+        self.args.records.write_text(json.dumps(snapshot)); self.args.records.chmod(0o600)
+        self.args.output_dir = self.home / 'fitsy-wt/issue-755-evidence/private/repair25'
+        self.args.output_dir.mkdir()
+        original = self.cleanup.run
+        clones = []
+        def external(*args):
+            if args[:2] == ('/usr/bin/ditto', '--clone'):
+                clones.append(args)
+                Path(args[3]).write_bytes(Path(args[2]).read_bytes())
+                return ''
+            return original(*args)
+        with mock.patch.object(self.cleanup, 'run', side_effect=external):
+            with mock.patch.object(self.cleanup.shutil, 'disk_usage', return_value=SimpleNamespace(free=8 * 2**30)):
+                with self.assertRaisesRegex(ValueError, 'staging'):
+                    self.cleanup.prepare_attachments(self.args)
+            self.assertEqual(clones, [])
+            self.assertFalse((self.args.output_dir / 'attachment-representatives').exists())
+            proposal = self.cleanup.prepare_attachments(self.args)
+            self.assertEqual(proposal['selectedFiles'], 1)
+            self.assertEqual(len(proposal['retainedRepresentatives']), 1)
+            self.assertEqual(proposal['staging']['requiredBytes'], self.selected[0]['bytes'])
+            self.assertEqual(len(clones), 1)
+            self.assertEqual(len(list(self.directory.iterdir())), 3)
+            self.assertEqual(self.unique.read_bytes(), b'\x89PNG\r\n\x1a\nuntouched singleton pixels')
+            # Reuse the verified staged representative rather than copying again.
+            self.assertEqual(self.cleanup.prepare_attachments(self.args)['staging']['requiredBytes'], 0)
+            self.assertEqual(len(clones), 1)
+            self.unique.write_bytes(b'changed source')
+            with self.assertRaises(ValueError):
+                self.cleanup.prepare_attachments(self.args)
+            self.assertEqual(len(clones), 1)
+
+    def test_successor_scope_requires_its_exact_external_owner_grant_and_reviewed_source(self):
+        control = self.home / 'scripts/delivery/cleanup.py'
+        control.parent.mkdir(parents=True); control.write_text('reviewed control fixture\n')
+        original_run = self.cleanup.run
+        def source_proof(*args):
+            if args[0] == 'git' and 'show' in args: return 'reviewed control fixture'
+            return original_run(*args)
+        for patch in (mock.patch.object(self.cleanup, '__file__', str(control)),
+                      mock.patch.object(self.cleanup, 'run', side_effect=source_proof)):
+            patch.start(); self.addCleanup(patch.stop)
+        self.evidence.rename(self.evidence.with_name('repair25'))
+        self.evidence = self.evidence.with_name('repair25')
+        self.representative = self.evidence / 'attachment-representatives' / self.representative.name
+        self.args.records = self.evidence / self.args.records.name
+        self.args.approval_comment = 9001
+        for row in self.selected: row['retained'] = str(self.representative)
+        self.proposal['retainedRepresentatives'][0]['path'] = str(self.representative)
+        self.write_proposal()
+        values = {'NEXT_ATTACHMENT_PROPOSAL_SHA': hashlib.sha256(self.args.records.read_bytes()).hexdigest(),
+                  'NEXT_ATTACHMENT_COUNT': 2, 'NEXT_ATTACHMENT_BYTES': self.proposal['selectedBytes'],
+                  'NEXT_ATTACHMENT_REPRESENTATIVES': 1, 'NEXT_ATTACHMENT_RETAINED_BYTES': self.representative.stat().st_size}
+        for name, value in values.items():
+            patch = mock.patch.object(self.cleanup, name, value, create=True); patch.start(); self.addCleanup(patch.stop)
+        self.approval.update(id=9001, issue_url='https://api.github.com/repos/dgmolla/fitsy/issues/755')
+        approved = f'''**TL;DR:** Owner approves the exact #755 duplicate cleanup below.
+
+Control source: `{'a' * 40}`.
+Proposal SHA256: `{values['NEXT_ATTACHMENT_PROPOSAL_SHA']}`.
+Delete only 2 duplicate PNGs totaling {self.proposal['selectedBytes']} bytes from the owned normal986/C385 attachment directory.
+Retain all 1 representatives totaling {self.representative.stat().st_size} bytes, every unselected original and every canonical recovery input.
+The outside-path and younger-than-four-hours exceptions apply only to this sealed list.
+Use reviewed scripts/delivery/cleanup.py dry-run, then --apply, after fresh identity, hash, no-consumer and capacity checks.'''
+        for body in ('pending', approved.replace('Owner approves', 'Owner has not approved'),
+                     approved.replace('a' * 40, 'b' * 40), approved.replace('Retain all 1', 'Retain all 0')):
+            self.approval['body'] = body
+            with self.assertRaises(ValueError): self.cleanup.approved_attachments(self.args)
+            self.assertTrue(all(Path(row['path']).exists() for row in self.selected))
+        self.approval['body'] = approved
+        receipt = self.cleanup.approved_attachments(self.args)
+        self.assertEqual(receipt['status'], 'would-delete')
+        self.args.dry_run_receipt.write_text(json.dumps(receipt)); self.args.apply = True
+        control.write_text('modified control\n')
+        with self.assertRaises(ValueError): self.cleanup.approved_attachments(self.args)
+        control.write_text('reviewed control fixture\n')
+        self.approval['body'] += '\nApproval withdrawn.'
+        with self.assertRaises(ValueError): self.cleanup.approved_attachments(self.args)
+        self.approval['body'] = approved
+        self.approval['issue_url'] = 'https://api.github.com/repos/dgmolla/fitsy/issues/753'
+        with self.assertRaises(ValueError): self.cleanup.approved_attachments(self.args)
+        self.approval['issue_url'] = 'https://api.github.com/repos/dgmolla/fitsy/issues/755'
+        self.assertEqual(self.cleanup.approved_attachments(self.args)['removed'], 2)
+        self.assertTrue(self.representative.exists())
+        self.assertEqual(self.unique.read_bytes(), b'required unique evidence')
 
 
 if __name__ == '__main__':

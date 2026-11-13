@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Pressable, ScrollView, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,10 +9,9 @@ import type { useDiscoveryState } from '@/lib/useDiscoveryState';
 import { EDITORIAL } from '@/lib/brand';
 import { hasMapCoordinate, mapRestaurantLabel } from '@/lib/discoveryMap';
 import { trackRestaurantTapped } from '@/lib/analytics';
-import { SearchBar } from './DiscoveryChrome';
+import { FrostedSearchSurface } from './DiscoveryChrome';
 import { openRestaurantOrPaywall } from './DiscoveryCards';
-import { RestaurantPhoto } from './RestaurantPhoto';
-import { DiscoveryViewToggle } from './DiscoveryViewToggle';
+import { DiscoveryMapCard } from './DiscoveryMapCard';
 import { ShuffleButton } from './ShuffleButton';
 import { s } from './DiscoveryMap.styles';
 import { useFloatingNavClearance } from '@/lib/floatingNav';
@@ -20,126 +19,231 @@ import { useFloatingNavClearance } from '@/lib/floatingNav';
 type Discovery = ReturnType<typeof useDiscoveryState>;
 const DELTA = { latitudeDelta: 0.09, longitudeDelta: 0.09 };
 
-export default function DiscoveryMap({ discovery: d, onShowList }: { discovery: Discovery; onShowList: () => void }) {
+// Snapshot only paint/selection changes, with no asynchronous image in a marker.
+const RestaurantMarker = React.memo(function RestaurantMarker({ result, position, selected, onSelect }: {
+  result: RestaurantResult; position: number; selected: boolean; onSelect: (result: RestaurantResult) => void;
+}) {
+  const [tracking, setTracking] = useState(true);
+  useEffect(() => {
+    setTracking(true);
+    const timer = setTimeout(() => setTracking(false), 250);
+    return () => clearTimeout(timer);
+  }, [selected, result.name]);
+  return <Marker identifier={result.id} coordinate={{ latitude: result.lat, longitude: result.lng }}
+    anchor={{ x: 0.5, y: 0.5 }} stopPropagation tracksViewChanges={tracking}
+    zIndex={selected ? 1000 : 100 - position} testID={`map-pin-${position}`}
+    accessibilityRole="button" accessibilityLabel={mapRestaurantLabel(result)}
+    accessibilityHint="Select restaurant card" accessibilityState={{ selected }} onPress={() => onSelect(result)}>
+    <View style={[s.pin, s.emojiPin, selected && s.selectedPin]} collapsable={false}>
+      <Text style={s.pinEmoji}>🍴</Text>
+    </View>
+  </Marker>;
+});
+
+// Loaded only when the iOS Discovery map is selected.
+export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, onTourLayoutChange }: {
+  discovery: Discovery; onShowList: () => void; previewHeader?: React.ReactNode; onTourLayoutChange?: () => void;
+}) {
   const insets = useSafeAreaInsets();
   const tabBarClearance = useFloatingNavClearance();
+  const bottomClearance = d.isOnboardingPreview ? insets.bottom : tabBarClearance;
+  const { width, height } = useWindowDimensions();
   const map = useRef<MapView>(null);
+  const carousel = useRef<ScrollView>(null);
+  const [mapRevision, setMapRevision] = useState(0);
   const [selectedId, setSelectedId] = useState<string>();
   const [trayHeight, setTrayHeight] = useState(220);
-  // Apply the same free-result boundary as the list; the map grants no extra access.
-  const visibleResults = d.locked ? d.results.slice(0, 3) : d.results;
-  const pins = d.canSearch && !d.loading ? visibleResults.filter(hasMapCoordinate) : [];
-  const selected = pins.find(result => result.id === selectedId);
-  const index = selected ? pins.indexOf(selected) : -1;
+  const [topHeight, setTopHeight] = useState(104);
+  const [layoutHeight, setLayoutHeight] = useState(height);
+  const panning = useRef(false);
+  const touchStart = useRef<{ x: number; y: number } | undefined>(undefined);
+  const [pendingArea, setPendingArea] = useState<{ lat: number; lng: number } | null>(null);
+  const cardWidth = width - 56;
+  const stride = cardWidth + 12;
+  const compact = height < 740;
+  const controlsBottom = insets.top + 8 + topHeight;
+  const maxTrayHeight = Math.max(160, layoutHeight - controlsBottom - bottomClearance - 96);
+  // Match the list's free-result boundary and preserve rows without coordinates.
+  // The preview appends one real, locked card teasing the paid tier, when the
+  // area has a fourth nearby restaurant to show (lockedTeaser is null otherwise).
+  const cards = useMemo(() => d.canSearch && !d.loading
+    ? (d.isOnboardingPreview ? (d.lockedTeaser ? [...d.results.slice(0, 3), d.lockedTeaser] : d.results.slice(0, 3))
+      : d.locked ? d.results.slice(0, 3) : d.results) : [],
+    [d.canSearch, d.loading, d.locked, d.isOnboardingPreview, d.results, d.lockedTeaser]);
+  const pins = useMemo(() => cards.filter(hasMapCoordinate), [cards]);
+  const index = cards.findIndex(result => result.id === selectedId);
   const fallback = !d.location.loading && d.location.source.startsWith('fallback-');
   const { lat, lng } = d.location;
+  useEffect(() => { setPendingArea(null); panning.current = false; }, [lat, lng]);
+  const firstId = cards[0]?.id;
   useEffect(() => {
     setSelectedId(undefined);
-    if (!d.location.loading) map.current?.animateToRegion({ latitude: lat, longitude: lng, ...DELTA }, 350);
-  }, [lat, lng, d.location.loading]);
-  function select(result: RestaurantResult) {
+    carousel.current?.scrollTo({ x: 0, animated: false });
+  }, [firstId, lat, lng, d.tourVisible]);
+  useEffect(() => {
+    if (!mapRevision || d.location.loading || pendingArea) return;
+    // One camera writer, after measured layout. Do not also set mapPadding:
+    // Apple Maps applies those layout margins in addition to this fitted inset.
+    const frame = requestAnimationFrame(() => {
+      // A touch may finish without a native region event. A later intentional
+      // fit supersedes that gesture and must not be mistaken for an area pick.
+      panning.current = false;
+      if (!pins.length) {
+        map.current?.animateToRegion({ latitude: lat, longitude: lng, ...DELTA }, 0);
+        return;
+      }
+      const coordinates = pins.length === 1
+        ? [{ latitude: pins[0].lat - 0.004, longitude: pins[0].lng - 0.004 },
+          { latitude: pins[0].lat + 0.004, longitude: pins[0].lng + 0.004 }]
+        : pins.map(result => ({ latitude: result.lat, longitude: result.lng }));
+      map.current?.fitToCoordinates(coordinates, { edgePadding: {
+        top: controlsBottom + 28, bottom: trayHeight + bottomClearance + 28, left: 32, right: 32,
+      }, animated: false });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [mapRevision, pins, controlsBottom, trayHeight, bottomClearance, layoutHeight, lat, lng, d.location.loading, pendingArea]);
+  const restoreCarousel = useCallback(() => {
+    // Refresh/error states unmount this view while retaining the selected row.
+    carousel.current?.scrollTo({ x: Math.max(0, index) * stride, animated: false });
+  }, [index, stride]);
+  function select(result: RestaurantResult, scroll = true) {
     setSelectedId(result.id);
-    map.current?.animateToRegion({ latitude: result.lat, longitude: result.lng, ...DELTA }, 300);
+    if (scroll) {
+      carousel.current?.scrollTo({ x: cards.findIndex(card => card.id === result.id) * stride, animated: true });
+    }
   }
   function open(result: RestaurantResult) {
-    trackRestaurantTapped({ restaurant_id: result.id, restaurant_name: result.name, position: index, entry_point: 'section' });
+    trackRestaurantTapped({ restaurant_id: result.id, restaurant_name: result.name,
+      position: cards.findIndex(card => card.id === result.id), entry_point: 'section' });
+    if (d.isOnboardingPreview) { void d.unlockPreview(result); return; }
     void openRestaurantOrPaywall(d.locked === true, () => router.push({
       pathname: `/restaurant/${result.id}`,
       params: { address: result.address, distance: result.distanceMiles?.toFixed(1), photoUrl: result.photoUrl, cuisine: result.cuisineTags?.[0] },
     }), d.onLockedTap);
   }
+  const showRestaurants = cards.length > 0 && !d.loading && !d.refreshing && !d.location.loading && !d.error && !d.outOfArea;
   const emptyTitle = !d.canSearch ? 'Find your next meal' : d.hasQuery ? 'No matches for this search' : 'No meals with nutrition nearby';
-  return <View style={s.root} testID="discovery-map">
+  const more = d.nextCursor && !d.locked && !d.isOnboardingPreview && !d.loading && <Pressable style={s.more} disabled={d.loadingMore || d.refreshing}
+    onPress={() => { void d.handleEndReached(); }} testID="map-load-more" accessibilityRole="button"
+    accessibilityState={{ disabled: d.loadingMore || d.refreshing }}>
+    <Text style={s.link}>{d.loadingMore ? 'Loading more…' : 'More spots'}</Text>
+  </Pressable>;
+  return <View style={s.root} testID="discovery-map" onLayout={event => setLayoutHeight(event.nativeEvent.layout.height)}>
     {!d.location.loading && <MapView ref={map} style={s.map} testID="discovery-map-surface"
-      initialRegion={{ latitude: lat, longitude: lng, ...DELTA }}
-      onMapReady={() => map.current?.animateToRegion({ latitude: lat, longitude: lng, ...DELTA }, 0)}
-      mapPadding={{ top: insets.top + 72, right: 24, bottom: trayHeight + tabBarClearance + 12, left: 24 }}
+      initialRegion={{ latitude: lat, longitude: lng, ...DELTA }} onMapReady={() => setMapRevision(value => value + 1)}
+      onLayout={() => setMapRevision(value => value + 1)}
+      onTouchStart={event => { panning.current = false; touchStart.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY }; }}
+      onTouchCancel={() => { touchStart.current = undefined; }}
+      onPanDrag={() => { panning.current = true; }}
+      onTouchEnd={event => {
+        // MapKit scrolling can omit onPanDrag/onTouchMove while still delivering
+        // touch endpoints before region completion. A tap must not arm a search.
+        const start = touchStart.current;
+        touchStart.current = undefined;
+        if (start && Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y) > 8) {
+          panning.current = true;
+        }
+      }}
+      onRegionChangeComplete={region => {
+        // MapKit also reports programmatic fits; only a real pan offers a search.
+        if (!panning.current) return;
+        panning.current = false;
+        const { latitude, longitude } = region;
+        if (Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180)
+          setPendingArea({ lat: latitude, lng: longitude });
+      }}
+      legalLabelInsets={{ top: 0, right: 0, bottom: trayHeight + bottomClearance + 8, left: 12 }}
       showsUserLocation={d.location.source === 'gps'} showsMyLocationButton={false}
-      showsCompass={false} showsPointsOfInterest={false} rotateEnabled={false}
-      onPress={() => setSelectedId(undefined)}>
-      {pins.map((result, position) => <Marker key={result.id} identifier={result.id}
-        coordinate={{ latitude: result.lat, longitude: result.lng }} anchor={{ x: 0.5, y: 0.5 }} stopPropagation
-        zIndex={result.id === selectedId ? 1000 : pins.length - position}
-        testID={`map-pin-${position}`} accessibilityRole="button" accessibilityLabel={mapRestaurantLabel(result)}
-        accessibilityHint="Show restaurant preview" accessibilityState={{ selected: result.id === selectedId }}
-        onPress={() => select(result)}>
-        <View style={s.pin} collapsable={false}>
-          <View style={[s.photoRing, result.id === selectedId && s.selectedRing]}>
-            <RestaurantPhoto uri={result.photoUrl} name={result.name} style={s.pinPhoto} thumbnail />
-          </View>
-          <Text style={s.pinLabel} numberOfLines={1}>{mapRestaurantLabel(result)}</Text>
-        </View>
-      </Marker>)}
+      showsCompass={false} showsPointsOfInterest={false} scrollEnabled rotateEnabled={false}>
+      {pins.map(result => <RestaurantMarker key={result.id} result={result} position={cards.indexOf(result)}
+        selected={result.id === selectedId} onSelect={select} />)}
     </MapView>}
-    <View pointerEvents="box-none" style={[s.top, { top: insets.top + 12 }]}>
-      <Pressable style={s.location} testID="discovery-location" onPress={d.handleOpenLocationPicker}
-        accessibilityRole="button" accessibilityLabel={`Location: ${d.locationLabel}`} accessibilityHint="Change search area">
-        <Ionicons name="location" size={16} color={EDITORIAL.green} />
-        <Text style={s.locationText} numberOfLines={1}>{d.locationLabel}</Text>
-        <Ionicons name="chevron-down" size={12} color={EDITORIAL.green} />
-      </Pressable>
-      <DiscoveryViewToggle map onPress={onShowList} />
+    {pendingArea && <View pointerEvents="none" style={s.areaCenter} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <Ionicons name="add" size={28} color={EDITORIAL.green} />
+    </View>}
+    <View testID="map-controls" pointerEvents="box-none" style={[s.top, { top: insets.top + 8 }]}
+      onLayout={event => { setTopHeight(event.nativeEvent.layout.height); onTourLayoutChange?.(); }}>
+      {previewHeader && <View style={s.previewHeader}>{previewHeader}</View>}
+      <View style={s.searchRow}>
+        <Pressable ref={d.tourSearchRef} collapsable={false} style={s.searchEntry} testID="map-search-entry" onPress={onShowList}
+          accessibilityRole="button" accessibilityLabel={d.query ? `Search: ${d.query}` : 'Search restaurants or dishes'}
+          accessibilityHint="Open the list with search and macro editing">
+          <FrostedSearchSurface />
+          <Ionicons name="search" size={19} color={EDITORIAL.green} />
+          <Text style={s.searchText} numberOfLines={1}>{d.query || 'Search restaurants or dishes'}</Text>
+        </Pressable>
+      </View>
+      <View style={s.topRow} pointerEvents="box-none" testID="map-toolbar">
+        <Pressable ref={d.tourLocationRef} collapsable={false} style={s.location} testID="discovery-location" onPress={d.handleOpenLocationPicker}
+          accessibilityRole="button" accessibilityLabel={`Location: ${d.locationLabel}`} accessibilityHint="Change search area">
+          <Ionicons name="location" size={15} color={EDITORIAL.green} />
+          <Text style={s.locationText} numberOfLines={1}>{d.locationLabel}</Text>
+          <Ionicons name="chevron-down" size={12} color={EDITORIAL.green} />
+        </Pressable>
+        <Pressable ref={d.tourEditRef} collapsable={false} style={s.goals} testID="map-goals" onPress={() => d.setFilterVisible(true)}
+          accessibilityRole="button" accessibilityLabel="Edit macros">
+          <Ionicons name="options-outline" size={16} color={EDITORIAL.green} /><Text style={s.locationText}>Macros</Text>
+        </Pressable>
+        {!d.isOnboardingPreview && <ShuffleButton style={s.shuffle} disabled={!d.canShuffle} onPress={d.handleShuffle} />}
+      </View>
+      {pendingArea && <Pressable style={s.areaSearch} testID="map-search-area" accessibilityRole="button"
+        accessibilityLabel="Search this area" accessibilityHint="Search near the center of the map with your current meal targets"
+        onPress={() => d.handlePickLocation({ ...pendingArea, name: 'Map area' })}>
+        <Ionicons name="search" size={17} color={EDITORIAL.green} /><Text style={s.locationText}>Search this area</Text>
+      </Pressable>}
     </View>
-    <KeyboardAvoidingView style={s.foreground} behavior="padding" pointerEvents="box-none">
+    <View style={s.foreground} pointerEvents="box-none">
       <View style={s.spacer} pointerEvents="none" />
-      <View testID="map-tray" style={[s.tray, { marginBottom: tabBarClearance }]} onLayout={event => setTrayHeight(event.nativeEvent.layout.height)}>
+      <View testID="map-tray" style={[s.tray, { marginBottom: bottomClearance, maxHeight: maxTrayHeight }]}
+        onLayout={event => { setTrayHeight(event.nativeEvent.layout.height); onTourLayoutChange?.(); }}>
         {fallback && <Text style={s.fallback} testID="map-location-fallback">
           {d.location.source === 'fallback-denied' ? 'Location off' : 'Location unavailable'} · Showing {d.locationLabel}. Change area above.
         </Text>}
-        {(d.loading || d.refreshing || d.location.loading) && <View style={s.status} accessibilityLiveRegion="polite">
-          <ActivityIndicator color={EDITORIAL.green} /><Text style={s.body}>Finding spots…</Text>
-        </View>}
-        {!d.loading && d.error && <View style={s.status}>
-          <Text style={s.body} accessibilityRole="alert">{d.error}</Text>
-          <Pressable style={s.action} onPress={() => { void d.handleRefresh(); }} testID="preview-retry" accessibilityRole="button"><Text style={s.link}>Try again</Text></Pressable>
-        </View>}
-        {!d.loading && !d.error && pins.length === 0 && <View style={s.status}>
-          <Text style={s.heading}>{visibleResults.length ? 'These spots have no map location' : emptyTitle}</Text>
-          <Text style={s.body}>{visibleResults.length ? 'Open the list to explore every result.' : 'Try another dish or area, or adjust your meal targets.'}</Text>
-          <Pressable style={s.action} onPress={() => d.setFilterVisible(true)} testID="discovery-empty-edit" accessibilityRole="button"><Text style={s.link}>Adjust meal targets</Text></Pressable>
-          {d.hasQuery && <Pressable style={s.action} onPress={d.handleClearQuery} testID="discovery-empty-clear" accessibilityRole="button"><Text style={s.link}>Clear search</Text></Pressable>}
-        </View>}
-        {selected && <View testID="map-preview" style={s.previewRow}>
-          <Pressable onPress={() => open(selected)} style={s.preview} testID="map-preview-open"
-            accessibilityRole="button" accessibilityLabel={`Open ${mapRestaurantLabel(selected)}`}>
-            <RestaurantPhoto uri={selected.photoUrl} name={selected.name} style={s.previewPhoto} thumbnail />
-            <View style={s.previewCopy}>
-              <Text style={s.heading} numberOfLines={2}>{selected.name}</Text>
-              <Text style={s.body} numberOfLines={1}>{selected.cuisineTags.join(', ') || 'Restaurant'}{Number.isFinite(selected.distanceMiles) ? ` · ${selected.distanceMiles.toFixed(1)} mi` : ''}</Text>
-              <Text style={s.previewLink}>View menu →</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={EDITORIAL.green} />
-          </Pressable>
-          <Pressable onPress={() => setSelectedId(undefined)} style={s.close} testID="map-preview-close" accessibilityRole="button" accessibilityLabel="Close restaurant preview">
-            <Ionicons name="close" size={18} color={EDITORIAL.green} />
-          </Pressable>
-        </View>}
-        {pins.length > 0 && <View style={s.caption}>
-          <View style={s.captionCopy}><Text style={s.heading}>Spots near you</Text><Text style={s.body}>See what’s popping 🔥</Text></View>
-          <Pressable testID="map-previous-spot" style={s.arrow} disabled={index <= 0} onPress={() => select(pins[index - 1])} accessibilityRole="button" accessibilityLabel="Previous spot" accessibilityState={{ disabled: index <= 0 }}>
-            <Ionicons name="chevron-back" size={19} color={index <= 0 ? EDITORIAL.textSoft : EDITORIAL.green} />
-          </Pressable>
-          <Text style={s.body} testID="map-page">{index < 0 ? `${pins.length} spots` : `${index + 1} / ${pins.length}`}</Text>
-          <Pressable testID="map-next-spot" style={s.arrow} disabled={index === pins.length - 1} onPress={() => select(pins[index + 1])} accessibilityRole="button" accessibilityLabel="Next spot" accessibilityState={{ disabled: index === pins.length - 1 }}>
-            <Ionicons name="chevron-forward" size={19} color={EDITORIAL.green} />
-          </Pressable>
-        </View>}
-        {pins.length > 1 && <View style={s.dots} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-          {pins.slice(Math.max(0, index - 2), Math.max(0, index - 2) + 5).map(result => <View key={result.id} style={[s.dot, result.id === selectedId && s.activeDot]} />)}
-        </View>}
-        {d.nextCursor && !d.locked && !d.loading && <Pressable style={s.more} disabled={d.loadingMore || d.refreshing} onPress={() => { void d.handleEndReached(); }} testID="map-load-more" accessibilityRole="button" accessibilityState={{ disabled: d.loadingMore || d.refreshing }}>
-          <Text style={s.link}>{d.loadingMore ? 'Loading more…' : 'More spots'}</Text>
-        </Pressable>}
-        <SearchBar value={d.query} onChangeText={d.setQuery} onClear={d.handleClearQuery}
-          placeholder="Search spots, dishes, or vibes…" action={<ShuffleButton disabled={!d.canShuffle} onPress={d.handleShuffle} />} />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chips} keyboardShouldPersistTaps="handled">
-          {(['calories', 'protein', 'carbs', 'fat'] as const).map((key, position) => <Pressable key={key}
-            style={s.chip} onPress={() => d.setFilterVisible(true)} testID={position === 0 ? 'preview-edit-targets' : `map-filter-${key}`}
-            accessibilityRole="button" accessibilityLabel={`Edit ${key === 'calories' ? 'calories per meal' : `${key} grams`}, ${d.inputs[key] || 'not set'}`}>
-            <Text style={s.chipText}>{d.inputs[key] || 'Any'}{d.inputs[key] && key !== 'calories' ? 'g' : ''} {key === 'calories' ? 'kcal' : key}</Text>
-          </Pressable>)}
-        </ScrollView>
+        {!showRestaurants && <ScrollView style={{ flexGrow: 0, flexShrink: 1 }}
+          contentContainerStyle={s.status} keyboardShouldPersistTaps="handled">
+          {d.loading || d.refreshing || d.location.loading ? <View accessibilityLiveRegion="polite">
+            <ActivityIndicator color={EDITORIAL.green} /><Text style={s.body}>Finding spots…</Text>
+          </View> : d.error ? <>
+            <Text style={s.body} accessibilityRole="alert">{d.error}</Text>
+            <Pressable style={s.action} onPress={() => { void d.handleRefresh(); }} testID="preview-retry" accessibilityRole="button"><Text style={s.link}>Try again</Text></Pressable>
+          </> : d.outOfArea ? <>
+            <Text style={s.heading}>We're not in your area yet</Text>
+            <Text style={s.body}>Fitsy is launching in Los Angeles first - your city is next on the list.</Text>
+            <Pressable style={s.action} onPress={d.handleJoinWaitlist} testID="discovery-join-waitlist" accessibilityRole="button">
+              <Text style={s.link}>Keep me posted</Text>
+            </Pressable>
+          </> : <>
+            <Text style={s.heading}>{emptyTitle}</Text>
+            <Text style={s.body}>Try another dish or area, or adjust your meal targets.</Text>
+            <Pressable style={s.action} onPress={() => d.setFilterVisible(true)} testID="discovery-empty-edit" accessibilityRole="button"><Text style={s.link}>Adjust meal targets</Text></Pressable>
+            {d.hasQuery && <Pressable style={s.action} onPress={d.handleClearQuery} testID="discovery-empty-clear" accessibilityRole="button"><Text style={s.link}>Clear search</Text></Pressable>}
+          </>}
+        </ScrollView>}
+        {showRestaurants && <ScrollView ref={carousel} horizontal testID="map-carousel" style={{ height: compact ? 174 : 210, flexGrow: 0 }}
+          showsHorizontalScrollIndicator={false} snapToInterval={stride} decelerationRate="fast" disableIntervalMomentum
+          contentContainerStyle={s.carousel} keyboardShouldPersistTaps="handled"
+          onLayout={() => { restoreCarousel(); onTourLayoutChange?.(); }} onContentSizeChange={restoreCarousel}
+          onMomentumScrollEnd={event => {
+            const result = cards[Math.min(cards.length - 1, Math.max(0, Math.round(event.nativeEvent.contentOffset.x / stride)))];
+            if (result) select(result, false);
+          }}>
+          {cards.map((result, position) => <View key={result.id} ref={position === 0 ? d.tourHeroRef : undefined} collapsable={false} testID={result.id === selectedId ? 'map-preview' : undefined}>
+            <DiscoveryMapCard result={result} locked={(d.locked === true && !d.isOnboardingPreview) || result.id === d.lockedTeaser?.id}
+              onboardingPreview={d.isOnboardingPreview} hideDishName={d.isOnboardingPreview && position > 0}
+              style={{ width: cardWidth, height: compact ? 174 : 210 }}
+              testID={result.id === selectedId ? 'map-preview-open' : `map-card-${position}`} onPress={() => open(result)}
+              label={`Open ${mapRestaurantLabel(result)}`} page={`${position + 1} / ${cards.length}`}
+              pageTestID={position === Math.max(0, index) ? 'map-page' : undefined} />
+          </View>)}
+          {more && <View style={s.moreCard}>{more}</View>}
+        </ScrollView>}
+        {d.isOnboardingPreview && !d.loading && !d.refreshing && !d.error && !d.outOfArea &&
+          <Pressable ref={d.tourMoreRef} collapsable={false} style={s.previewUnlock} testID="locked-value-cta"
+            onPress={() => { void d.unlockPreview(); }} accessibilityRole="button"
+            accessibilityLabel={cards.length ? 'Explore full menus. Explore full menus with Pro.' : 'Keep exploring. Try another dish or area. Explore Pro plans.'}>
+            <Text style={s.link}>{cards.length ? 'Explore full menus with Pro →' : 'Explore Pro plans →'}</Text>
+          </Pressable>}
       </View>
-    </KeyboardAvoidingView>
+    </View>
   </View>;
 }

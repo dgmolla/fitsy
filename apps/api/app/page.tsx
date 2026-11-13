@@ -1,12 +1,11 @@
 import styles from "./landing.module.css";
+import comingSoonStyles from "./coming-soon.module.css";
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/restaurantService";
-import { WAITLIST_URL } from "@/lib/appLinks";
-import { LAUNCH_CITY, LAUNCH_DATE_ISO, LAUNCH_DATE_LABEL } from "@/lib/launch";
 import { getDisplayPricing } from "@/lib/pricing";
 import { Nav } from "@/components/Nav";
 import { FeatureGrid } from "@/components/landing/FeatureGrid";
-import { WaitlistForm } from "@/components/landing/WaitlistForm";
+import { ComingSoon } from "@/components/landing/ComingSoon";
 import {
   Closing,
   Faq,
@@ -53,10 +52,6 @@ export default async function LandingPage() {
       <section className={styles.hero}>
         <div className={styles.heroContent}>
           <div className={styles.heroText}>
-            <span className={styles.badge}>
-              Launching in {LAUNCH_CITY} on{" "}
-              <time dateTime={LAUNCH_DATE_ISO}>{LAUNCH_DATE_LABEL}</time>
-            </span>
             <h1 className={styles.headline}>
               Find food that fits
               <br />
@@ -67,7 +62,7 @@ export default async function LandingPage() {
               protein, carb, and fat targets. Eat out without blowing your plan.
             </p>
             <div className={styles.heroCtas}>
-              <WaitlistForm />
+              <ComingSoon />
               <a href="#features" className={styles.ctaGhost}>
                 Learn more
                 <span className={styles.ctaArrow}>&#8595;</span>
@@ -112,9 +107,7 @@ export default async function LandingPage() {
           <span className={styles.statSub}>
             across {restaurantCount.toLocaleString()} local restaurants
           </span>
-          <a href={WAITLIST_URL} className={styles.statCta}>
-            Join the waitlist
-          </a>
+          <span className={comingSoonStyles.inlineBadge}>Coming soon</span>
         </div>
       </section>
 
@@ -123,7 +116,7 @@ export default async function LandingPage() {
       <Closing />
 
       {/* ─── Footer ──────────────────────────────────────────────── */}
-      <FooterCols waitlistHref={WAITLIST_URL} />
+      <FooterCols />
     </main>
   );
 }
@@ -137,7 +130,7 @@ function PhoneMockup() {
       <div className={styles.phoneScreen}>
         <img
           src="/app-screenshot.png"
-          alt="Fitsy app search screen"
+          alt="Fitsy map view showing nearby restaurants with dishes matching macro targets"
           className={styles.phoneImg}
         />
       </div>

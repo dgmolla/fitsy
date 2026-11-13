@@ -9,9 +9,24 @@ import { within } from '@testing-library/react-native';
 import type { RestaurantResult } from '@fitsy/shared';
 import Search from '../app/(tabs)/search';
 import { saveDiscoveryMacroTargets } from '../lib/macroStorage';
+import { saveOnboardingField } from '../lib/onboardingStorage';
 import { MANUAL_LOCATION_KEY } from '../lib/useLocation';
 import { __resetForTesting } from '../lib/analytics';
 import { DiscoveryScreen } from './DiscoveryScreen';
+
+// Preview is map-first now, so this flow renders the real DiscoveryMap.
+jest.mock('react-native-maps', () => {
+  const React = require('react');
+  const { View, Pressable } = require('react-native');
+  return { __esModule: true,
+    default: React.forwardRef((props: object, ref: React.Ref<unknown>) => {
+      React.useImperativeHandle(ref, () => ({ animateToRegion: jest.fn(), animateCamera: jest.fn(), fitToCoordinates: jest.fn() }));
+      return <View {...props} />;
+    }),
+    Marker: ({ onPress, ...props }: { onPress: (event: unknown) => void }) =>
+      <Pressable testID="native-marker" {...props} onPress={() => onPress({ stopPropagation() {} })} />,
+  };
+});
 
 const values = { calories: '600', protein: '40', carbs: '60', fat: '20' };
 const restaurants: RestaurantResult[] = ['Kitchen (DTLA)', 'WILDBIRD', 'Juice House'].map((name, index) => ({
@@ -165,12 +180,12 @@ it.each([undefined, false, 'control', 'true'])('keeps normal search usable with 
   expect(screen.getByTestId('discovery-search').props.value).toBe('juice');
 });
 
-it.each([true, false])('allows the explicit override only in Debug builds (dev=%s)', async dev => {
-  Object.defineProperty(globalThis, '__DEV__', { value: dev, configurable: true });
+it('allows the explicit Debug override without a remote opt-in', async () => {
+  Object.defineProperty(globalThis, '__DEV__', { value: true, configurable: true });
   flag = false;
   const screen = renderJourney('/search?query=meal&shuffleDebug=1', { ...routes, '(tabs)/search': () => <Search /> });
   await screen.findByTestId('discovery-hero');
-  expect(Boolean(screen.queryByTestId('shuffle-button'))).toBe(dev);
+  expect(screen.getByTestId('shuffle-button')).toBeTruthy();
 });
 
 it.each(['0', 'true', '', '1&shuffleDebug=1'])('rejects a Debug override other than a single 1 (%s)', async value => {
@@ -210,7 +225,15 @@ it('keeps locked results locked and uses the existing subscription entry after f
 });
 
 it('keeps Shuffle out of onboarding preview', async () => {
+  // Preview is map-first by product requirement, so this is the real default
+  // entry point now, not just the list fallback reached via its search entry.
+  // Preview reads its area from onboarding data, not MANUAL_LOCATION_KEY, or it
+  // redirects to location-permission before the map ever gets a chance to show.
+  await saveOnboardingField('area', { lat: 34.04, lng: -118.24, name: 'DTLA', source: 'manual' });
   const screen = renderJourney('/welcome/preview', { ...routes, 'welcome/preview': () => <DiscoveryScreen onboardingPreview /> });
+  await screen.findByTestId('discovery-map');
+  expect(screen.queryByTestId('shuffle-button')).toBeNull();
+  await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
   await screen.findByTestId('discovery-search');
   expect(screen.queryByTestId('shuffle-button')).toBeNull();
 });

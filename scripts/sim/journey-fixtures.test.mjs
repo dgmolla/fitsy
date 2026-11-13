@@ -1,11 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
-import { journeyFixture, withFixtureEnvironment, prepareJourney, assertJourneyStore } from './journey-fixtures.mjs';
+import { journeyFixture, withFixtureEnvironment, prepareJourney, assertJourneyStore, releaseExceptions } from './journey-fixtures.mjs';
 import { simulatorFlows, repository } from '../verify/impact-plan.mjs';
+import { main as hostedMain } from './actions.mjs';
+import { acceptanceExceptions, validateAcceptance } from '../verify/product-flow.mjs';
 
 const yaml = createRequire(import.meta.url)('js-yaml');
 const header = flow => yaml.loadAll(readFileSync(join(repository, `apps/mobile/e2e/flows/${flow}.yaml`), 'utf8'))[0];
@@ -27,7 +30,7 @@ test('all account-dependent saved journeys require local preparation before nati
   assert.equal(journeyFixture(header('signin-options'), '').name, 'default');
 });
 
-test('full selection prepares every required account/store after earlier journeys clear authentication', async () => {
+test('full selection invokes every required account/store adapter without inheriting a previous fixture', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'fitsy-journey-fixtures-'));
   const config = { version: 1, fixtures: {} }, trace = join(directory, 'trace.jsonl');
   const adapter = join(directory, 'prepare.mjs');
@@ -44,21 +47,18 @@ test('full selection prepares every required account/store after earlier journey
   const file = join(directory, 'fixtures.json'); writeFileSync(file, JSON.stringify(config));
   const previousEmail = process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL;
   try {
-    let authenticated = false;
     const observed = [];
     for (const flow of simulatorFlows()) {
       const fixture = journeyFixture(header(flow), file);
       await withFixtureEnvironment(fixture, async () => {
-        // Models the destructive boundary that originally broke the next flow.
-        // No state is inherited as a substitute for a required setup invocation.
-        authenticated = false;
+        // This is adapter selection proof, not native authentication proof.
+        // The billing caller separately verifies history and runs ci-signin.
         prepareJourney(fixture, flow, '54503F5C-8A3C-4699-8401-2E1D32890A24');
         if (expected[flow]) {
           const last = JSON.parse(readFileSync(trace, 'utf8').trim().split('\n').at(-1));
           assert.equal(last.flow, flow); assert.equal(last.fixture, expected[flow][0]);
           assert.equal(last.account, `${fixture.name}@example.test`);
           assert.equal(last.udid, '54503F5C-8A3C-4699-8401-2E1D32890A24');
-          authenticated = true;
           assert.deepEqual(fixture.stores, expected[flow][1]);
           for (const storeMode of ['test-store', 'apple-simulator', 'unconfigured']) {
             if (fixture.stores.includes(storeMode)) assert.doesNotThrow(() => assertJourneyStore(fixture, { storeMode }));
@@ -66,11 +66,22 @@ test('full selection prepares every required account/store after earlier journey
           }
           observed.push(flow);
         }
-        if (flow.startsWith('subscription-')) assert.equal(authenticated, true);
       });
       assert.equal(process.env.EXPO_PUBLIC_DEV_LOGIN_EMAIL, previousEmail);
     }
     assert.deepEqual(observed.sort(), Object.keys(expected).sort());
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
+test('inactive billing fixtures require their own credentials rather than inheriting the preceding account', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'fitsy-inactive-fixture-'));
+  try {
+    const file = join(directory, 'fixtures.json');
+    for (const flow of ['subscription-expired-routing', 'subscription-restore-empty']) {
+      const [name] = expected[flow];
+      writeFileSync(file, JSON.stringify({ version: 1, fixtures: { [name]: { prepare: ['/usr/bin/true'] } } }));
+      assert.throws(() => journeyFixture(header(flow), file), /own local dev login/);
+    }
   } finally { rmSync(directory, { recursive: true, force: true }); }
 });
 
@@ -124,5 +135,142 @@ test('account fixtures cannot silently switch a PR preview back to stable dev', 
   } finally {
     if (previous === undefined) delete process.env.EXPO_PUBLIC_API_URL;
     else process.env.EXPO_PUBLIC_API_URL = previous;
+  }
+});
+
+// The exact public owner grant is deliberately pinned, including edits/revocation.
+const releaseApprovalBody = "**TL;DR:** Owner approval (Dawit, 2026-11-07 19:14 PT, \"Appr auto these always\"). This grants a standing, scoped approval for the three boundaries in [6716284756](https://github.com/dgmolla/fitsy/issues/755#issuecomment-6716284756). Root 64440: resume the same workstream (`codex/issue-753`, PR754 at d5a16dc2) with one successor worker. Don't run parallel workers.\n\n**1. Duplicate screenshot cleanup: APPROVED.**\n- Scope is only the sealed proposal `aabf2e5d48ae01c9124263384a1c93efd345aa156d15736dfcb17385b3c17245`: exactly 16,119 byte-identical duplicate PNGs (10,361,606,936 bytes). The outside-path and age exception applies to that list only.\n- Keep all 851 verified representatives and every required receipt and recovery input (task.env, fixtures, persistent-expired.env, bundles, archives).\n- Before deleting, re-check file identities, hashes, that nothing is writing to them, and the free-space projection. Use the existing `scripts/delivery/cleanup.py`: dry-run first, then `--apply`.\n- No broad rm, and no deleting repo or user data.\n\n**2. Self-hosted Mac runner registration: APPROVED.**\n- Register `fitsy-mac` with labels `fitsy-sim` for https://github.com/dgmolla/fitsy using only official GitHub tooling: get a registration token through the supported API or gh under existing admin auth, run `config.sh`, then install and start the service. Confirm the runner reads back as online and matching.\n- Never print or log the token or secrets.\n- If GitHub or macOS needs an interactive auth or approval step that existing auth can't do, stop at that exact step and report the missing action precisely. Don't re-ask for this approval, and don't work around the step.\n\n**3. `subscription-restore-expired` Apple-history: release exception APPROVED** for this map/#746 release only.\n- Record it transparently as **excepted, not passed**, with the reason \"unprovisioned real Apple purchase history\".\n- Every other required native flow (the remaining full-28 selection on normal), the auth and subscription regression checks, Verify, AI review and branch protection all stay required.\n- This doesn't extend to any other test, and it isn't a #735/#745 transfer.\n\n**Then continue the approved ship serially:**\n1. Cleanup, then the full normal run on the exact final head.\n2. The runner job goes green for real.\n3. Mark ready and do a protected merge (no admin merge, no faked check).\n4. #746 production activation of C.\n5. EAS/TestFlight. No App Store submission, no production DB writes.\n6. Post-release smoke test. Post the SHAs, build IDs and TestFlight status here and on #746.\n\n**Mandatory audit:** explain why owner blockers, the missing runner, the lock and disk all stalled at once, and add safe preventive defaults, for example screenshot dedupe/retention at capture time and an earlier runner-capacity preflight.\n\n**After a verified shipment:** file the deferred \"Your location\" test issue. #758 stays on hold.\n";
+
+test('release admission retains the full catalog and excepts only genuine Apple-history on the published source', async () => {
+  const catalog = Object.fromEntries(simulatorFlows().map(name => [name, header(name)]));
+  const names = Object.keys(catalog);
+  const head = 'a'.repeat(40);
+  const approval = { id: 6716597294, user: { login: 'dgmolla' }, body: releaseApprovalBody };
+  const pr = { number: 759, state: 'open', base: { ref: 'main', repo: { full_name: 'dgmolla/fitsy' } }, head: { sha: head, ref: 'codex/issue-746', repo: { full_name: 'dgmolla/fitsy' } } };
+  const execute = (binary, args) => binary === 'git' ? head : JSON.stringify(args.at(-1).endsWith('/759') ? pr : approval);
+  assert.deepEqual(await releaseExceptions(names, catalog), []);
+  await assert.rejects(releaseExceptions(names, catalog, '745', execute), /Unknown/);
+  const result = await releaseExceptions(names, catalog, '6716597294', execute);
+  assert.deepEqual(await acceptanceExceptions({ flows: names }, '6716597294', repository, execute), result);
+  assert.equal(names.length, 28);
+  assert.equal(names.filter(name => !result.some(item => item.flow === name)).length, 27);
+  assert.deepEqual(result, [{ flow: 'subscription-restore-expired', status: 'EXCEPTED',
+    reason: 'unprovisioned real Apple purchase history',
+    approval: 'https://github.com/dgmolla/fitsy/issues/755#issuecomment-6716597294', release: 'map/#746',
+    source: head, prHead: head, fixture: 'apple-history', store: 'apple-simulator' }]);
+  for (const problem of ['source', 'closed', 'number', 'branch', 'base', 'repo', 'author', 'grant', 'tag', 'inventory']) {
+    const original = JSON.stringify({ pr, approval, catalog });
+    if (problem === 'source') pr.head.sha = 'b'.repeat(40);
+    if (problem === 'closed') pr.state = 'closed';
+    if (problem === 'number') pr.number = 754;
+    if (problem === 'branch') pr.head.ref = 'codex/issue-753';
+    if (problem === 'base') pr.base.ref = 'dev';
+    if (problem === 'repo') pr.head.repo.full_name = 'foreign/fitsy';
+    if (problem === 'author') approval.user.login = 'different-owner';
+    if (problem === 'grant') approval.body += ' revoked';
+    if (problem === 'tag') catalog['subscription-restore-expired'].tags = ['fixture:empty-store', 'store:test-store'];
+    await assert.rejects(releaseExceptions(names, catalog, '6716597294', problem === 'inventory'
+      ? () => { throw new Error('private API failure'); } : execute), /exception|contract/);
+    if (problem !== 'tag') {
+      // The final validator re-reads the same live grant/source boundary, even
+      // when a report retained a previously admitted exception.
+      await assert.rejects(validateAcceptance({ releaseExceptionId: '6716597294', exceptions: result },
+        { flows: names }, 'inputs', repository, Date.now(), repository, null, 'final-candidate',
+        problem === 'inventory' ? () => { throw new Error('private API failure'); } : execute), /exception|contract/);
+    }
+    const saved = JSON.parse(original); Object.assign(pr, saved.pr); Object.assign(approval, saved.approval); Object.assign(catalog, saved.catalog);
+  }
+  assert.deepEqual(await releaseExceptions(['cold-start-welcome'], catalog, '6716597294', execute), []);
+});
+
+test('the release grant binds PR merge refs and the exact squash merge, never a later main source', async t => {
+  const previous = { ...process.env };
+  t.after(() => {
+    for (const key of Object.keys(process.env)) if (!(key in previous)) delete process.env[key];
+    Object.assign(process.env, previous);
+  });
+  const name = 'subscription-restore-expired', catalog = { [name]: header(name) };
+  const head = 'a'.repeat(40), merge = 'b'.repeat(40);
+  let source = merge, parent = head;
+  const pr = { number: 759, state: 'open', merged: false, merge_commit_sha: merge,
+    base: { ref: 'main', repo: { full_name: 'dgmolla/fitsy' } },
+    head: { sha: head, ref: 'codex/issue-746', repo: { full_name: 'dgmolla/fitsy' } } };
+  const approval = { id: 6716597294, user: { login: 'dgmolla' }, body: releaseApprovalBody };
+  const execute = (binary, args) => binary === 'git' ? (args.at(-1) === 'HEAD^2' ? parent : source)
+    : JSON.stringify(args.at(-1).endsWith('/759') ? pr : approval);
+  t.mock.method(globalThis, 'fetch', async url => new Response(JSON.stringify(url.endsWith('/759') ? pr : approval)));
+  Object.assign(process.env, { GITHUB_ACTIONS: 'true', GITHUB_EVENT_NAME: 'pull_request', GITHUB_SHA: merge });
+  assert.equal((await releaseExceptions([name], catalog, '6716597294', execute))[0].source, merge);
+  parent = 'c'.repeat(40);
+  await assert.rejects(releaseExceptions([name], catalog, '6716597294', execute), /published PR759 source/);
+  pr.state = 'closed'; pr.merged = true;
+  Object.assign(process.env, { GITHUB_EVENT_NAME: 'push', GITHUB_REF: 'refs/heads/main' });
+  assert.equal((await releaseExceptions([name], catalog, '6716597294', execute))[0].prHead, head);
+  approval.body += ' revoked';
+  await assert.rejects(releaseExceptions([name], catalog, '6716597294', execute), /owner grant/);
+  approval.body = releaseApprovalBody;
+  source = 'd'.repeat(40); process.env.GITHUB_SHA = source;
+  assert.deepEqual(await releaseExceptions([name], catalog, '6716597294', execute), []);
+  delete process.env.GITHUB_ACTIONS;
+  await assert.rejects(releaseExceptions([name], catalog, '6716597294', execute), /published PR759 source/);
+});
+
+for (const eventName of ['pull_request', 'push']) test(`the real hosted ${eventName} reaches fixture admission without stored CLI authentication or a token`, async t => {
+  const directory = mkdtempSync(join(tmpdir(), 'fitsy-hosted-approval-'));
+  const previous = { ...process.env };
+  t.after(() => {
+    for (const key of Object.keys(process.env)) if (!(key in previous)) delete process.env[key];
+    Object.assign(process.env, previous);
+    rmSync(directory, { recursive: true, force: true });
+  });
+  const work = join(directory, 'fitsy-simulator-14-1'), config = join(directory, 'gh'), bin = join(directory, 'bin');
+  mkdirSync(work); mkdirSync(config); mkdirSync(bin);
+  writeFileSync(join(work, 'device.json'), JSON.stringify({ udid: '11111111-1111-1111-1111-111111111111' }));
+  const head = 'a'.repeat(40), base = 'b'.repeat(40);
+  // Supply the external Git comparison used by the real hosted selector.
+  // A navigation change requires full coverage regardless of this test's branch.
+  writeFileSync(join(bin, 'git'), `#!${process.execPath}
+const args = process.argv.slice(2);
+if (args[0] === 'rev-parse') console.log(args.at(-1).startsWith('${base}') ? '${base}' : '${head}');
+else if (args[0] === 'merge-base') console.log('${base}');
+else if (args[0] === 'diff' && args.includes('--name-only')) process.stdout.write('apps/mobile/app/index.tsx\\0');
+else process.exit(2);
+`, { mode: 0o755 });
+  const event = join(directory, 'event.json');
+  writeFileSync(event, JSON.stringify(eventName === 'push' ? { ref: 'refs/heads/main', before: base, after: head }
+    : { pull_request: { number: 759, base: { sha: base }, head: { sha: head } } }));
+  for (const key of ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN', 'GITHUB_ENTERPRISE_TOKEN', 'FITSY_DIFF_BASE', 'FITSY_DIFF_HEAD']) delete process.env[key];
+  Object.assign(process.env, { GITHUB_ACTIONS: 'true', RUNNER_OS: 'macOS', GITHUB_WORKSPACE: repository,
+    PATH: `${bin}:${process.env.PATH}`,
+    RUNNER_TEMP: directory, GITHUB_RUN_ID: '14', GITHUB_RUN_ATTEMPT: '1', GH_CONFIG_DIR: config,
+    GITHUB_EVENT_PATH: event, GITHUB_EVENT_NAME: eventName, GITHUB_REF: eventName === 'push' ? 'refs/heads/main' : 'refs/pull/759/merge', SIM_SCOPE: 'full', FITSY_XCTEST_SIM_UDID: '11111111-1111-1111-1111-111111111111',
+    EXPO_PUBLIC_API_URL: 'https://dev.fitsy.org', EXPO_PUBLIC_SUPABASE_URL: 'https://kegycybiruksmrzvniha.supabase.co',
+    EXPO_PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_synthetic', EXPO_PUBLIC_REVENUECAT_TEST_KEY: 'test_synthetic',
+    SIM_E2E_FIXTURES: '{}',
+  });
+  process.env.GITHUB_SHA = head;
+  const requests = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    requests.push(url);
+    assert.equal(new URL(url).origin, 'https://api.github.com');
+    assert.equal(options.redirect, 'error');
+    assert(options.signal instanceof AbortSignal);
+    assert.equal(new Headers(options.headers).has('authorization'), false);
+    const body = url.endsWith('/759')
+      ? { number: 759, state: eventName === 'push' ? 'closed' : 'open', merged: eventName === 'push', merge_commit_sha: head, base: { ref: 'main', repo: { full_name: 'dgmolla/fitsy' } }, head: { sha: head, ref: 'codex/issue-746', repo: { full_name: 'dgmolla/fitsy' } } }
+      : { id: 6716597294, user: { login: 'dgmolla' }, body: releaseApprovalBody };
+    return new Response(JSON.stringify(body));
+  });
+  // Empty fixture input stops before installation/native work, after the real
+  // hosted caller has independently checked public authority and exact source.
+  await assert.rejects(hostedMain('run'), /Missing disposable DEV credentials/);
+  assert.deepEqual(requests, ['https://api.github.com/repos/dgmolla/fitsy/pulls/759',
+    'https://api.github.com/repos/dgmolla/fitsy/issues/comments/6716597294']);
+  for (const failure of ['denied', 'malformed', 'timeout']) {
+    t.mock.method(globalThis, 'fetch', async () => {
+      if (failure === 'timeout') throw new DOMException('Timed out', 'TimeoutError');
+      return failure === 'denied' ? new Response('{}', { status: 403 }) : new Response('not JSON');
+    });
+    await assert.rejects(hostedMain('run'), /authority\/source lookup unavailable/);
   }
 });

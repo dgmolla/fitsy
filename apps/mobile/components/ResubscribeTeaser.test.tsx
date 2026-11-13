@@ -50,6 +50,14 @@ it.each([false, true])('renders the bundled search card without fetch (saved are
   expect(screen.getByLabelText('Photo of Chick-fil-A').props.source).toEqual(RESUBSCRIBE_SAMPLE_IMAGE);
   expect(screen.getByLabelText('Photo of Chick-fil-A').props.source).not.toEqual(expect.objectContaining({ uri: expect.any(String) }));
   expect(screen.getByTestId('paywall-search-item-card').props.accessibilityRole).toBe('text');
+  const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, '../e2e/flows/subscription-expired-routing.yaml'), 'utf8')) as [unknown, {
+    assertVisible?: { id?: string; text?: string };
+  }[]];
+  const sample = commands.find(step => step.assertVisible?.id === 'paywall-search-item-card' && step.assertVisible.text)!.assertVisible!;
+  // Maestro matches the entire accessibility label, including nutrition copy.
+  // Replay the saved native consumer instead of approving a stale shorter label.
+  expect(screen.getByTestId(sample.id!).props.accessibilityLabel).toBe(sample.text);
 
   await act(async () => { fireEvent.press(screen.getByTestId('paywall-search-item-card')); });
   expect(screen.getPathname()).toBe('/welcome/resubscribe');

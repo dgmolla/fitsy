@@ -28,6 +28,9 @@ case "$TEST_GROUPS" in
   api|scripts|mobile|"api scripts"|"api mobile"|"scripts mobile"|"api scripts mobile") ;;
   *) printf '{"name":"test","status":"fail","summary":"invalid test group plan"}\n'; exit 1 ;;
 esac
+case "${FITSY_VERIFY_TEST_GROUP:-}" in ""|api|scripts|mobile) ;;
+  *) printf '{"name":"test","status":"fail","summary":"invalid FITSY_VERIFY_TEST_GROUP"}\n'; exit 1 ;;
+esac
 FAIL=""
 REPORTS="$(mktemp -d "${TMPDIR:-/tmp}/fitsy-tests.XXXXXX")" || exit 1
 trap 'rm -rf "$REPORTS"' EXIT
@@ -66,6 +69,18 @@ run_node() {
   node --test --test-reporter=spec --test-reporter-destination=stderr --test-reporter=./scripts/verify/node-focused-reporter.mjs --test-reporter-destination="$REPORTS/$group.json" "$@" >&2 &&
     node scripts/verify/test-results.mjs "$REPORTS/$group.json" node >&2 || FAIL="${FAIL:+$FAIL, }$group"
 }
+# A hosted shard runs exactly one of api/scripts/mobile in parallel with the
+# others (same commands and worker limits as the unsharded run); narrow the
+# already-computed selection to this shard and skip cleanly if its group
+# isn't in it. Local/unsharded callers never set this and are unaffected.
+SHARD="${FITSY_VERIFY_TEST_GROUP:-}"
+SHARD_APPLICABLE=1
+if [ -n "$SHARD" ]; then
+  case " $TEST_GROUPS " in
+    *" $SHARD "*) SHARD_APPLICABLE=1; TEST_GROUPS="$SHARD" ;;
+    *) SHARD_APPLICABLE=0; TEST_GROUPS="" ;;
+  esac
+fi
 # Shared pure contracts run with every affected group; they need no database.
 run_jest shared npm test --workspace=@fitsy/shared --
 if [[ " $TEST_GROUPS " == *" scripts "* ]]; then
@@ -107,5 +122,9 @@ fi
 if [ -n "$FAIL" ]; then
   printf '{"name":"test","status":"fail","summary":"tests failed in: %s","fix":"inspect the test logs listed by Verify; rerun the failing suite (npm run test:coverage -w apps/api, npm test -w @fitsy/scripts, or npm test -w @fitsy/mobile) and fix"}\n' "$FAIL"
   exit 1
+fi
+if [ -n "$SHARD" ] && [ "$SHARD_APPLICABLE" = 0 ]; then
+  printf '{"name":"test","status":"skipped","summary":"%s not affected by this change"}\n' "$SHARD"
+  exit 2
 fi
 printf '{"name":"test","status":"pass","summary":"%s test groups passed: %s","fix":""}\n' "$MODE" "$TEST_GROUPS"

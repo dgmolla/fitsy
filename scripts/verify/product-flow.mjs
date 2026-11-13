@@ -112,7 +112,7 @@ export function impact(paths, configKeys = [], options = {}) {
     else categories.add('changed-journey');
   }
   return { required: simulator.required,
-    paths: [...affected, ...configKeys.map(key => `public-env:${key}`)], categories: [...categories].sort(),
+    paths: [...affected, ...configKeys.map(key => `public-env:${key}`)], categories: simulator.acceptanceCategories || [...categories].sort(),
     baseline: simulator.flows.filter(name => baseline.includes(name)), flows: simulator.flows, simulator };
 }
 
@@ -128,6 +128,31 @@ export function selectedFlows(plan, additional = []) {
   insist(plan.flows?.length || !plan.required, 'Required simulator scope has no maintained flows');
   insist(additional.every(name => /^[a-z0-9-]+$/.test(name)), 'Invalid flow name');
   return [...new Set([...(plan.flows || []), ...additional])].sort();
+}
+
+// The same live owner/source admission serves execution and final publication.
+// Report metadata is never authority to omit a selected journey.
+export async function acceptanceExceptions(plan, approvalId, cwd = root, execute) {
+  if (!approvalId) return [];
+  const { releaseExceptions } = await import('../sim/journey-fixtures.mjs');
+  const names = selectedFlows(plan);
+  const catalog = Object.fromEntries(names.map(name => [name,
+    yaml.loadAll(readFileSync(resolve(cwd, `apps/mobile/e2e/flows/${name}.yaml`), 'utf8'))[0]]));
+  return releaseExceptions(names, catalog, approvalId, execute);
+}
+
+export async function validateAcceptance(report, plan, hash, directory, now = Date.now(), cwd = root,
+  nativeHash = null, mode = 'final-candidate', executeAuthority) {
+  const exceptions = await acceptanceExceptions(plan, report.releaseExceptionId, cwd, executeAuthority);
+  const fixtureConfigurations = {};
+  for (const flow of report.flows || []) {
+    if (!flow.identity) continue;
+    insist(/^[a-z0-9-]+$/.test(flow.name) && flow.source === `apps/mobile/e2e/flows/${flow.name}.yaml`, 'invalid flow source');
+    const { journeyFixture, withFixtureEnvironment } = await import('../sim/journey-fixtures.mjs');
+    const header = yaml.loadAll(readFileSync(resolve(cwd, flow.source), 'utf8'))[0];
+    fixtureConfigurations[flow.name] = await withFixtureEnvironment(journeyFixture(header), () => publicConfigIdentity(cwd).configHash);
+  }
+  return validate(report, plan, hash, directory, now, cwd, nativeHash, mode, exceptions, fixtureConfigurations);
 }
 
 export function isSuccessfulCommand(entry) {
@@ -206,6 +231,79 @@ export function artifactPath(file, directory) {
 export function artifact(file, directory) {
   return readFileSync(artifactPath(file, directory));
 }
+
+// Original observations remain immutable. Only a verified, complete transition
+// may nominate the live restored caller that checkBundle must still inspect.
+export function walkthroughState(report, directory, now = Date.now()) {
+  insist(!report.walkthroughPending, 'walkthrough fixture transition is unfinished');
+  const sessions = new Map();
+  let metro = report.metro, completedAt = Date.parse(report.startedAt);
+  for (const entry of report.walkthroughSessions || []) {
+    const bytes = artifact(entry.receipt, directory);
+    insist(digest(bytes) === entry.sha256, 'changed walkthrough fixture receipt');
+    const session = JSON.parse(bytes);
+    insist(session.version === 1 && session.state === 'complete' && entry.category === session.category && !sessions.has(session.category),
+      'duplicate or invalid walkthrough fixture category');
+    for (const field of ['inputHash', 'jsHash', 'appHash', 'simulator', 'os', 'backendRevision', 'backendDeployment', 'storeMode'])
+      insist(session[field] === report[field], `walkthrough ${field} differs from the accepted run`);
+    insist(session.nativeHash === (report.nativeIdentity?.hash || report.nativeSourceHash), 'walkthrough native identity changed');
+    insist(JSON.stringify(session.callerBefore) === JSON.stringify(metro), 'walkthrough Metro transition chain changed');
+    const flow = session.flow && report.flows.find(item => item.name === session.flow);
+    insist(!session.flow || flow?.identity, 'walkthrough fixture needs an executed journey');
+    let fixture = { fixture: 'default', configHash: report.configHash };
+    if (flow) {
+      const identity = artifact(flow.identity, directory);
+      insist(digest(identity) === flow.identityHash, 'changed walkthrough journey identity');
+      fixture = JSON.parse(identity);
+    }
+    insist(session.fixture === fixture.fixture && session.configHash === fixture.configHash,
+      'walkthrough fixture configuration changed');
+    const times = ['startedAt', 'readyAt', 'completedAt', 'restoredAt'].map(key => Date.parse(session[key]));
+    insist(times.every(Number.isFinite) && times[0] >= completedAt && times.every((time, i) => !i || time >= times[i - 1]) &&
+      times.at(-1) <= now, 'invalid walkthrough transition timestamps');
+    for (const [server, config, bundle] of [[session.metro, session.configHash, session.bundleHash],
+      [session.restoredMetro, report.configHash, report.bundleHash]]) {
+      insist(Number.isInteger(server?.pid) && server.pid > 0 && server.processIdentity?.trim() &&
+        server.root === report.metro.root && server.route === report.metro.route && server.port === report.metro.port &&
+        server.jsHash === report.jsHash && server.configHash === config && server.bundleHash === bundle &&
+        /^[a-f0-9]{64}$/.test(bundle), 'invalid walkthrough Metro/configuration/bundle identity');
+    }
+    const trace = artifact(session.trace, directory);
+    insist(digest(trace) === session.traceHash, 'changed walkthrough session trace');
+    const events = trace.toString().trim().split('\n').map(line => JSON.parse(line));
+    insist(events.length && events.every(event => Date.parse(event.at) >= times[1] && Date.parse(event.at) <= times[2]),
+      'walkthrough events fall outside their fixture session');
+    insist(JSON.stringify(entry.artifacts) === JSON.stringify([
+      session.attachmentBefore, session.attachmentAfter, session.captureReceipt, session.attachmentCloseout]),
+    'walkthrough publication omits fixture evidence');
+    for (const field of ['attachmentBefore', 'attachmentAfter']) {
+      const bytes = artifact(session[field], directory);
+      insist(digest(bytes) === session[`${field}Hash`] && JSON.parse(bytes).udid === report.simulator,
+        `missing or changed walkthrough ${field}`);
+    }
+    for (const field of ['captureReceipt', 'attachmentCloseout']) {
+      const bytes = artifact(session[field], directory);
+      insist(digest(bytes) === session[`${field}Hash`], `changed walkthrough ${field}`);
+      const values = field === 'captureReceipt' ? bytes.toString().trim().split('\n').filter(Boolean).map(JSON.parse) : [JSON.parse(bytes)];
+      insist(values.length && values.every(value => value.udid === report.simulator && (field === 'captureReceipt'
+        ? value.preferredScreenCaptureFormat === 'screenshots' : value.generated?.videos === 0 && value.deleted?.length === 0)),
+      `invalid walkthrough ${field}`);
+    }
+    if (session.fixture === 'entitled-dev')
+      insist(session.entitlement?.sandbox === true && session.entitlement.storeMode === report.storeMode &&
+        /^[a-f0-9]{64}$/.test(session.entitlement.accountHash) && Date.parse(session.entitlement.expiresAt) > times[2] &&
+        Date.parse(session.entitlement.verifiedAt) >= times[0] && Date.parse(session.entitlement.verifiedAt) <= times[1],
+      'walkthrough entitlement was not active throughout the observation');
+    if (session.category === 'billing' && session.fixture === 'default')
+      insist(session.entitlement?.fixture === 'empty-store' && session.entitlement.sandbox === true &&
+        session.entitlement.storeMode === report.storeMode && /^[a-f0-9]{64}$/.test(session.entitlement.accountHash) &&
+        Date.parse(session.entitlement.verifiedAt) >= times[0] && Date.parse(session.entitlement.verifiedAt) <= times[1],
+      'free billing walkthrough lacks a verified empty store');
+    sessions.set(session.category, session);
+    metro = session.restoredMetro; completedAt = times.at(-1);
+  }
+  return { metro, sessions };
+}
 export function isPlayableVideo(file) {
   let probe;
   try {
@@ -231,13 +329,42 @@ export function isPlayableVideo(file) {
   }
 }
 
-export function validate(report, plan, hash, directory, now = Date.now(), cwd = root, nativeHash = null, mode = 'final-candidate') {
-  insist(report.version === 1 && report.inputHash === hash, 'missing or stale source/test identity');
+// #773/#794: inputHash is a whole-tree hash, so an unrelated commit merged
+// into main after collection (e.g. a tooling-only PR) invalidates every
+// report, even when nothing journey-relevant changed. Reuse is safe only
+// when the collected tree was clean, the current tree is clean, and the
+// entire committed difference since collection both exists and classifies
+// as simulator scope 'none' - i.e. the same routing an ordinary PR gets,
+// run against the base-update delta instead of the PR's own diff. Any
+// genuinely new local/PR change, not just a base update, fails this and
+// falls through to the existing strict check.
+export function baseUpdateDeltaIsSafe(report, cwd = root) {
+  if (report.cleanAtCollection !== true || typeof report.headAtCollection !== 'string' || !report.headAtCollection) return false;
+  if (report.configHash !== publicConfigIdentity(cwd).configHash) return false;
+  try { if (git(['status', '--porcelain'], cwd)) return false; } catch { return false; }
+  let currentHead;
+  try { currentHead = git(['rev-parse', 'HEAD'], cwd); } catch { return false; }
+  if (currentHead === report.headAtCollection) return false;
+  try { git(['merge-base', '--is-ancestor', report.headAtCollection, currentHead], cwd); } catch { return false; }
+  let files;
+  try { files = git(['diff', '--name-only', '--no-renames', '-z', report.headAtCollection, currentHead], cwd).split('\0').filter(Boolean); }
+  catch { return false; }
+  if (!files.length) return false;
+  return simulatorSelection(files, { cwd }).scope === 'none';
+}
+
+export function validate(report, plan, hash, directory, now = Date.now(), cwd = root, nativeHash = null,
+  mode = 'final-candidate', verifiedExceptions = [], fixtureConfigurations = {}) {
+  insist(report.version === 1, 'missing report version');
+  insist(report.inputHash === hash || baseUpdateDeltaIsSafe(report, cwd), 'missing or stale source/test identity');
   insist(['development', 'final-candidate', 'requested-video'].includes(mode) && report.evidenceMode === mode,
     `Expected ${mode} evidence; development or requested-video proof cannot satisfy final publication`);
   const time = Date.parse(report.finishedAt);
   insist(Number.isFinite(time) && time <= now && now - time <= 24 * 3600_000, 'evidence expired or invalid timestamp');
   insist(report.result === 'pass', 'product flow did not pass');
+  insist(JSON.stringify(report.exceptions || []) === JSON.stringify(verifiedExceptions),
+    'release exceptions do not match current owner/source admission');
+  const excepted = new Set(verifiedExceptions.map(item => item.flow));
   for (const field of ['appHash', 'bundleHash', 'backendRevision', 'simulator', 'os', 'storeMode', 'fixture', 'maestroVersion']) {
     insist(typeof report[field] === 'string' && report[field].trim() && !/^(unknown|none|n\/a)$/i.test(report[field]), `missing ${field}`);
   }
@@ -254,12 +381,31 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
   const covered = new Set();
   const names = new Set();
   for (const flow of report.flows) {
+    insist(!excepted.has(flow.name), 'an excepted journey cannot also be reported passed');
     insist(!names.has(flow.name), 'duplicate flow result'); names.add(flow.name);
     insist(/^apps\/mobile\/e2e\/flows\/[a-z0-9-]+\.yaml$/.test(flow.source), 'invalid flow source');
     const source = readFileSync(resolve(cwd, flow.source));
     insist(digest(source) === flow.sourceHash, `changed flow source: ${flow.name}`);
     const config = yaml.load(source.toString().split(/^---\s*$/m)[0]);
     insist((config.name || flow.source.split('/').at(-1).replace('.yaml', '')) === flow.name, 'flow identity mismatch');
+    const fixtures = (config.tags || []).filter(tag => tag.startsWith('fixture:'));
+    const stores = (config.tags || []).filter(tag => tag.startsWith('store:')).map(tag => tag.slice(6));
+    if (fixtures.length || flow.identity || flow.identityHash) {
+      insist(flow.identity && flow.identityHash, `missing journey fixture identity: ${flow.name}`);
+      const identityBytes = artifact(flow.identity, directory);
+      insist(digest(identityBytes) === flow.identityHash, `changed journey fixture identity: ${flow.name}`);
+      const identity = JSON.parse(identityBytes.toString());
+      insist(identity.version === 1 && fixtures.length <= 1 &&
+        identity.fixture === (fixtures[0]?.slice(8) || 'default') && identity.storeMode === report.storeMode &&
+        (!stores.length || stores.includes(identity.storeMode)), `wrong fixture or store: ${flow.name}`);
+      for (const field of ['inputHash', 'jsHash', 'appHash', 'simulator', 'os', 'backendRevision', 'backendDeployment'])
+        insist(identity[field] === report[field], `journey ${field} differs from the accepted run: ${flow.name}`);
+      insist(identity.configHash === fixtureConfigurations[flow.name], `wrong fixture configuration: ${flow.name}`);
+      insist(identity.nativeHash === (report.nativeIdentity?.hash || report.nativeSourceHash) &&
+        /^[a-f0-9]{64}$/.test(identity.configHash) && /^[a-f0-9]{64}$/.test(identity.bundleHash) &&
+        identity.initialBundleHash === identity.bundleHash,
+      `missing native/configuration/bundle fixture proof: ${flow.name}`);
+    }
     const data = artifact(flow.commands, directory);
     insist(digest(data) === flow.sha256, `changed command artifact: ${flow.name}`);
     const commands = JSON.parse(data.toString());
@@ -299,19 +445,35 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
       for (const tag of config.tags || []) if (!baselineTags || baselineTags.includes(tag)) covered.add(tag);
     }
   }
-  for (const name of selectedFlows(plan)) insist(names.has(name), `missing affected flow: ${name}`);
+  for (const name of selectedFlows(plan))
+    insist(excepted.has(name) || names.has(name), `missing affected flow: ${name}`);
   // A completed configuration acceptance remains part of the retained proof
   // even when that configuration no longer requires a new run.
   const acceptedCategories = typeof report.publicConfigAcceptance?.verifiedConfigHash === 'string' &&
     report.publicConfigAcceptance.verifiedConfigHash === report.configHash
     ? impact([], report.publicConfigAcceptance.keys || []).categories : [];
-  for (const category of new Set([...plan.categories, ...acceptedCategories])) {
+  const observations = report.exploration || [];
+  insist(Array.isArray(observations) && new Set(observations.map(item => item?.category)).size === observations.length,
+    'duplicate or invalid walkthrough categories');
+  const walkthroughs = walkthroughState(report, directory, time).sessions;
+  insist(!report.walkthroughProtocol || report.walkthroughProtocol === 1, 'unknown walkthrough fixture protocol');
+  insist([...walkthroughs.keys()].every(category => observations.some(item => item.category === category)),
+    'walkthrough fixture session has no verified observation');
+  // Reusing a larger completed report retains its observations too. Validate
+  // every retained charter even when the current plan requires fewer flows.
+  for (const category of new Set([...plan.categories, ...acceptedCategories,
+    ...observations.map(observation => observation?.category)])) {
     insist(covered.has(category), `no deterministic coverage for ${category}`);
     const observation = report.exploration?.find(o => o.category === category);
     insist(observation?.result === 'pass' && observation.expected?.trim() && observation.observed?.trim(), `missing walkthrough outcome: ${category}`);
     insist(observation.branches?.includes('primary') && observation.branches?.includes('recovery'), `walkthrough needs primary and recovery: ${category}`);
     const trace = artifact(observation.trace, directory);
     insist(digest(trace) === observation.sha256, `changed walkthrough trace: ${category}`);
+    if (report.walkthroughProtocol === 1) {
+      const session = walkthroughs.get(category);
+      insist(session?.trace === observation.trace && session.traceHash === observation.sha256 &&
+        (!observation.flow || session.flow === observation.flow), `missing or mismatched walkthrough fixture session: ${category}`);
+    }
     const events = trace.toString().trim().split('\n').map(line => JSON.parse(line));
     const observationSource = observation.flow && report.flows.find(flow => flow.name === observation.flow)?.source;
     insist(!observation.flow || observationSource, 'walkthrough expired-screen exception requires an executed maintained flow');
@@ -324,12 +486,16 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
       events.some(e => e.command?.name === 'mobile_list_elements_on_screen');
     insist(maestro || legacy, `walkthrough needs actual interactions and screen observations: ${category}`);
   }
-  return { status: 'pass', summary: `${report.flows.length} flows and ${plan.categories.length} changed-journey walkthroughs verified` };
+  return { status: 'pass', summary: `${report.flows.length} flows and ${plan.categories.length} changed-journey walkthroughs verified` +
+    (excepted.size ? `; ${excepted.size} explicitly excepted, not passed` : '') };
 }
 
 if (isMain(import.meta.url)) {
   try {
     insist(!process.env.CI || process.env.FITSY_DIFF_BASE, 'CI must supply the candidate diff base');
+    const args = process.argv.slice(2), approvals = args.filter(arg => arg.startsWith('--release-exception='));
+    insist(approvals.length <= 1 && args.every(arg => arg === '--plan' || arg.startsWith('--release-exception=')) &&
+      (!approvals.length || args.includes('--plan')), 'Usage: product-flow.mjs [--plan [--release-exception=6716597294]]');
     const reportFile = resolve(root, '.evidence/product-flow/report.json');
     const buildFile = resolve(root, '.evidence/product-build/receipt.json');
     const previous = existsSync(reportFile) ? JSON.parse(readFileSync(reportFile, 'utf8')) : null;
@@ -337,12 +503,13 @@ if (isMain(import.meta.url)) {
     const configKeys = requiredPublicConfigKeys(previous, build, publicConfigIdentity());
     const plan = candidatePlan(configKeys, process.env.CI ? process.env.FITSY_DIFF_BASE : undefined);
     if (process.argv.includes('--plan')) {
-      console.log(JSON.stringify({ ...plan, inputHash: inputHash() }));
+      const exceptions = await acceptanceExceptions(plan, approvals[0]?.slice('--release-exception='.length));
+      console.log(JSON.stringify({ ...plan, inputHash: inputHash(), exceptions }));
     } else if (!plan.required) {
       console.log(JSON.stringify({ name: 'product-flow', status: 'pass', applicability: 'not_applicable', summary: 'no mobile-facing product changes', fix: '' }));
     } else {
       const report = JSON.parse(readFileSync(reportFile, 'utf8'));
-      const result = validate(report, plan, inputHash(), resolve(reportFile, '..'));
+      const result = await validateAcceptance(report, plan, inputHash(), resolve(reportFile, '..'));
       execFileSync(process.execPath, ['--env-file=apps/mobile/.env.development.local', 'scripts/sim/product-flow.mjs', 'check'], { cwd: root, stdio: ['ignore', 'ignore', 'pipe'] });
       console.log(JSON.stringify({ name: 'product-flow', ...result, fix: '' }));
     }

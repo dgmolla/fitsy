@@ -4,6 +4,9 @@ appId: com.fitsy.mobile
 - launchApp:
     clearState: true
     clearKeychain: true
+# Match active-entitlement setup: settle launch before the first XCTest read.
+- waitForAnimationToEnd:
+    timeout: 10000
 - extendedWaitUntil:
     visible:
       id: welcome-login

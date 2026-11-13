@@ -67,7 +67,7 @@ Worker sandbox restrictions on the host directory or shared lock require install
 
 ## Simulator status reasons and retries
 
-The external Mac poller posts `Simulator`; `.github/workflows/sim-scope.yml` only posts the separate `Sim scope` classification.
+The external Mac poller posts `Simulator`.
 After reviewed integration, the existing host owner installs the maintained status lifecycle from a clean checkout matching fresh `origin/main` at an idle boundary:
 
 ```sh

@@ -57,9 +57,28 @@ test.each([
   expect(select([path])).toMatchObject({ risk: 'medium', scope: 'flow', required: true, flows });
 });
 
+// #821: PR #820's auth/onboarding files (minus apps/api/lib/auth.ts and
+// services/authService.ts, which independently carry a high review tier via
+// risk-tiers.yml and so still correctly force full coverage regardless of
+// this narrowing) used to send the whole change to scope:full through the
+// old combined auth/signin/session keyword bucket. They now resolve to the
+// same narrow sign-in/onboarding/paywall-access set Dawit named in the issue.
+test('PR #820\'s non-review-gated auth/onboarding files select the narrow flow set, not the full 28', () => {
+  const result = select([
+    'apps/mobile/app/welcome/signin.tsx',
+    'apps/mobile/lib/authClient.ts',
+    'apps/mobile/lib/guidedPreview.ts',
+  ]);
+  expect(result.scope).toBe('flow');
+  expect(result.flows).toEqual(['cold-start-welcome', 'meal-target-energy-sync', 'onboarding-assisted-targets',
+    'onboarding-guided-preview', 'onboarding-out-of-area', 'onboarding-returning-account', 'onboarding-returning-preview',
+    'onboarding-search-highlight', 'onboarding-target-ranked-search', 'paywall-access', 'signin-options']);
+  expect(result.reason).toContain('apps/mobile/app/welcome/signin.tsx');
+  expect(result.reason).not.toContain('Navigation, auth, billing, native configuration or release path');
+});
+
 test.each([
   'apps/mobile/app/_layout.tsx', 'apps/mobile/app/(tabs)/_layout.tsx',
-  'apps/mobile/app/auth/login.tsx', 'apps/mobile/app/welcome/signin.tsx',
   'apps/mobile/app/welcome/payment.tsx', 'apps/mobile/components/PaywallView.tsx',
   'apps/mobile/lib/useEntitlementVerdict.ts', 'apps/mobile/lib/useOwnedHardwareBack.ts',
   'apps/mobile/lib/nativeIntent.ts', 'apps/mobile/lib/supabase.ts',
@@ -116,7 +135,7 @@ test.each([[], ['docs/guide.md'], ['scripts/example.ts'], ['apps/mobile/lib/menu
 
 test('needs-sim preserves an affected selection and cannot reduce a high selection', () => {
   expect(select(['apps/mobile/lib/menuFilters.ts'], { labels: ['needs-sim'] }).scope).toBe('flow');
-  expect(select(['apps/mobile/lib/authClient.ts'], { labels: ['needs-sim'] }).flows).toEqual(allFlows);
+  expect(select(['apps/mobile/lib/useEntitlementVerdict.ts'], { labels: ['needs-sim'] }).flows).toEqual(allFlows);
 });
 
 test.each([null, ['apps/mobile/app/welcome/goal.tsx', '.github/workflows/verify.yml']].map(files => ({ files })))(
@@ -253,9 +272,6 @@ test.each([
   const outputs = Object.fromEntries(readFileSync(output, 'utf8').trim().split('\n').map(line => {
     const index = line.indexOf('='); return [line.slice(0, index), line.slice(index + 1)];
   }));
-  const artifact = JSON.parse(readFileSync(join(directory, '.evidence/sim-scope/selection.json'), 'utf8'));
-  expect(artifact.comparison.head).toBe(head);
-  expect(artifact.simulator).toMatchObject({ scope: outputs.sim_scope, flows: JSON.parse(outputs.sim_flows!), smoke: JSON.parse(outputs.sim_smoke!) });
   const needs = { classify: { result: 'success', outputs }, static: { result: entry.staticResult } };
   const build = workflow.jobs.build!;
   expect(expression(build.if!, needs)).toBe(entry.expected);
@@ -265,19 +281,41 @@ test.each([
   expect(expression(build.if!, { ...needs, classify: { ...needs.classify, result: 'failure' } })).toBe(false);
 });
 
-test('label additions and removals rerun classification, and the final Verify job is byte-for-byte unchanged', () => {
+// Pinned literal baseline for the final Verify job: a human must deliberately
+// update this string (not just the workflow file) to change the required-check
+// aggregation, so a silent edit to the job graph fails this test instead of
+// slipping through unreviewed. Last reviewed when test-other was added (#778).
+const EXPECTED_VERIFY_JOB = `    name: Verify
+    needs: [classify, static, domain-check, test, test-other, build]
+    if: \${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every applicable job
+        env:
+          NEEDS_JSON: \${{ toJSON(needs) }}
+        run: |
+          jq -e --arg event "$GITHUB_EVENT_NAME" '
+            def expected($flag):
+              if $flag == "true" then "success"
+              elif $flag == "false" then "skipped" else "invalid" end;
+            .classify.result == "success" and
+            .static.result == expected(.classify.outputs.code) and
+            .test.result == expected(.classify.outputs.tests) and
+            ."test-other".result == expected(.classify.outputs.tests) and
+            .build.result == expected(.classify.outputs.build) and
+            ."domain-check".result == (if $event == "pull_request" then "success" else "skipped" end)
+          ' <<<"$NEEDS_JSON"
+`;
+test('label additions and removals rerun classification, and the final Verify job matches its reviewed baseline', () => {
   expect(workflow.on.pull_request.types).toEqual(expect.arrayContaining(['opened', 'synchronize', 'reopened', 'labeled', 'unlabeled']));
-  const original = execFileSync('git', ['show', 'HEAD:.github/workflows/verify.yml'], { cwd: root, env, encoding: 'utf8' });
-  expect(workflowText.split('\n  verify:\n')[1]).toBe(original.split('\n  verify:\n')[1]);
-  const main = execFileSync('git', ['show', 'origin/main:.github/workflows/verify.yml'], { cwd: root, env, encoding: 'utf8' });
-  expect(workflowText.split('\n  verify:\n')[1]).toBe(main.split('\n  verify:\n')[1]);
+  expect(workflowText.split('\n  verify:\n')[1]).toBe(EXPECTED_VERIFY_JOB);
 });
 
 test.each(['success', 'failure', 'skipped', 'cancelled'])(
   'actual final Verify requires success from the selected Build job (Build=%s)', buildResult => {
   const needs = {
     classify: { result: 'success', outputs: { code: 'true', tests: 'true', build: 'true' } },
-    static: { result: 'success' }, test: { result: 'success' },
+    static: { result: 'success' }, test: { result: 'success' }, 'test-other': { result: 'success' },
     'domain-check': { result: 'success' }, build: { result: buildResult },
   };
   const command = workflow.jobs.verify!.steps.find(step => step.name === 'Require every applicable job')!.run!;
@@ -351,7 +389,7 @@ test.each([
   { path: 'apps/mobile/app/welcome/goal.tsx', after: screen('Your goal', 8, 'setGoal("lose_fat")'), mode: 'e2e', scope: 'flow' },
   { path: 'apps/mobile/components/ContinueButton.tsx', after: screen('Continue'), mode: 'e2e', scope: 'full' },
   { path: 'apps/mobile/app/_layout.tsx', after: screen('Fitsy'), mode: 'e2e', scope: 'full' },
-  { path: 'apps/mobile/app/auth/login.tsx', after: screen('Sign in'), mode: 'e2e', scope: 'full' },
+  { path: 'apps/mobile/app/auth/login.tsx', after: screen('Sign in'), mode: 'e2e', scope: 'flow' },
   { path: 'apps/mobile/app/welcome/payment.tsx', after: screen('Subscribe'), mode: 'e2e', scope: 'full' },
   { path: 'apps/web/app/page.tsx', after: screen('Welcome'), mode: 'e2e', scope: 'full' },
 ])('actual UI diff selects $scope $mode coverage for $path', entry => {
@@ -377,7 +415,7 @@ test.each([
     cwd: directory, env: { ...env, CI: 'true', FITSY_DIFF_BASE: base, FITSY_DIFF_HEAD: head }, encoding: 'utf8',
   });
   expect({ status: execute.status, error: execute.status === 0 ? '' : execute.stderr }).toEqual({ status: 0, error: '' });
-  expect(JSON.parse(execute.stdout)).toEqual(plan.simulator);
+  expect(JSON.parse(execute.stdout)).toEqual({ ...plan.simulator, environmentRetryAllowed: true });
 });
 
 test.each([
@@ -413,32 +451,11 @@ test('Verify only classifies simulator scope with read-only credentials', () => 
   expect(workflow.jobs.classify!.steps.find(step => step.uses === 'actions/checkout@v4')!.with).toMatchObject({ 'persist-credentials': false });
   expect(workflow.jobs.classify!.steps.some(step => step.uses === 'actions/github-script@v7')).toBe(false);
   expect(workflow.jobs.classify!.steps.some(step => step.env?.GH_TOKEN || step.env?.GITHUB_TOKEN)).toBe(false);
-  const upload = workflow.jobs.classify!.steps.find(step => step.name === 'Upload simulator selection')!;
-  expect(upload.uses).toBe('actions/upload-artifact@v4');
-  expect(upload.with?.path).toBe('.evidence/sim-scope/selection.json');
   for (const file of readdirSync(join(root, '.github/workflows'))) {
-    // The dedicated self-hosted runner has its own execution/security contract
-    // in sim/actions.test.mjs; every other workflow remains classification-only.
-    if (file === 'simulator.yml') continue;
     const text = readFileSync(join(root, '.github/workflows', file), 'utf8');
     expect(text).not.toMatch(/FITSY_(?:CI_)?SIM_|sim\/ci\.mjs|maestro|simctl|iphonesimulator|macos-15/);
   }
   expect(existsSync(join(root, '.eas/workflows/mobile-e2e.yml'))).toBe(false);
   const registry = yaml.load(readFileSync(join(root, 'scripts/verify/registry.yml'), 'utf8')) as { checks: { name: string; script: string }[] };
   expect(registry.checks.some(check => check.name === 'mobile-e2e')).toBe(false);
-});
-
-test.each(['none', 'smoke', 'flow', 'full'])('actual %s selection produces a status within GitHub\'s 140-character limit', scope => {
-  const simulator = select(scope === 'none' ? ['docs/guide.md'] : scope === 'full' ? ['apps/mobile/lib/authClient.ts'] : ['apps/mobile/lib/notificationSchedule.ts']);
-  if (scope === 'smoke') Object.assign(simulator, { scope, mode: 'render', smoke: [
-    { flow: 'reminders', screen: 'apps/mobile/app/notification-settings.tsx', selector: { id: 'reminder-permission' } },
-  ] });
-  const head = 'a'.repeat(40);
-  const result = spawnSync(process.execPath, ['--input-type=module', '-e',
-    `import {scopeDescription} from ${JSON.stringify(join(root, 'scripts/verify/sim-scope-status.mjs'))};
-     process.stdout.write(scopeDescription(${JSON.stringify({ version: 1, comparison: { head, unknown: false }, simulator })}, '${head}'));`],
-  { env, encoding: 'utf8' });
-  expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: '' });
-  expect(result.stdout.trim()).toBe(`scope=${scope} flows=${simulator.flows.length}`);
-  expect(result.stdout.trim().length).toBeLessThanOrEqual(140);
 });

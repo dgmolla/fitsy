@@ -33,28 +33,14 @@ jobs:
       tests: ${{ steps.t.outputs.tests }}
       build: ${{ steps.t.outputs.build }}
       docs_only: ${{ steps.t.outputs.docs_only }}
-      simulator: ${{ steps.t.outputs.simulator }}
-      sim_scope: ${{ steps.t.outputs.sim_scope }}
-      sim_mode: ${{ steps.t.outputs.sim_mode }}
-      sim_smoke: ${{ steps.t.outputs.sim_smoke }}
-      sim_flows: ${{ steps.t.outputs.sim_flows }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
       - id: t
-        run: |
-          mkdir -p .evidence/sim-scope
-          node scripts/verify/impact-plan.mjs --github-output > .evidence/sim-scope/selection.json
-      - name: Upload simulator selection
-        uses: actions/upload-artifact@v4
-        with:
-          name: sim-scope
-          path: .evidence/sim-scope/selection.json
-          if-no-files-found: error
-      # Sim scope is published by sim-scope.yml from its protected workflow
-      # revision. Candidate scripts and baseline checks receive read-only access.
+        run: node scripts/verify/impact-plan.mjs --github-output
+      # Candidate scripts and baseline checks receive read-only access.
       - name: Install gitleaks (docs PRs can leak secrets too)
         run: curl -sL "$(curl -s https://api.github.com/repos/gitleaks/gitleaks/releases/latest | grep browser_download_url | grep linux_x64.tar.gz | head -1 | cut -d '"' -f4)" | tar xz -C /usr/local/bin gitleaks || echo "gitleaks install failed; grep fallback covers"
       - name: Baseline checks (always, no npm ci)
@@ -81,18 +67,27 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      # Release downloads have returned HTTP 504; reuse the pinned archives and
+      # check their SHA-256 on every run, cached or downloaded.
+      - name: Restore pinned workflow lint tool archives
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/lint-tools
+          key: lint-tools-actionlint-1.7.12-8aca8db9-shellcheck-0.11.0-8c3be12b
       - name: Install required workflow lint tools
         run: |
-          curl --fail --show-error --location --retry 3 \
+          dir="$RUNNER_TEMP/lint-tools"
+          mkdir -p "$dir"
+          [ -f "$dir/actionlint.tar.gz" ] || curl --fail --show-error --location --retry 3 \
             https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz \
-            --output "$RUNNER_TEMP/actionlint.tar.gz"
-          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $RUNNER_TEMP/actionlint.tar.gz" | sha256sum --check
-          tar xzf "$RUNNER_TEMP/actionlint.tar.gz" -C /usr/local/bin actionlint
-          curl --fail --show-error --location --retry 3 \
+            --output "$dir/actionlint.tar.gz"
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $dir/actionlint.tar.gz" | sha256sum --check
+          tar xzf "$dir/actionlint.tar.gz" -C /usr/local/bin actionlint
+          [ -f "$dir/shellcheck.tar.xz" ] || curl --fail --show-error --location --retry 3 \
             https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz \
-            --output "$RUNNER_TEMP/shellcheck.tar.xz"
-          echo "8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198  $RUNNER_TEMP/shellcheck.tar.xz" | sha256sum --check
-          tar xJf "$RUNNER_TEMP/shellcheck.tar.xz" -C /usr/local/bin --strip-components=1 shellcheck-v0.11.0/shellcheck
+            --output "$dir/shellcheck.tar.xz"
+          echo "8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198  $dir/shellcheck.tar.xz" | sha256sum --check
+          tar xJf "$dir/shellcheck.tar.xz" -C /usr/local/bin --strip-components=1 shellcheck-v0.11.0/shellcheck
           actionlint --version
           shellcheck --version
       - name: Install gitleaks
@@ -107,6 +102,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload L0-L1 diagnostics
         if: ${{ always() }}
+        # A transient artifact-service outage must not fail an otherwise-passing job.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: verify-l0-l1-logs-attempt-${{ github.run_attempt }}
@@ -150,6 +147,10 @@ jobs:
        (needs.classify.outputs.code == 'false' && needs.static.result == 'skipped'))
     name: Tests (L2)
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [api, scripts, mobile]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -162,13 +163,55 @@ jobs:
       - run: git fetch origin main
       # The canonical runner owns PostGIS, target checks, migrations and seed.
       # External API keys stay absent; tests replace external services.
+      # Each shard runs only its own group (same commands/worker limits as the
+      # unsharded run) in parallel with the others; a shard whose group isn't
+      # affected by this change reports skipped and exits 0, not failed.
       - name: Run L2 checks
-        run: node scripts/verify/run.mjs --layer=2 --runs=ci --scope=changed
+        env:
+          FITSY_VERIFY_TEST_GROUP: ${{ matrix.group }}
+        run: node scripts/verify/run.mjs --layer=2 --runs=ci --scope=changed --only=test
       - name: Upload L2 diagnostics
         if: ${{ always() }}
+        # A transient artifact-service outage must not fail an otherwise-passing job.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
-          name: verify-l2-logs-attempt-${{ github.run_attempt }}
+          name: verify-l2-logs-attempt-${{ github.run_attempt }}-${{ matrix.group }}
+          path: .evidence/verify/logs/
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: warn
+
+  test-other:
+    needs: [classify, static]
+    if: >-
+      always() && needs.classify.result == 'success' &&
+      needs.classify.outputs.tests == 'true' &&
+      ((needs.classify.outputs.code == 'true' && needs.static.result == 'success') ||
+       (needs.classify.outputs.code == 'false' && needs.static.result == 'skipped'))
+    name: Tests (L2 other)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: git fetch origin main
+      # The two L2 checks not sharded by test group: small and fast relative
+      # to the api/scripts/mobile suites, so they stay on one runner.
+      - name: Run remaining L2 checks
+        run: node scripts/verify/run.mjs --layer=2 --runs=ci --scope=changed --only=own-code-mocks,rate-limit-store
+      - name: Upload L2 diagnostics
+        if: ${{ always() }}
+        # A transient artifact-service outage must not fail an otherwise-passing job.
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: verify-l2-other-logs-attempt-${{ github.run_attempt }}
           path: .evidence/verify/logs/
           include-hidden-files: true
           retention-days: 7
@@ -199,6 +242,8 @@ jobs:
         run: node scripts/verify/run.mjs --layer=3 --runs=ci --scope=changed
       - name: Upload L3 diagnostics
         if: ${{ always() }}
+        # A transient artifact-service outage must not fail an otherwise-passing job.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: verify-l3-logs-attempt-${{ github.run_attempt }}
@@ -209,7 +254,7 @@ jobs:
 
   verify:
     name: Verify
-    needs: [classify, static, domain-check, test, build]
+    needs: [classify, static, domain-check, test, test-other, build]
     if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
@@ -224,6 +269,7 @@ jobs:
             .classify.result == "success" and
             .static.result == expected(.classify.outputs.code) and
             .test.result == expected(.classify.outputs.tests) and
+            ."test-other".result == expected(.classify.outputs.tests) and
             .build.result == expected(.classify.outputs.build) and
             ."domain-check".result == (if $event == "pull_request" then "success" else "skipped" end)
           ' <<<"$NEEDS_JSON"

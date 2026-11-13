@@ -25,6 +25,7 @@ import { syncSavedProfileToServer, queueSavedProfileToServer, deliverQueuedProfi
 import { useTheme } from '@/lib/theme';
 import { FilterPopup } from '@/components/FilterPopup';
 import { ProfileEditSheet, type ProfileEditSheetProps } from '@/components/ProfileEditSheet';
+import { DevTestAccountControl } from '@/components/DevTestAccountControl';
 import { MACRO_COLORS } from '@/lib/macroColors';
 import { updateProfileFieldAndTargets } from '@/lib/profileTargetUpdate';
 import { openLegalLink } from '@/lib/legalLinks';
@@ -38,7 +39,6 @@ import {
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { usePurchases } from '@/lib/usePurchases';
 import { useFloatingNavClearance } from '@/lib/floatingNav';
-import { LaunchAnalyticsPreferences } from '@/components/LaunchAnalyticsPreferences';
 
 const GOAL_OPTIONS = [
   { id: 'lose_fat', label: 'Lose Weight', icon: 'flame-outline', description: 'Calorie deficit for fat loss' },
@@ -361,7 +361,7 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={14} color={EDITORIAL.creamDeep} />
         </Pressable>
 
-        <LaunchAnalyticsPreferences />
+        {__DEV__ && <DevTestAccountControl />}
 
         {/* Logout */}
         <Pressable testID="profile-logout" style={s.logoutBtn} onPress={handleLogout}>

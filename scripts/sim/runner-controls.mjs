@@ -377,7 +377,7 @@ export async function startOwnedRecorder(udid, file, log, { command = 'xcrun', a
   onStart = null, onComplete = null } = {}) {
   const fd = openSync(log, 'w');
   let owned, startError;
-  try { owned = await startOwnedGroup('recorder', command, args || ['simctl', 'io', udid, 'recordVideo', '--type=mp4', file],
+  try { owned = await startOwnedGroup('recorder', command, args || ['simctl', 'io', udid, 'recordVideo', '--codec=h264', file],
     { stdio: ['ignore', fd, fd], spawnImpl }); }
   catch (error) { startError = error; }
   try { closeSync(fd); }
@@ -465,7 +465,8 @@ export async function runOwnedMaestro(command, args, { cwd, env, dir, timeline, 
       catch (error) { event(timeline, { type: 'diagnostic-error', pid: ownedPid, error: error.message }); }
     };
     while (!owned.commandResult && !owned.keeperResult) {
-      await sleep(pollMs);
+      // Exit receipts wake the supervisor immediately; only watchdog checks poll.
+      await waitOrTimeout(owned.completed, pollMs);
       const log = latestMaestroLog(dir);
       if (log) { try { const size = statSync(log).size; if (size !== lastLogSize) { lastLogSize = size; lastActivity = performance.now(); } } catch { /* a rotating log is not evidence of a hang */ } }
       if (owned.commandResult || owned.keeperResult) break;
@@ -516,9 +517,13 @@ export async function runOwnedMaestro(command, args, { cwd, env, dir, timeline, 
       reason = interruptionReason(signal);
       await capture(reason, latestMaestroLog(dir));
     }
+    const returnPrepared = clock();
+    const supervisorTiming = { dispatch: anchor, exitObservedMonotonicNs: result.observedMonotonicNs || null, returnPrepared,
+      exitToReturnMs: result.observedMonotonicNs ? Number(BigInt(returnPrepared.monotonicNs) - BigInt(result.observedMonotonicNs)) / 1e6 : null,
+      uiReady: 'unobserved', note: 'Keeper-observed child exit through owned cleanup, before final receipt write; not app latency or outer tool return.' };
     event(timeline, { type: 'maestro-end', pid: ownedPid, outcome: reason || (result.code === 0 ? 'pass' : 'fail'), exitCode: result.code, signal: result.signal,
-      elapsedMs: performance.now() - started, reason });
-    return { ...result, reason, elapsedMs: performance.now() - started, anchor };
+      elapsedMs: performance.now() - started, reason, supervisorTiming });
+    return { ...result, reason, elapsedMs: performance.now() - started, anchor, supervisorTiming };
   } catch (error) {
     // Every callback and evidence write after acquisition can throw. Keep the
     // original failure while closing only the group whose keeper we still own.

@@ -13,7 +13,7 @@ tags: [billing, onboarding, changed-journey, 'fixture:expired-subscription', 'st
 - assertVisible: "Sample meal"
 - assertVisible:
     id: paywall-search-item-card
-    text: "Chick-fil-A, best match: 8 ct Grilled Nuggets"
+    text: "Chick-fil-A, best match: 8 ct Grilled Nuggets, Published nutrition, high confidence, 130 kcal"
 - assertNotVisible:
     id: paywall-logo
 - tapOn:

@@ -1,0 +1,172 @@
+{
+  "appSource": "6539edab846a2464a8d6d3f6574b622835831af7",
+  "designIteration": 2,
+  "ownerDirection": "https://github.com/dgmolla/fitsy/issues/755#issuecomment-6711565662",
+  "images": [
+    {
+      "source": "6539edab846a2464a8d6d3f6574b622835831af7",
+      "jsHash": "455101b0e14fecfaf4d89be1586f7392e8da7ad7f99eff95b386dc1bd8a0bdbb",
+      "bundleHash": "0a9ee98d6f42f21369c4a91dca11e22110e105a5a9efa416a4ab02fc44af9934",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "udid": "98638215-7437-4A09-BF9F-C9E699E303B6",
+      "at": "2026-11-07T19:38:20.551Z",
+      "file": "normal-list-map-focused.png",
+      "device": "iPhone 15 / iOS 17.5",
+      "capturedAt": "2026-11-07T19:39:09.595644+00:00",
+      "sha256": "59174a941f8c6e91885474ab61710a82d3822083b535f24784643cf305669acd",
+      "bytes": 2618997,
+      "dimensions": [
+        1179,
+        2556
+      ],
+      "servedReadbackHash": "0a9ee98d6f42f21369c4a91dca11e22110e105a5a9efa416a4ab02fc44af9934",
+      "caption": "Single Map control with focused white frosted search and actual Pizzana meal"
+    },
+    {
+      "source": "6539edab846a2464a8d6d3f6574b622835831af7",
+      "jsHash": "455101b0e14fecfaf4d89be1586f7392e8da7ad7f99eff95b386dc1bd8a0bdbb",
+      "bundleHash": "0a9ee98d6f42f21369c4a91dca11e22110e105a5a9efa416a4ab02fc44af9934",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "udid": "98638215-7437-4A09-BF9F-C9E699E303B6",
+      "at": "2026-11-07T19:38:20.551Z",
+      "file": "normal-list-map-results.png",
+      "device": "iPhone 15 / iOS 17.5",
+      "capturedAt": "2026-11-07T19:39:18.314297+00:00",
+      "sha256": "32573b8126593eaeee5a5af2c81673c7df0cca613fa25a8f0f6d103e6db6e3c7",
+      "bytes": 2616310,
+      "dimensions": [
+        1179,
+        2556
+      ],
+      "servedReadbackHash": "0a9ee98d6f42f21369c4a91dca11e22110e105a5a9efa416a4ab02fc44af9934",
+      "caption": "Submitted pizza results with one Map control and editable targets"
+    },
+    {
+      "source": "6539edab846a2464a8d6d3f6574b622835831af7",
+      "jsHash": "455101b0e14fecfaf4d89be1586f7392e8da7ad7f99eff95b386dc1bd8a0bdbb",
+      "bundleHash": "0a9ee98d6f42f21369c4a91dca11e22110e105a5a9efa416a4ab02fc44af9934",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "udid": "98638215-7437-4A09-BF9F-C9E699E303B6",
+      "at": "2026-11-07T19:38:20.551Z",
+      "file": "normal-map-city-results.png",
+      "device": "iPhone 15 / iOS 17.5",
+      "capturedAt": "2026-11-07T19:41:04.819701+00:00",
+      "sha256": "6797b95f4e8208ffab298f9bf00627746332189c8903deb9d4796b50cbd55f0d",
+      "bytes": 2891048,
+      "dimensions": [
+        1179,
+        2556
+      ],
+      "servedReadbackHash": "0a9ee98d6f42f21369c4a91dca11e22110e105a5a9efa416a4ab02fc44af9934",
+      "caption": "City-picker recovery with real results and visible meal overlays"
+    },
+    {
+      "source": "6539edab846a2464a8d6d3f6574b622835831af7",
+      "jsHash": "455101b0e14fecfaf4d89be1586f7392e8da7ad7f99eff95b386dc1bd8a0bdbb",
+      "bundleHash": "0a9ee98d6f42f21369c4a91dca11e22110e105a5a9efa416a4ab02fc44af9934",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "udid": "98638215-7437-4A09-BF9F-C9E699E303B6",
+      "at": "2026-11-07T19:38:20.551Z",
+      "file": "normal-map-macros-city.png",
+      "device": "iPhone 15 / iOS 17.5",
+      "capturedAt": "2026-11-07T19:39:31.290959+00:00",
+      "sha256": "2e209382905c269107ef7b67caca406a7914c2bf2c33b0b1bde918524c586b35",
+      "bytes": 2873340,
+      "dimensions": [
+        1179,
+        2556
+      ],
+      "servedReadbackHash": "0a9ee98d6f42f21369c4a91dca11e22110e105a5a9efa416a4ab02fc44af9934",
+      "caption": "Chosen C alternate with Macros, city picker and selected Pizzana meal"
+    },
+    {
+      "source": "6539edab846a2464a8d6d3f6574b622835831af7",
+      "jsHash": "455101b0e14fecfaf4d89be1586f7392e8da7ad7f99eff95b386dc1bd8a0bdbb",
+      "bundleHash": "0a9ee98d6f42f21369c4a91dca11e22110e105a5a9efa416a4ab02fc44af9934",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "udid": "B2635EF1-A1BA-4712-978C-49486F4C14DB",
+      "nativeInputsStable": true,
+      "at": "2026-11-07T19:42:28.113Z",
+      "file": "small-list-map-focused.png",
+      "device": "iPhone SE (3rd generation) / iOS 17.5",
+      "capturedAt": "2026-11-07T19:44:08.523466+00:00",
+      "sha256": "b338eaa2d5421298154cb41c3b1f077cdd4afe9b3d472aca0a32aec14933f402",
+      "bytes": 1068957,
+      "dimensions": [
+        750,
+        1334
+      ],
+      "servedReadbackHash": "0a9ee98d6f42f21369c4a91dca11e22110e105a5a9efa416a4ab02fc44af9934",
+      "caption": "Single Map control with focused white frosted search and actual Pizzana meal"
+    },
+    {
+      "source": "6539edab846a2464a8d6d3f6574b622835831af7",
+      "jsHash": "455101b0e14fecfaf4d89be1586f7392e8da7ad7f99eff95b386dc1bd8a0bdbb",
+      "bundleHash": "0a9ee98d6f42f21369c4a91dca11e22110e105a5a9efa416a4ab02fc44af9934",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "udid": "B2635EF1-A1BA-4712-978C-49486F4C14DB",
+      "nativeInputsStable": true,
+      "at": "2026-11-07T19:42:28.113Z",
+      "file": "small-list-map-results.png",
+      "device": "iPhone SE (3rd generation) / iOS 17.5",
+      "capturedAt": "2026-11-07T19:44:18.673497+00:00",
+      "sha256": "8508f17112f59830b2675162e4f33068c62b56dace2d4a6ea05d6d1445ef0920",
+      "bytes": 1068501,
+      "dimensions": [
+        750,
+        1334
+      ],
+      "servedReadbackHash": "0a9ee98d6f42f21369c4a91dca11e22110e105a5a9efa416a4ab02fc44af9934",
+      "caption": "Submitted pizza results with one Map control and editable targets"
+    },
+    {
+      "source": "6539edab846a2464a8d6d3f6574b622835831af7",
+      "jsHash": "455101b0e14fecfaf4d89be1586f7392e8da7ad7f99eff95b386dc1bd8a0bdbb",
+      "bundleHash": "0a9ee98d6f42f21369c4a91dca11e22110e105a5a9efa416a4ab02fc44af9934",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "udid": "B2635EF1-A1BA-4712-978C-49486F4C14DB",
+      "nativeInputsStable": true,
+      "at": "2026-11-07T19:42:28.113Z",
+      "file": "small-map-city-results.png",
+      "device": "iPhone SE (3rd generation) / iOS 17.5",
+      "capturedAt": "2026-11-07T19:46:27.971016+00:00",
+      "sha256": "d3f9f8fb685b30a9e44e7391767d21d3d1adce28f5875a9cd8ac5d3ee83158e6",
+      "bytes": 1023237,
+      "dimensions": [
+        750,
+        1334
+      ],
+      "servedReadbackHash": "0a9ee98d6f42f21369c4a91dca11e22110e105a5a9efa416a4ab02fc44af9934",
+      "caption": "City-picker recovery with real results and visible meal overlays"
+    },
+    {
+      "source": "6539edab846a2464a8d6d3f6574b622835831af7",
+      "jsHash": "455101b0e14fecfaf4d89be1586f7392e8da7ad7f99eff95b386dc1bd8a0bdbb",
+      "bundleHash": "0a9ee98d6f42f21369c4a91dca11e22110e105a5a9efa416a4ab02fc44af9934",
+      "nativeIdentity": "5eea716917c91bab84b7e2444bd81d9f7b8d41ddc4a2334546980bc82d03f8fb",
+      "appHash": "0100266d613d99ae01e4084f50080023e4b63502f83ccf52ac222a791aaa470f",
+      "udid": "B2635EF1-A1BA-4712-978C-49486F4C14DB",
+      "nativeInputsStable": true,
+      "at": "2026-11-07T19:42:28.113Z",
+      "file": "small-map-macros-city.png",
+      "device": "iPhone SE (3rd generation) / iOS 17.5",
+      "capturedAt": "2026-11-07T19:44:31.730334+00:00",
+      "sha256": "6f7aad07e8fb4a07c5773dfef4a0fcd3a1552a2a082d2ceecf33e471b93dc1b5",
+      "bytes": 1020926,
+      "dimensions": [
+        750,
+        1334
+      ],
+      "servedReadbackHash": "0a9ee98d6f42f21369c4a91dca11e22110e105a5a9efa416a4ab02fc44af9934",
+      "caption": "Chosen C alternate with Macros, city picker and selected Pizzana meal"
+    }
+  ],
+  "nativeAcceptance": "Unverified: final-source drag-to-area, full 28-flow scope, retained XCTest setup and Apple-history prerequisites remain unresolved."
+}

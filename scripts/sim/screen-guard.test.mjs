@@ -40,9 +40,18 @@ test('capture fails on expired pixels, unreadable content and changed artifacts;
 
 test('walkthroughs inspect actual screenshots and observations, without trusting expected prose or input commands', () => {
   const event = (name, content) => ({ command: { name }, result: { content } });
-  const screen = event('take_screenshot', [{ type: 'image', mimeType: 'image/png', data: Buffer.from('pixels').toString('base64') }]);
+  const pixels = readFileSync(new URL('./fixtures/active-saved-meal.png', import.meta.url));
+  const screen = event('take_screenshot', [{ type: 'image', mimeType: 'image/png', data: pixels.toString('base64') }]);
   assert.throws(() => inspectWalkthrough([screen], ordinaryFlow, () => 'Subscription ended'), /Unexpected/);
   assert.doesNotThrow(() => inspectWalkthrough([screen], expiredFlow, () => 'Subscription ended'));
   assert.throws(() => inspectWalkthrough([event('inspect_view_hierarchy', [{ type: 'text', text: 'resubscribe-restore' }])]), /Unexpected/);
   assert.doesNotThrow(() => inspectWalkthrough([event('input_text', [{ type: 'text', text: 'Subscription ended' }])]));
+  for (const image of [
+    { mimeType: 'image/jpeg', data: pixels.toString('base64') },
+    { mimeType: 'image/gif', data: pixels.toString('base64') },
+    { mimeType: 'image/png', data: pixels.subarray(0, -1).toString('base64') },
+    { mimeType: 'image/png', data: `${pixels.toString('base64')}!` },
+    { mimeType: 'image/png' },
+  ]) assert.throws(() => inspectWalkthrough([event('take_screenshot', [{ type: 'image', ...image }])], '',
+    () => assert.fail('Invalid image bytes must not reach OCR')), /matching complete PNG or JPEG/);
 });

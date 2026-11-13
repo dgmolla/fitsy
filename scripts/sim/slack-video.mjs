@@ -82,7 +82,7 @@ export async function withSlackVideo({ enabled = false, udid, dir, signal }, ope
       // Raw and incomplete encoded files have no .mp4 suffix, so evidence.py
       // cannot accidentally upload an oversized or unfinished recording.
       const log = openSync(`${video}.log`, 'w');
-      try { recorder = launch('xcrun', ['simctl', 'io', udid, 'recordVideo', '--type=mp4', join(scratch, 'source.mov')],
+      try { recorder = launch('xcrun', ['simctl', 'io', udid, 'recordVideo', '--codec=h264', join(scratch, 'source.mov')],
         { stdio: ['ignore', log, log] }); }
       finally { closeSync(log); }
       recorder.child.unref(); // Failed optional cleanup must not keep the gate alive.

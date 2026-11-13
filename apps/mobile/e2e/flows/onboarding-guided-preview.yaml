@@ -237,20 +237,15 @@ env:
 - assertVisible: "Estimated"
 - tapOn:
     id: welcome-continue
-- extendedWaitUntil:
-    visible:
-      id: onboarding-widget-card
-    timeout: 15000
-- assertVisible:
-    id: onboarding-widget-example
-- assertVisible: "1. Long-press your Home Screen."
-- assertVisible: "2. Tap \\+ \\(or Edit → Add Widget\\)."
-- assertVisible: "3. Search fitsy and add the widget."
-- assertVisible:
-    id: welcome-skip
-- takeScreenshot: onboarding-widget-card
-- tapOn:
-    id: welcome-continue
+# The widget screen moved to the end of onboarding (after payment); it no
+# longer appears here. Preview is map-first by product requirement (not the
+# search tab's experiment flag), so the real "Continue" tap above must land
+# directly in map mode on its own, with no mapDebug override needed. The
+# coachmark tour's native Modal masks discovery-map/preview-back from
+# accessibility once it auto-starts, so asserting map mode here would race
+# that ~600ms auto-start; the assertions right after the tour closes below
+# (discovery-map, preview-back, map-card-0, map-pin-2) already cover it
+# reliably, since nothing forces map mode anymore without the removed link.
 - extendedWaitUntil:
     visible:
       id: coachmark-next
@@ -298,6 +293,34 @@ env:
 - tapOn: "Find my meal"
 - assertNotVisible:
     id: coachmark-next
+- assertVisible:
+    id: discovery-map
+- assertVisible:
+    id: preview-back
+- assertVisible:
+    id: map-card-0
+- assertVisible:
+    id: map-pin-2
+- assertNotVisible:
+    id: map-pin-3
+- assertNotVisible:
+    id: map-load-more
+- assertNotVisible:
+    id: shuffle-button
+- assertVisible:
+    id: locked-value-cta
+- takeScreenshot: onboarding-map-first-tour-complete
+# Search opens the existing list; the single Map control returns to the same map.
+- tapOn:
+    id: map-search-entry
+- assertVisible:
+    id: discovery-list
+- tapOn:
+    id: discovery-view-toggle
+- assertVisible:
+    id: discovery-map
+- tapOn:
+    id: map-search-entry
 - copyTextFrom:
     id: discovery-search
 - assertTrue: ${maestro.copiedText === 'pizza'}
@@ -391,13 +414,25 @@ env:
 - assertTrue: ${maestro.copiedText === 'chicken'}
 - tapOn:
     id: discovery-clear-search
+# Clearing starts a real search whose result layout can move the input.
+# Wait for that result before choosing native tap coordinates, then verify the
+# typed value before Enter so an unfocused keyboard cannot masquerade as input.
 - extendedWaitUntil:
     visible:
       id: discovery-search
     timeout: 30000
+- extendedWaitUntil:
+    visible:
+      id: discovery-hero
+    timeout: 30000
+- waitForAnimationToEnd
 - tapOn:
     id: discovery-search
+- waitForAnimationToEnd
 - inputText: "pizza"
+- copyTextFrom:
+    id: discovery-search
+- assertTrue: ${maestro.copiedText === 'pizza'}
 - pressKey: Enter
 - extendedWaitUntil:
     visible:
@@ -540,20 +575,8 @@ env:
 - tapOn:
     id: welcome-continue
 - assertVisible: "A little context.*A better choice.*"
-- tapOn:
-    id: welcome-continue
-- extendedWaitUntil:
-    visible:
-      id: onboarding-widget-card
-    timeout: 15000
-- assertVisible:
-    id: onboarding-widget-example
-- assertVisible: "1. Long-press your Home Screen."
-- assertVisible: "2. Tap \\+ \\(or Edit → Add Widget\\)."
-- assertVisible: "3. Search fitsy and add the widget."
-- assertVisible:
-    id: welcome-skip
-- takeScreenshot: onboarding-widget-card
+# The widget screen moved to the end of onboarding (after payment); continue
+# now reaches the preview directly.
 - tapOn:
     id: welcome-continue
 - extendedWaitUntil:

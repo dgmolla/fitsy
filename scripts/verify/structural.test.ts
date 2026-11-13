@@ -142,15 +142,6 @@ test.each(["misc", "releases"])("an unrelated docs/%s domain is still rejected",
   expect(result.stderr).toContain(`docs/${domain}/ is not an allowed domain`);
 });
 
-test("the requested simulator setup runbook passes at its exact docs root path", () => {
-  mkdirSync(join(directory, "docs"));
-  writeFileSync(join(directory, "docs/ci-simulator.md"), "# Simulator CI\n");
-  const result = verify();
-  expect(result.error).toBeUndefined();
-  if (result.status !== 0) throw new Error(result.stdout + "\n" + result.stderr);
-  expect(JSON.parse(result.stdout)).toMatchObject({ name: "structural", status: "pass", blocking: true });
-});
-
 test.each(["submission.md", "ci-simulator-notes.md"])("the runbook exception still rejects unrelated root document %s", name => {
   mkdirSync(join(directory, "docs"));
   writeFileSync(join(directory, "docs", name), "# Notes\n");

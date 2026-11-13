@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyToken } from "@/services/authService";
-import type { JwtPayload } from "@/services/authService";
-import { dataIpLimiter, dataUserLimiter, rateLimitResponse } from "@/lib/rateLimit";
+import type { JwtPayload, VerifyTokenOptions } from "@/services/authService";
+import { anonymousDataUserLimiter, dataIpLimiter, dataUserLimiter, rateLimitResponse } from "@/lib/rateLimit";
 import { trustedClientIp } from '@/lib/clientIp';
 
 function unauthorized(): NextResponse {
@@ -20,6 +20,7 @@ function unauthorized(): NextResponse {
  */
 export async function requireAuth(
   request: NextRequest,
+  options: VerifyTokenOptions = {},
 ): Promise<JwtPayload | NextResponse> {
   const authHeader = request.headers.get("authorization");
 
@@ -31,11 +32,13 @@ export async function requireAuth(
 
   let payload: JwtPayload;
   try {
-    payload = await verifyToken(token);
+    payload = await verifyToken(token, options);
   } catch {
     return unauthorized();
   }
-  const userLimit = await dataUserLimiter.check(payload.sub);
+  // A real account's limit is sized for ongoing app use; an anonymous
+  // session gets the tighter, per-device budget instead (#801).
+  const userLimit = await (payload.isAnonymous ? anonymousDataUserLimiter : dataUserLimiter).check(payload.sub);
   if (!userLimit.ok) return rateLimitResponse(userLimit);
   return payload;
 }

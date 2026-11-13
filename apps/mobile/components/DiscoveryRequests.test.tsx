@@ -199,6 +199,30 @@ it.each([true, false])('ignores an old response immediately after typing, before
   expect(result.current.loading).toBe(false);
 });
 
+it.each([true, false])('keeps a replayed completed query pending through its new debounce and response (preview=%s)', async preview => {
+  const query = `replayed-pizza-${preview}`;
+  const { result, rerender } = renderHook(({ query }) => useDiscoveryResults({ inputs, query, location, canSearch: true,
+    targetsLoaded: true, previewReady: true, isOnboardingPreview: preview }), { initialProps: { query } });
+  await act(async () => {});
+  await act(async () => respond(0, 'first-pizza'));
+  expect(result.current.loading).toBe(false);
+
+  // Back to the Search tip types the same craving again before its debounce fires.
+  rerender({ query: '' });
+  rerender({ query });
+  expect(requests).toHaveLength(1);
+  expect(result.current.loading).toBe(true);
+  await act(async () => jest.advanceTimersByTime(599));
+  expect(requests).toHaveLength(1);
+  expect(result.current.loading).toBe(true);
+  await act(async () => jest.advanceTimersByTime(1));
+  expect(requests).toHaveLength(2);
+  expect(result.current.loading).toBe(true);
+  await act(async () => respond(1, 'replayed-pizza'));
+  expect(result.current.loading).toBe(false);
+  expect(result.current.results.map(row => row.id)).toEqual(['replayed-pizza']);
+});
+
 it('invalidates count and cancels the transport when meal targets change or the screen unmounts', async () => {
   const { result, rerender, unmount } = renderHook(({ calories }) => { const targets = useMemo(() => ({ ...inputs, calories }), [calories]); return useDiscoveryResults({ inputs: targets, query: 'targets-test', location, canSearch: true, targetsLoaded: true, previewReady: true, isOnboardingPreview: true }); }, { initialProps: { calories: '600' } });
   await act(async () => {});

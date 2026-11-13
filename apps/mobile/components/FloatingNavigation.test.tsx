@@ -75,6 +75,9 @@ function open(url = '/search', bottom = 34, search = () => <Search />) {
 it.each([undefined, false, 'true', 'control'])('keeps the current bar and original content spacing when the flag is %s', async value => {
   flag = value;
   const screen = open();
+  await screen.findByTestId('discovery-map');
+  expect(StyleSheet.flatten(screen.getByTestId('map-tray').props.style).marginBottom).toBe(0);
+  await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
   await screen.findByTestId('discovery-list');
   expect(screen.queryByTestId('floating-tab-bar')).toBeNull();
   expect(screen.getByText('SAVED')).toBeTruthy();
@@ -90,11 +93,14 @@ it.each([undefined, false, 'true', 'control'])('keeps the current bar and origin
 
 it.each([0, 21, 34])('keeps every tab reachable and its last content above the capsule with a %spt safe area', async bottom => {
   const screen = open('/search', bottom);
+  const clearance = 64 + 8 + bottom;
+  await screen.findByTestId('discovery-map');
+  expect(StyleSheet.flatten(screen.getByTestId('map-tray').props.style).marginBottom).toBe(clearance);
+  await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
   await screen.findByTestId('discovery-list');
   expect(screen.getByRole('tab', { name: 'Search', selected: true })).toBeTruthy();
   expect(screen.queryByText('SAVED')).toBeNull();
   expect(screen.queryByText('PROFILE')).toBeNull();
-  const clearance = 64 + 8 + bottom;
   expect(StyleSheet.flatten(screen.getByTestId('discovery-list').props.contentContainerStyle).paddingBottom).toBe(clearance + 28);
   // The full-width positioning layer passes touches through outside the capsule.
   const position = screen.getByTestId('floating-tab-bar-position');
@@ -103,7 +109,7 @@ it.each([0, 21, 34])('keeps every tab reachable and its last content above the c
   // Native hit testing must reach the controls above the screen, while the
   // animated blur stays decorative. Calling onPress directly cannot prove this.
   expect(StyleSheet.flatten(position.props.style).zIndex).toBeGreaterThan(0);
-  const blur = screen.UNSAFE_getByType(BlurView);
+  const blur = position.findByType(BlurView);
   expect(blur.props.pointerEvents).toBe('none');
   expect(blur.findAllByProps({ accessibilityRole: 'tab' })).toHaveLength(0);
   await act(async () => fireEvent.press(screen.getByRole('tab', { name: 'Saved' })));
@@ -130,8 +136,18 @@ it.each([0, 21, 34])('keeps every tab reachable and its last content above the c
 it('switches the bar and clearance together when remote flags arrive or are disabled', async () => {
   flag = undefined;
   const screen = open();
-  await screen.findByTestId('discovery-list');
+  await screen.findByTestId('discovery-map');
   expect(screen.queryByTestId('floating-tab-bar')).toBeNull();
+  expect(StyleSheet.flatten(screen.getByTestId('map-tray').props.style).marginBottom).toBe(0);
+  await act(async () => { flag = true; listeners.forEach(update => update()); });
+  expect(screen.getByTestId('floating-tab-bar')).toBeTruthy();
+  expect(StyleSheet.flatten(screen.getByTestId('map-tray').props.style).marginBottom).toBe(106);
+  await act(async () => { flag = false; listeners.forEach(update => update()); });
+  expect(screen.queryByTestId('floating-tab-bar')).toBeNull();
+  expect(StyleSheet.flatten(screen.getByTestId('map-tray').props.style).marginBottom).toBe(0);
+  await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
+  await screen.findByTestId('discovery-list');
+  expect(StyleSheet.flatten(screen.getByTestId('discovery-list').props.contentContainerStyle).paddingBottom).toBe(28);
   await act(async () => { flag = true; listeners.forEach(update => update()); });
   expect(screen.getByTestId('floating-tab-bar')).toBeTruthy();
   expect(StyleSheet.flatten(screen.getByTestId('discovery-list').props.contentContainerStyle).paddingBottom).toBe(134);

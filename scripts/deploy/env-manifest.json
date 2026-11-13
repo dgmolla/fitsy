@@ -221,10 +221,6 @@
       "expression": "v"
     },
     {
-      "file": "scripts/sim/actions.mjs",
-      "expression": "key"
-    },
-    {
       "file": "scripts/sim/ci.mjs",
       "expression": "key"
     },

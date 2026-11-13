@@ -20,6 +20,7 @@ export function paymentCompletionRoutes(onNotificationMount: () => void) {
     _layout: () => <PurchasesProvider><Stack screenOptions={{ headerShown: false }} /></PurchasesProvider>,
     'welcome/_layout': WelcomeLayout, 'welcome/trial': TrialScreen, 'welcome/trial-reminder': TrialReminderScreen,
     'welcome/payment': PaymentScreen,
+    'welcome/widget': () => <Text testID="widget-tip-screen">Widget tip</Text>,
     'welcome/signin': () => <Text>Sign in before plans</Text>,
     'welcome/preview': () => <Text>Browse the preview</Text>,
     'welcome/resubscribe': () => <Text>Resubscribe plans</Text>,

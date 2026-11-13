@@ -23,12 +23,21 @@ export function testsExpiredScreen(source = '') {
 }
 
 export function recognizeScreen(file) {
-  try {
-    const text = execFileSync('tesseract', [file, 'stdout', '-l', 'eng'],
-      { encoding: 'utf8', timeout: 15_000, maxBuffer: 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
-    if (!text.trim()) throw new Error('No recognized screenshot text');
-    return text;
-  } catch { throw new Error('Screenshot OCR failed; install working tesseract with English data and retain the failed capture'); }
+  const deadline = Date.now() + 15_000;
+  // Automatic page segmentation can return no text over a full-photo UI.
+  // Retry only that empty successful result with sparse-text segmentation,
+  // within the same total deadline; command failures and blank images still fail.
+  for (const layout of [[], ['--psm', '11']]) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw new Error(`Screenshot OCR deadline exceeded: ${file}`);
+    let text;
+    try {
+      text = execFileSync('tesseract', [file, 'stdout', '-l', 'eng', ...layout],
+        { encoding: 'utf8', timeout: remaining, maxBuffer: 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch { throw new Error(`Screenshot OCR command failed; verify tesseract and English data, and retain: ${file}`); }
+    if (text.trim()) return text;
+  }
+  throw new Error(`No screenshot text recognized; retain the unreadable capture: ${file}`);
 }
 
 export function requireScreenRecognition() {
@@ -78,10 +87,19 @@ export function inspectWalkthrough(events, source = '', recognize = recognizeScr
         expiredScreen(item.text || '') && !expectedExpired)
       throw new Error('Unexpected subscription-expired screen in walkthrough observation');
     if (item.type !== 'image') continue;
-    if (!item.data || item.mimeType !== 'image/png') throw new Error('Walkthrough screenshot must contain PNG pixels');
+    const pixels = typeof item.data === 'string' ? Buffer.from(item.data, 'base64') : Buffer.alloc(0);
+    // Maestro MCP returns JPEG; retain its original bytes and require the MIME
+    // type to agree with a complete image before the existing decoder/OCR check.
+    const png = pixels.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex')) &&
+      pixels.subarray(-12).equals(Buffer.from('0000000049454e44ae426082', 'hex'));
+    const jpeg = pixels.subarray(0, 3).equals(Buffer.from('ffd8ff', 'hex')) &&
+      pixels.subarray(-2).equals(Buffer.from('ffd9', 'hex'));
+    const extension = item.mimeType === 'image/png' && png ? 'png' : item.mimeType === 'image/jpeg' && jpeg ? 'jpg' : null;
+    if (!extension || pixels.toString('base64') !== item.data)
+      throw new Error('Walkthrough screenshot must contain matching complete PNG or JPEG pixels');
     const dir = mkdtempSync(join(tmpdir(), 'fitsy-walkthrough-screen-'));
     try {
-      const file = join(dir, 'screen.png'); writeFileSync(file, Buffer.from(item.data, 'base64'));
+      const file = join(dir, `screen.${extension}`); writeFileSync(file, pixels);
       inspectScreenshot(file, source, recognize);
     } finally { rmSync(dir, { recursive: true, force: true }); }
   }

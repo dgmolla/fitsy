@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import { getPostHogClient } from './analytics';
 
-/** This experiment cannot be enabled in a production binary or on Android. */
+/** iOS production availability is source-controlled; Debug keeps its opt-ins. */
 export function useMapSearchFlag(debugOverride = false): boolean {
-  const allowed = __DEV__ && Platform.OS === 'ios';
+  const allowed = Platform.OS === 'ios';
+  const production = !__DEV__;
   const [enabled, setEnabled] = useState(false);
   useEffect(() => {
-    if (!allowed) return;
+    if (!allowed || production) return;
     try {
       const client = getPostHogClient();
       const update = () => {
@@ -18,6 +19,6 @@ export function useMapSearchFlag(debugOverride = false): boolean {
       update();
       return unsubscribe;
     } catch { setEnabled(false); }
-  }, [allowed]);
-  return allowed && (debugOverride || enabled);
+  }, [allowed, production]);
+  return allowed && (production || debugOverride || enabled);
 }
