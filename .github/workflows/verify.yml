@@ -102,6 +102,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload L0-L1 diagnostics
         if: ${{ always() }}
+        # A transient artifact-service outage must not fail an otherwise-passing job.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: verify-l0-l1-logs-attempt-${{ github.run_attempt }}
@@ -170,6 +172,8 @@ jobs:
         run: node scripts/verify/run.mjs --layer=2 --runs=ci --scope=changed --only=test
       - name: Upload L2 diagnostics
         if: ${{ always() }}
+        # A transient artifact-service outage must not fail an otherwise-passing job.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: verify-l2-logs-attempt-${{ github.run_attempt }}-${{ matrix.group }}
@@ -203,6 +207,8 @@ jobs:
         run: node scripts/verify/run.mjs --layer=2 --runs=ci --scope=changed --only=own-code-mocks,rate-limit-store
       - name: Upload L2 diagnostics
         if: ${{ always() }}
+        # A transient artifact-service outage must not fail an otherwise-passing job.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: verify-l2-other-logs-attempt-${{ github.run_attempt }}
@@ -236,6 +242,8 @@ jobs:
         run: node scripts/verify/run.mjs --layer=3 --runs=ci --scope=changed
       - name: Upload L3 diagnostics
         if: ${{ always() }}
+        # A transient artifact-service outage must not fail an otherwise-passing job.
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: verify-l3-logs-attempt-${{ github.run_attempt }}
