@@ -1,8 +1,0 @@
-self-hosted-runner:
-  labels: [fitsy-sim]
-paths:
-  .github/workflows/simulator.yml:
-    ignore:
-      # GitHub supports queue:max; pinned actionlint 1.7.12 predates it.
-      # Keep every other concurrency/syntax diagnostic enabled.
-      - '^unexpected key "queue" for "concurrency" section\.'

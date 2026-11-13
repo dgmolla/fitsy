@@ -253,9 +253,6 @@ test.each([
   const outputs = Object.fromEntries(readFileSync(output, 'utf8').trim().split('\n').map(line => {
     const index = line.indexOf('='); return [line.slice(0, index), line.slice(index + 1)];
   }));
-  const artifact = JSON.parse(readFileSync(join(directory, '.evidence/sim-scope/selection.json'), 'utf8'));
-  expect(artifact.comparison.head).toBe(head);
-  expect(artifact.simulator).toMatchObject({ scope: outputs.sim_scope, flows: JSON.parse(outputs.sim_flows!), smoke: JSON.parse(outputs.sim_smoke!) });
   const needs = { classify: { result: 'success', outputs }, static: { result: entry.staticResult } };
   const build = workflow.jobs.build!;
   expect(expression(build.if!, needs)).toBe(entry.expected);
@@ -435,32 +432,11 @@ test('Verify only classifies simulator scope with read-only credentials', () => 
   expect(workflow.jobs.classify!.steps.find(step => step.uses === 'actions/checkout@v4')!.with).toMatchObject({ 'persist-credentials': false });
   expect(workflow.jobs.classify!.steps.some(step => step.uses === 'actions/github-script@v7')).toBe(false);
   expect(workflow.jobs.classify!.steps.some(step => step.env?.GH_TOKEN || step.env?.GITHUB_TOKEN)).toBe(false);
-  const upload = workflow.jobs.classify!.steps.find(step => step.name === 'Upload simulator selection')!;
-  expect(upload.uses).toBe('actions/upload-artifact@v4');
-  expect(upload.with?.path).toBe('.evidence/sim-scope/selection.json');
   for (const file of readdirSync(join(root, '.github/workflows'))) {
-    // The dedicated self-hosted runner has its own execution/security contract
-    // in sim/actions.test.mjs; every other workflow remains classification-only.
-    if (file === 'simulator.yml') continue;
     const text = readFileSync(join(root, '.github/workflows', file), 'utf8');
     expect(text).not.toMatch(/FITSY_(?:CI_)?SIM_|sim\/ci\.mjs|maestro|simctl|iphonesimulator|macos-15/);
   }
   expect(existsSync(join(root, '.eas/workflows/mobile-e2e.yml'))).toBe(false);
   const registry = yaml.load(readFileSync(join(root, 'scripts/verify/registry.yml'), 'utf8')) as { checks: { name: string; script: string }[] };
   expect(registry.checks.some(check => check.name === 'mobile-e2e')).toBe(false);
-});
-
-test.each(['none', 'smoke', 'flow', 'full'])('actual %s selection produces a status within GitHub\'s 140-character limit', scope => {
-  const simulator = select(scope === 'none' ? ['docs/guide.md'] : scope === 'full' ? ['apps/mobile/lib/authClient.ts'] : ['apps/mobile/lib/notificationSchedule.ts']);
-  if (scope === 'smoke') Object.assign(simulator, { scope, mode: 'render', smoke: [
-    { flow: 'reminders', screen: 'apps/mobile/app/notification-settings.tsx', selector: { id: 'reminder-permission' } },
-  ] });
-  const head = 'a'.repeat(40);
-  const result = spawnSync(process.execPath, ['--input-type=module', '-e',
-    `import {scopeDescription} from ${JSON.stringify(join(root, 'scripts/verify/sim-scope-status.mjs'))};
-     process.stdout.write(scopeDescription(${JSON.stringify({ version: 1, comparison: { head, unknown: false }, simulator })}, '${head}'));`],
-  { env, encoding: 'utf8' });
-  expect({ status: result.status, stderr: result.stderr }).toEqual({ status: 0, stderr: '' });
-  expect(result.stdout.trim()).toBe(`scope=${scope} flows=${simulator.flows.length}`);
-  expect(result.stdout.trim().length).toBeLessThanOrEqual(140);
 });

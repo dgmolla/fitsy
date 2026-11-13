@@ -230,7 +230,7 @@ function entitlementObservationImpact(path, range, cwd, env) {
     '- retry:\n    maxRetries: 2\n    commands:\n      - waitForAnimationToEnd:\n          timeout: 10000\n' +
     '      - extendedWaitUntil:\n          visible:\n            id: welcome-login\n          timeout: 60000';
   if (!before.includes(initial) || before.replace(initial, retry) !== after) return null;
-  const callers = ['scripts/sim/actions.mjs', 'scripts/sim/ci.mjs', 'scripts/sim/product-flow.mjs'];
+  const callers = ['scripts/sim/ci.mjs', 'scripts/sim/product-flow.mjs'];
   for (const file of [...callers, 'scripts/sim/active-entitlement.mjs', 'scripts/sim/journey-fixtures.mjs',
     'scripts/sim/runner-controls.mjs', 'scripts/verify/product-flow.mjs']) {
     const versions = sourceVersions(file, range, cwd, env);
@@ -273,12 +273,10 @@ function discoveryPreviewImpact(source, configKeys, range, cwd, env) {
   if (!range || range.unknown || configKeys.length) return null;
   const components = ['DiscoveryScreen.tsx', 'DiscoveryMap.tsx', 'DiscoveryMap.styles.ts', 'DiscoveryMapCard.tsx', 'DiscoveryCards.tsx']
     .map(name => `apps/mobile/components/${name}`);
-  const budgetControls = ['scripts/verify/simulator-actions.mjs', '.github/workflows/simulator.yml'];
   const entitlementHelper = 'apps/mobile/e2e/helpers/active-entitlement.yaml';
   if (!components.every(path => source.includes(path)) || source.some(path => !components.includes(path) &&
-      path !== 'scripts/verify/impact-plan.mjs' && path !== entitlementHelper && !budgetControls.includes(path) &&
+      path !== 'scripts/verify/impact-plan.mjs' && path !== entitlementHelper &&
       !/^apps\/mobile\/e2e\/flows\/onboarding-(guided|returning)-preview\.yaml$/.test(path))) return null;
-  if (budgetControls.some(path => source.includes(path)) && !budgetControls.every(path => source.includes(path))) return null;
   const flows = ['map-search', 'map-search-location-denied', 'onboarding-assisted-targets', 'onboarding-guided-preview',
     'onboarding-out-of-area', 'onboarding-returning-preview', 'onboarding-search-highlight', 'onboarding-target-ranked-search',
     'paywall-access', 'subscription-expired-routing'];
@@ -288,25 +286,6 @@ function discoveryPreviewImpact(source, configKeys, range, cwd, env) {
       if (!entitled) return null;
       flows.push(...entitled.filter(flow => !flows.includes(flow)));
       flows.sort();
-    }
-    for (const path of budgetControls.filter(path => source.includes(path))) {
-      const [before, after] = sourceVersions(path, range, cwd, env);
-      const expected = path.endsWith('.yml') ? before
-        .replace('      scope: ${{ steps.plan.outputs.scope }}', '      scope: ${{ steps.plan.outputs.scope }}\n' +
-          '      timeout_minutes: ${{ steps.plan.outputs.timeout_minutes }}\n      worker_timeout_seconds: ${{ steps.plan.outputs.worker_timeout_seconds }}')
-        .replace("${{ needs.select.outputs.scope == 'full' && 90 || 30 }}", '${{ fromJSON(needs.select.outputs.timeout_minutes) }}')
-        .replace("${{ needs.select.outputs.scope == 'full' && '5400' || '1800' }}", '${{ needs.select.outputs.worker_timeout_seconds }}') : before
-        .replace('isMain, simulatorSelection', 'isMain, simulatorSelection, simulatorBudget')
-        .replace('  const labels =', '  const result = selection => ({ ...selection, ...simulatorBudget(selection, options.cwd) });\n  const labels =')
-        .replace("return { required: true, scope: plan.scope === 'full' ? 'full' : 'flow', flows: plan.flows, reason: plan.reason };",
-          "return result({ required: true, scope: plan.scope === 'full' ? 'full' : 'flow', flows: plan.flows, reason: plan.reason });")
-        .replace('return { required: controls,', 'return result({ required: controls,')
-        .replace("journeys' : plan.reason };", "journeys' : plan.reason });")
-        .replace("for (const key of ['required', 'scope']) appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${selection[key]}\\n`);",
-          "for (const [key, value] of Object.entries({ required: selection.required, scope: selection.scope,\n" +
-          "        timeout_minutes: selection.timeoutMinutes, worker_timeout_seconds: selection.workerTimeoutSeconds }))\n" +
-          "        appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\\n`);");
-      if (expected === before || expected !== after) return null;
     }
     // These are the actual shared card and screen callers, including ordinary
     // paywall A and resubscribe. A new caller invalidates this bounded mapping.
@@ -430,14 +409,6 @@ function discoveryEntryImpact(source, configKeys, range, cwd, env) {
     for (const path of source) {
       if (/^scripts\/(?:sim|verify)\//.test(path)) continue; // Changed controls retain their own tests/review.
       const versions = sourceVersions(path, range, cwd, env);
-      if (path === '.github/workflows/simulator.yml') {
-        const budget = text => text
-          .replace(/^    timeout-minutes: (?:30|\$\{\{ needs\.select\.outputs\.scope == 'full' && 90 \|\| 30 \}\})$/m, '    timeout-minutes: <budget>')
-          .replace(/^      FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS: (?:'1800'|\$\{\{ needs\.select\.outputs\.scope == 'full' && '5400' \|\| '1800' \}\})$/m,
-            '      FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS: <budget>');
-        if (budget(versions[0]) !== budget(versions[1])) return null;
-        continue;
-      }
       if (!/^apps\/mobile\/(?:components\/Discovery(?:Map|Screen)\.tsx|lib\/use(?:MapSearch|Shuffle)Flag\.ts)$/.test(path)) return null;
       productPath = true;
       const clean = versions.map(text => compact(comments(text)));
@@ -549,7 +520,7 @@ export function simulatorSelection(files, { cwd = repository, env = process.env,
   const entry = discoveryPreviewImpact(source, configKeys, range, cwd, env) || discoveryEntryImpact(source, configKeys, range, cwd, env);
   if (entry && entry.flows.every(flow => all.includes(flow)) && (entry.flows.length || !labels.includes('needs-sim'))) {
     let reviewTier;
-    try { reviewTier = simulatorReviewTier(source.filter(path => path !== '.github/workflows/simulator.yml'), cwd, env); }
+    try { reviewTier = simulatorReviewTier(source, cwd, env); }
     catch { return full('Review routing or risk tiers unavailable; cannot establish a narrower simulator scope'); }
     if (reviewTier === 'high') return { ...full('High canonical review tier affects a mobile-facing contract'), reviewTier };
     return { ...result(entry.flows.length ? 'medium' : 'low', entry.flows.length ? 'flow' : 'none', entry.flows,

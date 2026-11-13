@@ -102,7 +102,6 @@
     "FITSY_E2E_FIXTURES",
     "FITSY_FIXTURE",
     "FITSY_FROM_EMAIL",
-    "FITSY_JOB_STARTED_AT",
     "FITSY_PERF_ORIGIN",
     "FITSY_PERF_TOKEN",
     "FITSY_POSTAL_ADDRESS",
@@ -214,10 +213,6 @@
     {
       "file": "scripts/rerun.ts",
       "expression": "v"
-    },
-    {
-      "file": "scripts/sim/actions.mjs",
-      "expression": "key"
     },
     {
       "file": "scripts/sim/ci.mjs",

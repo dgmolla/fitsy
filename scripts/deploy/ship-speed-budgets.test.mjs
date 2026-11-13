@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  DEFAULT_BUDGETS, issueCommentHours, maestroQueueWaits, nativeAttemptsPerSha,
+  DEFAULT_BUDGETS, issueCommentHours,
   openToMergeMinutes, pushesPerPr, verifyDurations, violations,
 } from './ship-speed-budgets.mjs';
 
@@ -13,27 +13,6 @@ test('pushesPerPr reports each merged PR\'s commit count as its push count', () 
 test('openToMergeMinutes computes the gap between createdAt and mergedAt', () => {
   const prs = [{ number: 1, title: 'a', url: 'u1', createdAt: '2026-11-10T10:00:00Z', mergedAt: '2026-11-10T10:30:00Z' }];
   assert.deepEqual(openToMergeMinutes(prs), [{ pr: 1, title: 'a', url: 'u1', minutes: 30 }]);
-});
-
-test('nativeAttemptsPerSha counts simulator runs grouped by head SHA, including re-runs', () => {
-  const runs = [{ headSha: 'a' }, { headSha: 'a' }, { headSha: 'b' }];
-  const result = nativeAttemptsPerSha(runs);
-  assert.deepEqual(new Map(result.map(r => [r.sha, r.attempts])), new Map([['a', 2], ['b', 1]]));
-});
-
-test('maestroQueueWaits reads only the Maestro on Mac job, ignoring other jobs in the same run', () => {
-  const runs = [{ databaseId: 1, headSha: 'a' }];
-  const jobsFor = id => id === 1 ? [
-    { name: 'select', created_at: '2026-11-10T10:00:00Z', started_at: '2026-11-10T10:00:01Z' },
-    { name: 'Maestro on Mac', created_at: '2026-11-10T10:00:00Z', started_at: '2026-11-10T10:12:00Z' },
-  ] : [];
-  assert.deepEqual(maestroQueueWaits(runs, jobsFor), [{ run: 1, sha: 'a', queueWaitMinutes: 12 }]);
-});
-
-test('maestroQueueWaits skips a job missing timing fields (e.g. still queued)', () => {
-  const runs = [{ databaseId: 1, headSha: 'a' }];
-  const jobsFor = () => [{ name: 'Maestro on Mac', created_at: '2026-11-10T10:00:00Z', started_at: null }];
-  assert.deepEqual(maestroQueueWaits(runs, jobsFor), []);
 });
 
 test('verifyDurations matches any Tests (L2) job including matrix-sharded names', () => {
@@ -68,25 +47,19 @@ test('issueCommentHours reports zero for an issue with no comments', () => {
 
 test('violations flags every metric that exceeds its budget and names the offender', () => {
   const metrics = {
-    maestroQueueWaits: [{ run: 1, sha: 'a', queueWaitMinutes: 20 }],
-    nativeAttemptsPerSha: [{ sha: 'a'.repeat(20), attempts: 3 }],
     verifyDurations: [{ run: 1, sha: 'a', job: 'Tests (L2)', durationMinutes: 25 }],
     pushesPerPr: [{ pr: 9, pushes: 9 }],
     issueCommentHours: [{ issue: 5, peakCommentsPerHour: 5 }],
   };
   const found = violations(DEFAULT_BUDGETS, metrics);
-  assert.equal(found.length, 5);
-  assert.match(found[0], /Maestro queue wait 20min > 15min/);
-  assert.match(found[1], /3 native attempts > 2/);
-  assert.match(found[2], /Tests \(L2\) took 25min > 20min/);
-  assert.match(found[3], /PR #9 had 9 pushes > 8/);
-  assert.match(found[4], /Issue #5 peaked at 5 comments\/hour > 4/);
+  assert.equal(found.length, 3);
+  assert.match(found[0], /Tests \(L2\) took 25min > 20min/);
+  assert.match(found[1], /PR #9 had 9 pushes > 8/);
+  assert.match(found[2], /Issue #5 peaked at 5 comments\/hour > 4/);
 });
 
 test('violations is empty when every metric is within budget', () => {
   const metrics = {
-    maestroQueueWaits: [{ run: 1, sha: 'a', queueWaitMinutes: 5 }],
-    nativeAttemptsPerSha: [{ sha: 'a', attempts: 1 }],
     verifyDurations: [{ run: 1, sha: 'a', job: 'Tests (L2)', durationMinutes: 10 }],
     pushesPerPr: [{ pr: 1, pushes: 1 }],
     issueCommentHours: [{ issue: 1, peakCommentsPerHour: 1 }],

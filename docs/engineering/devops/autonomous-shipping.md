@@ -312,7 +312,7 @@ Two complementary execution modes:
 | `apps/mobile/FEATURE_MAP.md` | **new** | screen-by-screen: route, entry, testIDs, what "correct" looks like, known flake. Maintained by a check: every screen under `apps/mobile/app/**` has an entry (T11). |
 | testIDs | **new convention** | every interactive element in a screen has `testID`; a lint rule on `Pressable`/`TouchableOpacity`/`TextInput` without `testID` |
 | Maestro flows | **new** | six flows to start; the Layer 10 loop adds one per escaped mobile defect |
-| Local simulator gate | maintained | `scripts/sim/ci.mjs` runs the selected saved Maestro flows on the maintainer Mac; CI only records scope. |
+| Local simulator gate | maintained | `scripts/sim/ci.mjs` runs the selected saved Maestro flows on the maintainer Mac; the hosted Simulator workflow was removed (#781), so no CI job runs or records simulator scope. |
 | agent-device (callstack) | evaluate | may replace the hand-rolled `sim` CLI; keep the CLI surface identical either way |
 | Maestro MCP | installed CLI | `maestro mcp` exposes local device inspection and automation; saved YAML remains the scripted gate. |
 | Dev client vs Expo Go | **decide** | `eas.json`, `expo-dev-client` dependency, and `worktree-dev.md` say dev client; `CLAUDE.md` and role files say Expo Go. Standardize on the dev client; fix the four docs. |

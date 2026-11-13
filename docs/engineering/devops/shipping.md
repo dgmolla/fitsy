@@ -109,13 +109,9 @@ A comment-only Discovery edit does not change executable inputs, and a proven si
 The special mapping does not reuse an old whole-bundle pass or waive any selected assertion.
 Render smoke reuses maintained flow setup through a mapped render assertion, then saves a screenshot; uncertain changes retain E2E coverage.
 The `needs-sim` label forces flows and its addition or removal reruns classification.
-CI prints the scope and reason and uploads the full plan as `selection.json` in the `sim-scope` artifact.
 The classifier and baseline scripts run with read-only credentials and no persisted checkout token.
-The separate `sim-scope.yml` workflow publishes a successful `Sim scope` status on the current PR head from protected code, after validating the source run and artifact.
-Its description is `scope=<scope> flows=<count>` to stay within GitHub's 140-character limit; the linked Verify run retains exact flow names and checkpoints.
-That status records selection, not a native test result.
 The final Verify job retains its existing applicability and failure semantics.
-The hosted [Simulator workflow](../../ci-simulator.md) executes the shared impact selection on the serial Mac runner and reports the actual selected result.
+The hosted Simulator workflow was removed (#781); `product-flow/local` is now the only simulator pass, running the same shared impact selection locally.
 PR and main events use the same product mapping; control-only changes retain three smoke journeys, while unknown product impact and explicit full-suite labels remain conservative.
 The runner uses the saved YAML flows in `apps/mobile/e2e/flows/` through Maestro, with Maestro MCP available for the separate final acceptance walkthroughs.
 The retired local Simulator publisher stays paused; the existing final `product-flow/local` publisher remains a separate acceptance gate.

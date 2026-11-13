@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import type { RestaurantResult } from '@fitsy/shared';
 import type { useDiscoveryState } from '@/lib/useDiscoveryState';
 import { EDITORIAL } from '@/lib/brand';
-import { hasMapCoordinate, mapCuisineEmoji, mapRestaurantLabel } from '@/lib/discoveryMap';
+import { hasMapCoordinate, mapRestaurantLabel } from '@/lib/discoveryMap';
 import { trackRestaurantTapped } from '@/lib/analytics';
 import { FrostedSearchSurface } from './DiscoveryChrome';
 import { openRestaurantOrPaywall } from './DiscoveryCards';
@@ -17,29 +17,25 @@ import { s } from './DiscoveryMap.styles';
 import { useFloatingNavClearance } from '@/lib/floatingNav';
 
 type Discovery = ReturnType<typeof useDiscoveryState>;
-type PinStyle = 'numbered' | 'utensils' | 'cuisine' | 'icon';
 const DELTA = { latitudeDelta: 0.09, longitudeDelta: 0.09 };
-const PIN_STYLES = [['numbered', '01', 'Numbers'], ['utensils', '🍴', 'Utensils'], ['cuisine', '🌮', 'Cuisine'], ['icon', '', 'Icon']] as const;
 
 // Snapshot only paint/selection changes, with no asynchronous image in a marker.
-const RestaurantMarker = React.memo(function RestaurantMarker({ result, position, selected, pinStyle, onSelect }: {
-  result: RestaurantResult; position: number; selected: boolean; pinStyle: PinStyle; onSelect: (result: RestaurantResult) => void;
+const RestaurantMarker = React.memo(function RestaurantMarker({ result, position, selected, onSelect }: {
+  result: RestaurantResult; position: number; selected: boolean; onSelect: (result: RestaurantResult) => void;
 }) {
-  const symbol = pinStyle === 'cuisine' ? mapCuisineEmoji(result) : pinStyle === 'utensils' ? '🍴' : String(position + 1).padStart(2, '0');
   const [tracking, setTracking] = useState(true);
   useEffect(() => {
     setTracking(true);
     const timer = setTimeout(() => setTracking(false), 250);
     return () => clearTimeout(timer);
-  }, [selected, symbol, pinStyle, result.name]);
+  }, [selected, result.name]);
   return <Marker identifier={result.id} coordinate={{ latitude: result.lat, longitude: result.lng }}
     anchor={{ x: 0.5, y: 0.5 }} stopPropagation tracksViewChanges={tracking}
     zIndex={selected ? 1000 : 100 - position} testID={`map-pin-${position}`}
     accessibilityRole="button" accessibilityLabel={mapRestaurantLabel(result)}
     accessibilityHint="Select restaurant card" accessibilityState={{ selected }} onPress={() => onSelect(result)}>
-    <View style={[s.pin, pinStyle !== 'numbered' && s.emojiPin, selected && s.selectedPin]} collapsable={false}>
-      {pinStyle === 'icon' ? <Ionicons name="restaurant-outline" size={24} color={EDITORIAL.green} />
-        : <Text style={[pinStyle === 'numbered' ? s.pinNumber : s.pinEmoji, selected && pinStyle === 'numbered' && s.selectedPinNumber]}>{symbol}</Text>}
+    <View style={[s.pin, s.emojiPin, selected && s.selectedPin]} collapsable={false}>
+      <Text style={s.pinEmoji}>🍴</Text>
     </View>
   </Marker>;
 });
@@ -52,10 +48,6 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
   const tabBarClearance = useFloatingNavClearance();
   const bottomClearance = d.isOnboardingPreview ? insets.bottom : tabBarClearance;
   const { width, height } = useWindowDimensions();
-  // The owner chose C alternate. Historical mapTray/mapVariant links cannot
-  // restore retired layouts; only the orthogonal pin treatment is selectable.
-  const { mapPin } = useLocalSearchParams<{ mapPin?: string }>();
-  const pinStyle: PinStyle = mapPin === 'numbered' || mapPin === 'cuisine' || mapPin === 'icon' ? mapPin : 'utensils';
   const map = useRef<MapView>(null);
   const carousel = useRef<ScrollView>(null);
   const [mapRevision, setMapRevision] = useState(0);
@@ -63,7 +55,6 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
   const [trayHeight, setTrayHeight] = useState(220);
   const [topHeight, setTopHeight] = useState(104);
   const [layoutHeight, setLayoutHeight] = useState(height);
-  const [optionsVisible, setOptionsVisible] = useState(false);
   const panning = useRef(false);
   const touchStart = useRef<{ x: number; y: number } | undefined>(undefined);
   const [pendingArea, setPendingArea] = useState<{ lat: number; lng: number } | null>(null);
@@ -165,7 +156,7 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
       showsUserLocation={d.location.source === 'gps'} showsMyLocationButton={false}
       showsCompass={false} showsPointsOfInterest={false} scrollEnabled rotateEnabled={false}>
       {pins.map(result => <RestaurantMarker key={result.id} result={result} position={cards.indexOf(result)}
-        pinStyle={pinStyle} selected={result.id === selectedId} onSelect={select} />)}
+        selected={result.id === selectedId} onSelect={select} />)}
     </MapView>}
     {pendingArea && <View pointerEvents="none" style={s.areaCenter} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       <Ionicons name="add" size={28} color={EDITORIAL.green} />
@@ -194,10 +185,6 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
           <Ionicons name="options-outline" size={16} color={EDITORIAL.green} /><Text style={s.locationText}>Macros</Text>
         </Pressable>
         {!d.isOnboardingPreview && <ShuffleButton style={s.shuffle} disabled={!d.canShuffle} onPress={d.handleShuffle} />}
-        <Pressable style={s.optionsButton} testID="map-options-open" onPress={() => setOptionsVisible(true)}
-          accessibilityRole="button" accessibilityLabel="Choose pin style">
-          <Ionicons name="layers-outline" size={19} color={EDITORIAL.green} />
-        </Pressable>
       </View>
       {pendingArea && <Pressable style={s.areaSearch} testID="map-search-area" accessibilityRole="button"
         accessibilityLabel="Search this area" accessibilityHint="Search near the center of the map with your current meal targets"
@@ -258,22 +245,5 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
           </Pressable>}
       </View>
     </View>
-    <Modal visible={optionsVisible} transparent animationType="fade" onRequestClose={() => setOptionsVisible(false)}>
-      <View style={s.optionsBackdrop}>
-        <Pressable style={s.optionsDismiss} onPress={() => setOptionsVisible(false)} accessibilityRole="button" accessibilityLabel="Close map options" />
-        <ScrollView style={s.optionsPanel} contentContainerStyle={s.optionsContent} testID="map-options">
-          <View style={s.optionsHeading}><Text style={s.heading}>Pin style</Text>
-            <Pressable style={s.arrow} testID="map-options-close" onPress={() => setOptionsVisible(false)} accessibilityRole="button" accessibilityLabel="Done with map options">
-              <Ionicons name="close" size={21} color={EDITORIAL.green} />
-            </Pressable></View>
-          <View style={s.pinOptions}>{PIN_STYLES.map(([key, symbol, label]) => <Pressable key={key}
-            style={[s.pinOption, key === pinStyle && s.activeOption]} testID={`map-pin-style-${key}`}
-            accessibilityRole="button" accessibilityLabel={`${label} pins`} accessibilityState={{ selected: key === pinStyle }}
-            onPress={() => { router.setParams({ mapPin: key }); setOptionsVisible(false); }}>
-            {key === 'icon' ? <Ionicons name="restaurant-outline" size={27} color={EDITORIAL.green} /> : <Text style={s.pinOptionSymbol}>{symbol}</Text>}<Text style={s.body}>{label}</Text>
-          </Pressable>)}</View>
-        </ScrollView>
-      </View>
-    </Modal>
   </View>;
 }

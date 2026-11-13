@@ -28,9 +28,7 @@ Both out-of-area cold resumes retry only bounded animation and accessibility obs
 `paywall-live-terms` reconnects a cleared Debug client to local Metro, then uses semantic controls throughout live purchase recovery.
 After Test Store cancellation, it requires the discount modal to disappear before retrying a failed purchase; the welcome screen's warning-dismissal coordinate would tap Not now here and reopen the modal.
 `PaymentCompletionCheckout.test.tsx` replays those saved recovery commands against the real paywall and native SDK boundary, retaining the cancellation, safe failure message and incomplete-onboarding assertions.
-CI posts `Sim scope` on the PR head and uploads `selection.json` with scope, flows and render checkpoints.
-The read-only classifier supplies data to the protected `sim-scope.yml` publisher for manual acceptance planning; the bounded status description contains scope and flow count.
-The required `Simulator` check now comes from [GitHub Actions on the self-hosted Mac](../../../docs/ci-simulator.md).
+The hosted Simulator workflow was removed (#781); `product-flow/local` is now the only simulator pass, published by `scripts/sim/publish-product-flow.mjs` from the maintainer Mac.
 Its smoke/full Test Store policy is separate from the impact-selected manual acceptance commands below; keep the old publisher paused.
 The pre-push hook stays free of simulator execution.
 Use `node scripts/sim/ci.mjs --scope=<none|smoke|flow|full> --flows=<comma-list> --udid=<UDID>` with environment configuration loaded from the Mac.
@@ -193,7 +191,7 @@ Both journeys retain pin-to-preview coverage; `map-search` compares toggle and s
 The real-screen regression replays that helper with different native pin hit targets and a previously selected restaurant, requiring the same first result after toggling and a new one after shuffling.
 The denied-location journey settles the centered Hollywood picker, requires the unchanged area immediately, and taps a pin after fallback dismissal.
 Inspect native pin bounds against the controls and tray as well as the required preview assertion; one accessible pin does not prove all markers are unobscured.
-The primary flow captures C, G, A and B plus numbered, utensil, cuisine and installed Ionicons pin styles.
+The primary flow captures C, G, A and B; pins are icon-only now that the pin-style switcher was removed (#823).
 B's final-row proof requires the actual last row, the same restaurant in Peek, the last row again in Half, and a matching counter after real user scrolling.
 Its copied restaurant name uses literal suffix indexing; an inline end-anchor regex inside Maestro interpolation can remain unevaluated while reporting the command complete.
 The explicit suffix assertion and final-row visibility checks remain mandatory.
@@ -414,10 +412,10 @@ Keep its generated scheme snapshot, sealed artifact and private fixture bindings
 
 The map exposes only the owner-selected C alternate, with Macros, Shuffle and a horizontal restaurant carousel.
 Use the Map control in production iOS or `com.fitsy.mobile://search?mapDebug=1` in Debug; retired `mapTray` and `mapVariant` parameters are ignored.
-The options panel changes pin style only.
+The pin-style options panel, its toolbar button, and the `mapPin` param were removed (#823); pins always render in the icon style.
 Owner [6713988813](https://github.com/dgmolla/fitsy/issues/755#issuecomment-6713988813) retired A, B and baseline C from active source, capture and acceptance matrices on November7.
 Their galleries and raw results remain historical; removed subjourneys are not new passes or native waivers.
-The maintained `map-search` journey checks C menu/search/list/macros/Shuffle, city selection, explicit bounded pan confirmation, pin styles, visible final-card/name/counter synchronization and empty recovery.
+The maintained `map-search` journey checks C menu/search/list/macros/Shuffle, city selection, explicit bounded pan confirmation, visible final-card/name/counter synchronization and empty recovery.
 Rendered real-caller tests also cover failed Shuffle and retry restoration from pin and drag selection.
 Run on normal and small Simulator layouts and inspect control bounds, readable meal/confidence overlays, selected pins, carousel clipping and tab clearance.
 The impact-selected full scope, auth/subscription journeys and genuine Apple-history prerequisite remain unchanged by layout retirement.

@@ -1,11 +1,12 @@
 import { authFetch } from '@fitsy/shared/utils/authTransport';
 import { supabase } from './supabase';
 
-export type LaunchPreference = 'fitsy_la_cohort_consent_v1' | 'fitsy_internal_or_test';
-
-/** Bind the auth-service write to the account that actually made the choice. */
-export async function saveLaunchPreference(owner: string, field: LaunchPreference, enabled: boolean): Promise<void> {
-  if (field === 'fitsy_internal_or_test' && !enabled) throw new Error('Test classification is permanent');
+/**
+ * Dev-only: permanently mark the signed-in account as staff/test so it's
+ * excluded from launch metrics. Bind the write to the account that actually
+ * made the choice.
+ */
+export async function markInternalOrTestAccount(owner: string): Promise<void> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session || session.user.is_anonymous || session.user.id !== owner) throw new Error('Account changed');
   // The same public Auth endpoint used by auth.updateUser, with a captured token.
@@ -14,7 +15,7 @@ export async function saveLaunchPreference(owner: string, field: LaunchPreferenc
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', apikey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '',
       Authorization: `Bearer ${session.access_token}` },
-    body: JSON.stringify({ data: { [field]: enabled } }),
+    body: JSON.stringify({ data: { fitsy_internal_or_test: true } }),
   });
   if (!response.ok) throw new Error('Preference save failed');
   const updated = await response.json() as { id?: unknown };

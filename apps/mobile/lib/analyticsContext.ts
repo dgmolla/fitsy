@@ -25,7 +25,10 @@ export interface AnalyticsUser {
 
 export function analyticsAccount(user: AnalyticsUser) {
   return {
-    la_cohort: user.user_metadata?.fitsy_la_cohort_consent_v1 === true,
+    // MVP scope is LA-only (see lib/locations.ts) - every resolvable search
+    // area is LA, so this is derived as true for every identified account
+    // rather than a self-reported opt-in. Revisit once a non-LA city ships.
+    la_cohort: true,
     $internal_or_test_user: isAnalyticsTestRuntime() || user.internalOrTest === true ||
       user.app_metadata?.fitsy_internal_or_test === true || user.user_metadata?.fitsy_internal_or_test === true,
   };

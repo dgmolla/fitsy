@@ -33,28 +33,14 @@ jobs:
       tests: ${{ steps.t.outputs.tests }}
       build: ${{ steps.t.outputs.build }}
       docs_only: ${{ steps.t.outputs.docs_only }}
-      simulator: ${{ steps.t.outputs.simulator }}
-      sim_scope: ${{ steps.t.outputs.sim_scope }}
-      sim_mode: ${{ steps.t.outputs.sim_mode }}
-      sim_smoke: ${{ steps.t.outputs.sim_smoke }}
-      sim_flows: ${{ steps.t.outputs.sim_flows }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
       - id: t
-        run: |
-          mkdir -p .evidence/sim-scope
-          node scripts/verify/impact-plan.mjs --github-output > .evidence/sim-scope/selection.json
-      - name: Upload simulator selection
-        uses: actions/upload-artifact@v4
-        with:
-          name: sim-scope
-          path: .evidence/sim-scope/selection.json
-          if-no-files-found: error
-      # Sim scope is published by sim-scope.yml from its protected workflow
-      # revision. Candidate scripts and baseline checks receive read-only access.
+        run: node scripts/verify/impact-plan.mjs --github-output
+      # Candidate scripts and baseline checks receive read-only access.
       - name: Install gitleaks (docs PRs can leak secrets too)
         run: curl -sL "$(curl -s https://api.github.com/repos/gitleaks/gitleaks/releases/latest | grep browser_download_url | grep linux_x64.tar.gz | head -1 | cut -d '"' -f4)" | tar xz -C /usr/local/bin gitleaks || echo "gitleaks install failed; grep fallback covers"
       - name: Baseline checks (always, no npm ci)
