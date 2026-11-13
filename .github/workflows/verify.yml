@@ -142,17 +142,36 @@ jobs:
   mark-non-product:
     name: product-flow/local (non-product)
     needs: classify
-    if: github.event_name == 'pull_request' && needs.classify.outputs.simulator != 'true' && needs.classify.outputs.media != 'true'
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       statuses: write
     steps:
-      - name: Mark product-flow/local not applicable
+      # #849: a same-head label change (e.g. needs-sim) can re-run classify
+      # and flip applicability from not-required to required without a new
+      # commit. The commit-status API keeps whatever we post last, so this
+      # job must always run on pull_request (not skip) and actively
+      # invalidate its own earlier auto-skip success when that happens -
+      # otherwise a stale "Not applicable" success outlives the reclassification.
+      - name: Mark product-flow/local not applicable, or invalidate our own stale success
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SIMULATOR: ${{ needs.classify.outputs.simulator }}
+          MEDIA: ${{ needs.classify.outputs.media }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          REPO: ${{ github.repository }}
         run: |
-          gh api "repos/${{ github.repository }}/statuses/${{ github.event.pull_request.head.sha }}" --input - <<< \
-            '{"state":"success","context":"product-flow/local","description":"Not applicable: no mobile-facing product changes"}'
+          marker="Not applicable: no mobile-facing product changes"
+          if [ "$SIMULATOR" != 'true' ] && [ "$MEDIA" != 'true' ]; then
+            jq -n --arg d "$marker" '{state:"success",context:"product-flow/local",description:$d}' |
+              gh api "repos/$REPO/statuses/$SHA" --input -
+          else
+            existing=$(gh api "repos/$REPO/commits/$SHA/status" --jq '[.statuses[] | select(.context=="product-flow/local")][0].description // ""')
+            if [ "$existing" = "$marker" ]; then
+              jq -n '{state:"pending",context:"product-flow/local",description:"Applicability expanded since the last auto-skip; needs real evidence"}' |
+                gh api "repos/$REPO/statuses/$SHA" --input -
+            fi
+          fi
 
   domain-check:
     name: Single-domain PR check # Preserve the required status context while reporting cross-layer scope.
@@ -314,5 +333,5 @@ jobs:
             ."test-other".result == expected(.classify.outputs.tests) and
             .build.result == expected(.classify.outputs.build) and
             ."domain-check".result == (if $event == "pull_request" then "success" else "skipped" end) and
-            ."mark-non-product".result == (if $event == "pull_request" and .classify.outputs.simulator != "true" and .classify.outputs.media != "true" then "success" else "skipped" end)
+            ."mark-non-product".result == (if $event == "pull_request" then "success" else "skipped" end)
           ' <<<"$NEEDS_JSON"
