@@ -37,7 +37,7 @@ The existing publish-environment override is used only for this deliberately key
 Ambient public app variables are removed from the child export environment, and dotenv loading is disabled so local credentials cannot change the measured build.
 
 Budgets live in `scripts/perf/budgets.json`.
-The iOS limits are 5,750,000 minified JS bytes and 1,380,000 gzip bytes, approximately 5% above the measured candidate.
+The iOS limits are 6,350,000 minified JS bytes and 1,530,000 gzip bytes (raised from 5,750,000/1,380,000 for native Sentry crash capture, #747), approximately 5% above the measured candidate.
 These limits detect dependency and route growth, not launch speed.
 `DiscoveryPerformance.test.tsx` allows zero additional card-gradient renders when opening and dismissing the meal editor over three loaded restaurants.
 It also verifies result, rank, entitlement and callback updates after memoization.

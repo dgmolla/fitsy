@@ -1,11 +1,6 @@
 /**
- * JS-only crash/error reporting via PostHog (`client_error` events).
- *
- * Deliberately NOT a native crash SDK: the approved App Store binary predates
- * any native error module, and our OTA updates must stay runtime-compatible
- * with it. Native Sentry can land with the next binary; until then this
- * captures every JS-level failure (which in an Expo app is nearly every
- * failure users hit) with zero native surface.
+ * Stack-free PostHog `client_error` counts for the existing pager.
+ * Sentry separately captures sanitized crash stacks via lib/sentry.ts.
  */
 import { getPostHogClient } from './analytics';
 import { monitoringEnvironment } from './monitoringEnvironment';

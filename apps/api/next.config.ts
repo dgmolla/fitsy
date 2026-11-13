@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from '@sentry/nextjs';
 
 const securityHeaders = [
   // Never share authenticated API responses or auth failures across callers.
@@ -30,4 +31,15 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  // SENTRY_ORG, SENTRY_PROJECT and SENTRY_AUTH_TOKEN are read by the build plugin.
+  telemetry: false,
+  silent: true,
+  sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN },
+  release: { name: `fitsy-api@${process.env.VERCEL_GIT_COMMIT_SHA ?? 'development'}`, dist: 'server' },
+  webpack: {
+    autoInstrumentServerFunctions: false,
+    autoInstrumentMiddleware: false,
+    autoInstrumentAppDirectory: false,
+  },
+});
