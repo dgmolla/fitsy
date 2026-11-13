@@ -520,6 +520,25 @@ it('opens around the actual GPS fix when permission is granted', async () => {
   expect(Object.fromEntries(searchRequests().at(-1)!.searchParams)).toMatchObject({ lat: '34.08', lng: '-118.27' });
 });
 
+it('keeps the native map mounted while location is still resolving, instead of tearing it down and rebuilding it (#832)', async () => {
+  await SecureStore.deleteItemAsync(MANUAL_LOCATION_KEY);
+  let resolvePermission: (value: { status: string }) => void;
+  // Defer the permission check itself (not GPS) so this does not depend on
+  // locationCache's warm module-level cache from an earlier test in this file.
+  jest.mocked(ExpoLocation.requestForegroundPermissionsAsync).mockImplementation(
+    () => new Promise(resolve => { resolvePermission = resolve; }) as never);
+  const screen = open();
+  // Location is deliberately still pending here - a prior version of this
+  // component unmounted MapView entirely while location.loading was true,
+  // which (combined with a stale Fabric mounting transaction) crashed with an
+  // out-of-bounds native array insert once the map remounted afterward.
+  await screen.findByTestId('discovery-map-surface');
+  await waitFor(() => expect(resolvePermission).toBeDefined());
+  act(() => resolvePermission({ status: 'denied' }));
+  await screen.findByTestId('map-location-fallback');
+  expect(screen.getByTestId('discovery-map-surface')).toBeTruthy();
+});
+
 it('keeps C status actions content-sized and recovers through retry, targets and Clear search', async () => {
   const pending = deferred<Response>();
   searchResponse = () => pending.promise;
