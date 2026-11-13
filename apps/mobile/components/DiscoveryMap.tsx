@@ -43,8 +43,8 @@ const RestaurantMarker = React.memo(function RestaurantMarker({ result, position
 });
 
 // Loaded only when the iOS Discovery map is selected.
-export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, onTourLayoutChange }: {
-  discovery: Discovery; onShowList: () => void; previewHeader?: React.ReactNode; onTourLayoutChange?: () => void;
+export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, onTourLayoutChange, active = true }: {
+  discovery: Discovery; onShowList: () => void; previewHeader?: React.ReactNode; onTourLayoutChange?: () => void; active?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const tabBarClearance = useFloatingNavClearance();
@@ -234,7 +234,7 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
             const result = cards[Math.min(cards.length - 1, Math.max(0, Math.round(event.nativeEvent.contentOffset.x / stride)))];
             if (result) select(result, false);
           }}>
-          {cards.map((result, position) => <View key={result.id} ref={position === 0 ? d.tourHeroRef : undefined} collapsable={false} testID={result.id === selectedId ? 'map-preview' : undefined}>
+          {cards.map((result, position) => <View key={result.id} ref={position === 0 && active ? d.tourHeroRef : undefined} collapsable={false} testID={result.id === selectedId ? 'map-preview' : undefined}>
             <DiscoveryMapCard result={result} locked={(d.locked === true && !d.isOnboardingPreview) || result.id === d.lockedTeaser?.id}
               onboardingPreview={d.isOnboardingPreview} hideDishName={d.isOnboardingPreview && position > 0}
               style={{ width: cardWidth, height: compact ? 174 : 210 }}

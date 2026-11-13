@@ -136,7 +136,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
           {hasQuery && <Pressable testID="discovery-empty-clear" accessibilityRole="button" style={s.waitlistBtn} onPress={handleClearQuery}><Text style={s.waitlistBtnText}>Clear search</Text></Pressable>}
         </View>
       )}
-      {canSearch && !loading && heroResult && <HeroCard result={heroResult} locked={locked === true && !isOnboardingPreview} unlocking={onLockedTap} containerRef={tourHeroRef} onOpen={isOnboardingPreview ? unlockPreview : undefined} />}
+      {canSearch && !loading && heroResult && <HeroCard result={heroResult} locked={locked === true && !isOnboardingPreview} unlocking={onLockedTap} containerRef={!showMap ? tourHeroRef : undefined} onOpen={isOnboardingPreview ? unlockPreview : undefined} />}
       {canSearch && !loading && locked && !isOnboardingPreview && (results.length > 0) && (
         <Pressable
           style={s.lockedBanner}
@@ -208,6 +208,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
       {isOnboardingPreview
         ? <Masthead preview locationRef={tourLocationRef} locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker} />
         : <DiscoveryToolbar query={query} onQueryChange={setQuery} onClear={handleClearQuery} searchRef={tourSearchRef}
+            locationRef={tourLocationRef} locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker}
             onMacrosPress={() => setFilterVisible(true)} canShuffle={canShuffle} onShuffle={handleShuffle}
             onViewToggle={mapEnabled ? () => switchView('map') : undefined} />}
       {!loading && error !== null && (
@@ -300,7 +301,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
       <View style={{ flex: 1 }} collapsable={false}
         accessibilityElementsHidden={view === 'list'} importantForAccessibility={view === 'list' ? 'no-hide-descendants' : 'auto'}>
         <Suspense fallback={<ActivityIndicator accessibilityLabel="Loading map" />}>
-          <DiscoveryMap discovery={discovery} onShowList={() => switchView('list')}
+          <DiscoveryMap discovery={discovery} onShowList={() => switchView('list')} active={showMap}
             previewHeader={isOnboardingPreview ? <>{previewNav}{previewIntro}</> : undefined}
             onTourLayoutChange={onTourLayoutChange} />
         </Suspense>

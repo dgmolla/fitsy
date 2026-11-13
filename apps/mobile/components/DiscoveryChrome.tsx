@@ -70,6 +70,9 @@ export function DiscoveryToolbar({
   onQueryChange,
   onClear,
   searchRef,
+  locationLabel,
+  onLocationPress,
+  locationRef,
   onMacrosPress,
   canShuffle,
   onShuffle,
@@ -79,6 +82,9 @@ export function DiscoveryToolbar({
   onQueryChange: (text: string) => void;
   onClear: () => void;
   searchRef?: React.RefObject<View | null>;
+  locationLabel?: string;
+  onLocationPress?: () => void;
+  locationRef?: React.RefObject<View | null>;
   onMacrosPress: () => void;
   canShuffle: boolean;
   onShuffle: () => void;
@@ -88,7 +94,17 @@ export function DiscoveryToolbar({
     <View style={toolbar.wrap} testID="discovery-toolbar">
       <SearchBar value={query} onChangeText={onQueryChange} onClear={onClear} containerRef={searchRef} frosted />
       <View style={map.topRow}>
-        {/* Location lives on the map only (#829) - the map stays mounted under this sheet. */}
+        {/* Location lives on the map when it's available (#829) - the map stays
+            mounted under this sheet. Without a map (map-search flag off), this
+            is the only way to change or clear the search area, so keep it here. */}
+        {!onViewToggle && locationLabel !== undefined && onLocationPress && (
+          <Pressable ref={locationRef} collapsable={false} style={map.location} testID="discovery-location" onPress={onLocationPress}
+            accessibilityRole="button" accessibilityLabel={`Location: ${locationLabel}`} accessibilityHint="Change search area">
+            <Ionicons name="location" size={15} color={EDITORIAL.green} />
+            <Text style={map.locationText} numberOfLines={1}>{locationLabel}</Text>
+            <Ionicons name="chevron-down" size={12} color={EDITORIAL.green} />
+          </Pressable>
+        )}
         <Pressable style={map.goals} testID="discovery-goals" onPress={onMacrosPress}
           accessibilityRole="button" accessibilityLabel="Edit macros">
           <Ionicons name="options-outline" size={16} color={EDITORIAL.green} /><Text style={map.locationText}>Macros</Text>

@@ -733,6 +733,11 @@ it.each([false, true])('keeps Android on the list, including debug links (dev=%s
   await screen.findByTestId('discovery-hero');
   expect(screen.queryByTestId('discovery-map')).toBeNull();
   expect(Boolean(screen.queryByTestId('discovery-shuffle-button'))).toBe(dev);
+  // With no map, the list toolbar is the only way to change or clear the
+  // search area - losing this control here was a real regression #829
+  // introduced when it moved the location picker onto the map only.
+  await act(async () => fireEvent.press(screen.getByTestId('discovery-location')));
+  await screen.findByText('Choose a neighborhood');
 });
 
 it('allows explicit local opt-in and removes the map on a remote flag update without losing search', async () => {
