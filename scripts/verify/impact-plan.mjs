@@ -114,10 +114,14 @@ const screenFlows = [
     /^(meal-target-energy-sync|onboarding-(assisted-targets|guided-preview|out-of-area|search-highlight|target-ranked-search)|menu-load-recovery)$/, ['discovery']],
   [/^apps\/api\/app\/api\/restaurants\//,
     /^(chain-menu-serving|log-meal|map-search(-location-denied)?|menu-load-recovery|menu-macro-serving|paywall-access|shuffle)$/, ['billing', 'discovery']],
-  // #821: narrowed from the full flow set - a core sign-in/session path only
-  // reaches the sign-in, onboarding and paywall-access journeys.
-  [narrowAuthPath, /^(signin-options|paywall-access|onboarding-.*)$/, ['auth', 'onboarding']],
 ];
+// #821: narrows simulatorSelection's flow set for the same paths, without
+// changing mappedCategories()/review-category routing, which already has its
+// own deliberate, different categorization for these exact files (e.g.
+// app/auth/reviewer.tsx and lib/authClient.ts are tagged auth+billing by the
+// product-flow.mjs `rules` table, not auth+onboarding) - a separate concern
+// screenFlows must not shadow.
+const narrowAuthFlows = [[narrowAuthPath, /^(signin-options|paywall-access|onboarding-.*)$/]];
 // Product acceptance consumes the same path map as local and hosted selection.
 export function mappedCategories(path) {
   const matches = screenFlows.filter(([pattern]) => pattern.test(path));
@@ -560,7 +564,8 @@ export function simulatorSelection(files, { cwd = repository, env = process.env,
     for (const path of contracts) {
       const direct = /^apps\/mobile\/e2e\/flows\/([a-z0-9-]+)\.yaml$/.exec(path);
       const mapped = direct ? all.filter(name => name === direct[1])
-        : all.filter(name => screenFlows.some(([pattern, flow]) => pattern.test(path) && flow.test(name)));
+        : all.filter(name => screenFlows.some(([pattern, flow]) => pattern.test(path) && flow.test(name)) ||
+            narrowAuthFlows.some(([pattern, flow]) => pattern.test(path) && flow.test(name)));
       if (!mapped.length) return { ...full(`Unmapped mobile-facing path: ${path}; full coverage required`), reviewTier };
       for (const name of mapped) flows.add(name);
     }
