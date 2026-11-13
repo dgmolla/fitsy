@@ -4,16 +4,14 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { isMain } from './impact-plan.mjs';
+import { isMain, mediaIntegrationRequired } from './impact-plan.mjs';
 import { changedPaths, inputHash, repoEnv, root } from './product-flow.mjs';
+
+export { mediaIntegrationRequired };
 
 const receiptFile = resolve(root, '.evidence/verify/media-integration.json');
 const command = 'bash scripts/verify/media-integration.sh';
 const head = () => execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8', env: repoEnv() }).trim();
-
-export function mediaIntegrationRequired(paths) {
-  return paths.some(path => /^scripts\/sim\/|^scripts\/delivery\/loop\/(?:host|context|driver|install|loop\.test|worktrees(?:\.test)?)\.py$|^scripts\/verify\/(?:product-flow|media-integration|test\.sh|registry\.yml)/.test(path));
-}
 
 export function writeMediaReceipt(file = receiptFile, sourceSha = head(), sourceHash = inputHash()) {
   const receipt = { id: 'media-integration', source_sha: sourceSha, input_hash: sourceHash,

@@ -23,6 +23,7 @@ test.each([
   ['scripts/verify/run.mjs'],
   ['apps/api/jest.config.js'],
   ['apps/api/app/api/health/route.ts'], ['apps/mobile/lib/menuFilters.test.ts'],
+  ['apps/api/app/api/internal/waitlist/notify/route.ts'], ['apps/api/app/api/internal/sentry-test/route.ts'],
   ['.github/workflows/verify.yml'],
   ['apps/web/lib/cache.ts'], ['apps/web/app/api/health/route.ts'],
   ['apps/mobile/components/test-fixtures/accountProfile.ts'],
