@@ -284,7 +284,8 @@ test.each([
 // Pinned literal baseline for the final Verify job: a human must deliberately
 // update this string (not just the workflow file) to change the required-check
 // aggregation, so a silent edit to the job graph fails this test instead of
-// slipping through unreviewed. Last reviewed when mark-non-product was added (#843).
+// slipping through unreviewed. Last reviewed when mark-non-product's media
+// condition was added (#846 follow-up).
 const EXPECTED_VERIFY_JOB = `    name: Verify
     needs: [classify, static, domain-check, test, test-other, build, mark-non-product]
     if: \${{ always() }}
@@ -304,7 +305,7 @@ const EXPECTED_VERIFY_JOB = `    name: Verify
             ."test-other".result == expected(.classify.outputs.tests) and
             .build.result == expected(.classify.outputs.build) and
             ."domain-check".result == (if $event == "pull_request" then "success" else "skipped" end) and
-            ."mark-non-product".result == (if $event == "pull_request" and .classify.outputs.simulator != "true" then "success" else "skipped" end)
+            ."mark-non-product".result == (if $event == "pull_request" and .classify.outputs.simulator != "true" and .classify.outputs.media != "true" then "success" else "skipped" end)
           ' <<<"$NEEDS_JSON"
 `;
 test('label additions and removals rerun classification, and the final Verify job matches its reviewed baseline', () => {
