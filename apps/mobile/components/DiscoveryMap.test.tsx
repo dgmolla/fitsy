@@ -99,7 +99,7 @@ afterEach(() => {
 const open = (url = '/search?query=meal') => renderJourney(url, { ...routes, '(tabs)/search': () => <Search /> });
 
 it.each(['mapTray=A', 'mapTray=B', 'mapTray=C', 'mapVariant=B'])(
-  'ignores retired layout links (%s) and exposes only the chosen carousel and pin options', async retired => {
+  'ignores retired layout links (%s) and exposes only the chosen carousel, with no pin-style switcher', async retired => {
     const screen = open(`/search?query=meal&mapDebug=1&${retired}`);
     await screen.findByTestId('map-pin-0');
     expect(screen.getByTestId('map-carousel')).toBeTruthy();
@@ -108,9 +108,8 @@ it.each(['mapTray=A', 'mapTray=B', 'mapTray=C', 'mapVariant=B'])(
     expect(screen.queryByTestId('map-sheet-height')).toBeNull();
     expect(screen.queryByTestId('map-list-A')).toBeNull();
     expect(screen.queryByTestId('map-list-B')).toBeNull();
-    await act(async () => fireEvent.press(screen.getByTestId('map-options-open')));
     expect(screen.queryAllByTestId(/^map-variant-/)).toHaveLength(0);
-    expect(screen.getByTestId('map-pin-style-cuisine')).toBeTruthy();
+    expect(screen.queryByTestId('map-options-open')).toBeNull();
   },
 );
 
@@ -841,18 +840,12 @@ it('fits after measured overlays settle without a competing selection camera or 
   expect(searchRequests()).toHaveLength(before);
 });
 
-it('changes existing emoji pin styles without changing results and stops marker tracking after paint', async () => {
-  const screen = open('/search?query=meal&mapPin=numbered');
+it('selects a pin without changing results and stops marker tracking after paint', async () => {
+  const screen = open('/search?query=meal');
   await screen.findByTestId('map-pin-0');
   const before = searchRequests().length;
   await act(async () => fireEvent.press(screen.getByTestId('map-pin-1')));
-  for (const style of ['utensils', 'cuisine']) {
-    await act(async () => fireEvent.press(screen.getByTestId('map-options-open')));
-    await act(async () => fireEvent.press(screen.getByTestId(`map-pin-style-${style}`)));
-    expect(screen.getByTestId('map-pin-1').props.accessibilityState.selected).toBe(true);
-    await waitFor(() => expect(screen.getByTestId('map-pin-1').props.tracksViewChanges).toBe(false));
-  }
-  expect(screen.getAllByText('🍕')).toHaveLength(3);
-  expect(screen.getByText('🍴')).toBeTruthy();
+  expect(screen.getByTestId('map-pin-1').props.accessibilityState.selected).toBe(true);
+  await waitFor(() => expect(screen.getByTestId('map-pin-1').props.tracksViewChanges).toBe(false));
   expect(searchRequests()).toHaveLength(before);
 });
