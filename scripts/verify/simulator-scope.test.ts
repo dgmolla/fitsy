@@ -57,9 +57,28 @@ test.each([
   expect(select([path])).toMatchObject({ risk: 'medium', scope: 'flow', required: true, flows });
 });
 
+// #821: PR #820's auth/onboarding files (minus apps/api/lib/auth.ts and
+// services/authService.ts, which independently carry a high review tier via
+// risk-tiers.yml and so still correctly force full coverage regardless of
+// this narrowing) used to send the whole change to scope:full through the
+// old combined auth/signin/session keyword bucket. They now resolve to the
+// same narrow sign-in/onboarding/paywall-access set Dawit named in the issue.
+test('PR #820\'s non-review-gated auth/onboarding files select the narrow flow set, not the full 28', () => {
+  const result = select([
+    'apps/mobile/app/welcome/signin.tsx',
+    'apps/mobile/lib/authClient.ts',
+    'apps/mobile/lib/guidedPreview.ts',
+  ]);
+  expect(result.scope).toBe('flow');
+  expect(result.flows).toEqual(['cold-start-welcome', 'meal-target-energy-sync', 'onboarding-assisted-targets',
+    'onboarding-guided-preview', 'onboarding-out-of-area', 'onboarding-returning-account', 'onboarding-returning-preview',
+    'onboarding-search-highlight', 'onboarding-target-ranked-search', 'paywall-access', 'signin-options']);
+  expect(result.reason).toContain('apps/mobile/app/welcome/signin.tsx');
+  expect(result.reason).not.toContain('Navigation, auth, billing, native configuration or release path');
+});
+
 test.each([
   'apps/mobile/app/_layout.tsx', 'apps/mobile/app/(tabs)/_layout.tsx',
-  'apps/mobile/app/auth/login.tsx', 'apps/mobile/app/welcome/signin.tsx',
   'apps/mobile/app/welcome/payment.tsx', 'apps/mobile/components/PaywallView.tsx',
   'apps/mobile/lib/useEntitlementVerdict.ts', 'apps/mobile/lib/useOwnedHardwareBack.ts',
   'apps/mobile/lib/nativeIntent.ts', 'apps/mobile/lib/supabase.ts',
@@ -116,7 +135,7 @@ test.each([[], ['docs/guide.md'], ['scripts/example.ts'], ['apps/mobile/lib/menu
 
 test('needs-sim preserves an affected selection and cannot reduce a high selection', () => {
   expect(select(['apps/mobile/lib/menuFilters.ts'], { labels: ['needs-sim'] }).scope).toBe('flow');
-  expect(select(['apps/mobile/lib/authClient.ts'], { labels: ['needs-sim'] }).flows).toEqual(allFlows);
+  expect(select(['apps/mobile/lib/useEntitlementVerdict.ts'], { labels: ['needs-sim'] }).flows).toEqual(allFlows);
 });
 
 test.each([null, ['apps/mobile/app/welcome/goal.tsx', '.github/workflows/verify.yml']].map(files => ({ files })))(
@@ -265,9 +284,10 @@ test.each([
 // Pinned literal baseline for the final Verify job: a human must deliberately
 // update this string (not just the workflow file) to change the required-check
 // aggregation, so a silent edit to the job graph fails this test instead of
-// slipping through unreviewed. Last reviewed when test-other was added (#778).
+// slipping through unreviewed. Last reviewed when mark-non-product's media
+// condition was added (#846 follow-up).
 const EXPECTED_VERIFY_JOB = `    name: Verify
-    needs: [classify, static, domain-check, test, test-other, build]
+    needs: [classify, static, domain-check, test, test-other, build, mark-non-product]
     if: \${{ always() }}
     runs-on: ubuntu-latest
     steps:
@@ -284,7 +304,8 @@ const EXPECTED_VERIFY_JOB = `    name: Verify
             .test.result == expected(.classify.outputs.tests) and
             ."test-other".result == expected(.classify.outputs.tests) and
             .build.result == expected(.classify.outputs.build) and
-            ."domain-check".result == (if $event == "pull_request" then "success" else "skipped" end)
+            ."domain-check".result == (if $event == "pull_request" then "success" else "skipped" end) and
+            ."mark-non-product".result == (if $event == "pull_request" and .classify.outputs.simulator != "true" and .classify.outputs.media != "true" then "success" else "skipped" end)
           ' <<<"$NEEDS_JSON"
 `;
 test('label additions and removals rerun classification, and the final Verify job matches its reviewed baseline', () => {
@@ -297,7 +318,7 @@ test.each(['success', 'failure', 'skipped', 'cancelled'])(
   const needs = {
     classify: { result: 'success', outputs: { code: 'true', tests: 'true', build: 'true' } },
     static: { result: 'success' }, test: { result: 'success' }, 'test-other': { result: 'success' },
-    'domain-check': { result: 'success' }, build: { result: buildResult },
+    'domain-check': { result: 'success' }, build: { result: buildResult }, 'mark-non-product': { result: 'success' },
   };
   const command = workflow.jobs.verify!.steps.find(step => step.name === 'Require every applicable job')!.run!;
   const result = spawnSync('bash', ['-e', '-c', command], {
@@ -370,7 +391,7 @@ test.each([
   { path: 'apps/mobile/app/welcome/goal.tsx', after: screen('Your goal', 8, 'setGoal("lose_fat")'), mode: 'e2e', scope: 'flow' },
   { path: 'apps/mobile/components/ContinueButton.tsx', after: screen('Continue'), mode: 'e2e', scope: 'full' },
   { path: 'apps/mobile/app/_layout.tsx', after: screen('Fitsy'), mode: 'e2e', scope: 'full' },
-  { path: 'apps/mobile/app/auth/login.tsx', after: screen('Sign in'), mode: 'e2e', scope: 'full' },
+  { path: 'apps/mobile/app/auth/login.tsx', after: screen('Sign in'), mode: 'e2e', scope: 'flow' },
   { path: 'apps/mobile/app/welcome/payment.tsx', after: screen('Subscribe'), mode: 'e2e', scope: 'full' },
   { path: 'apps/web/app/page.tsx', after: screen('Welcome'), mode: 'e2e', scope: 'full' },
 ])('actual UI diff selects $scope $mode coverage for $path', entry => {
@@ -427,7 +448,15 @@ test('pre-push remains main\'s cheap gate and never runs simulator smoke', () =>
 
 test('Verify only classifies simulator scope with read-only credentials', () => {
   expect(workflow.permissions.statuses).toBeUndefined();
-  expect(Object.values(workflow.jobs).some(job => job.permissions?.statuses === 'write')).toBe(false);
+  // #843: mark-non-product legitimately needs statuses:write to post
+  // product-flow/local's auto-skip, but only because it never checks out or
+  // runs any PR-branch code - verify that invariant directly (any job with
+  // write access must not also run untrusted candidate code) rather than
+  // banning the permission outright everywhere.
+  for (const job of Object.values(workflow.jobs)) {
+    if (job.permissions?.statuses !== 'write') continue;
+    expect(job.steps.some(step => typeof step.uses === 'string' && step.uses.startsWith('actions/checkout'))).toBe(false);
+  }
   expect(workflow.jobs.classify!.permissions).toEqual({ contents: 'read', 'pull-requests': 'read' });
   expect(workflow.jobs.classify!.steps.find(step => step.uses === 'actions/checkout@v4')!.with).toMatchObject({ 'persist-credentials': false });
   expect(workflow.jobs.classify!.steps.some(step => step.uses === 'actions/github-script@v7')).toBe(false);
