@@ -32,7 +32,7 @@ test('real Discovery entry changes select three journeys across CLI and publicat
   symlinkSync(resolve(__dirname, '../../node_modules'), join(directory, 'node_modules'));
   writeFileSync(join(directory, '.gitignore'), 'node_modules\n.evidence/\n');
   const paths = ['apps/mobile/components/DiscoveryMap.tsx', 'apps/mobile/components/DiscoveryScreen.tsx',
-    '.github/workflows/simulator.yml', 'apps/mobile/lib/useMapSearchFlag.ts'];
+    'apps/mobile/lib/useMapSearchFlag.ts'];
   for (const path of paths) {
     mkdirSync(dirname(join(directory, path)), { recursive: true });
     copyFileSync(resolve(__dirname, '../..', path), join(directory, path));
@@ -42,9 +42,9 @@ test('real Discovery entry changes select three journeys across CLI and publicat
   git('init', '-q'); git('config', 'user.name', 'Entry impact fixture'); git('config', 'user.email', 'fixture@example.test');
   git('config', 'core.hooksPath', '/dev/null'); git('add', '.'); git('commit', '-qm', 'base');
   git('update-ref', 'refs/remotes/origin/main', 'HEAD');
-  const map = join(directory, paths[0]!), screen = join(directory, paths[1]!), workflow = join(directory, paths[2]!);
+  const map = join(directory, paths[0]!), screen = join(directory, paths[1]!);
   const originalMap = readFileSync(map, 'utf8'), originalScreen = readFileSync(screen, 'utf8');
-  const flag = join(directory, paths[3]!), originalFlag = readFileSync(flag, 'utf8');
+  const flag = join(directory, paths[2]!), originalFlag = readFileSync(flag, 'utf8');
   const cli = (file: string) => spawnSync(process.execPath, [file, '--plan'], { cwd: directory, env: env(), encoding: 'utf8' });
   writeFileSync(map, '// Clarify the unchanged renderer.\n' + originalMap);
   expect(JSON.parse(cli('scripts/verify/product-flow.mjs').stdout)).toMatchObject({ required: false, flows: [] });
@@ -52,11 +52,6 @@ test('real Discovery entry changes select three journeys across CLI and publicat
     originalScreen.includes("useState<'map' | 'list'>('list')") ? "useState<'map' | 'list'>('map');" : "useState<'map' | 'list'>('list');");
   expect(changedScreen).not.toBe(originalScreen);
   writeFileSync(screen, changedScreen);
-  const budget = readFileSync(workflow, 'utf8').replace('    timeout-minutes: 30',
-    "    timeout-minutes: ${{ needs.select.outputs.scope == 'full' && 90 || 30 }}").replace(
-    "      FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS: '1800'",
-    "      FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS: ${{ needs.select.outputs.scope == 'full' && '5400' || '1800' }}");
-  writeFileSync(workflow, budget);
   const expected = ['map-search', 'map-search-location-denied', 'onboarding-guided-preview'];
   const final = cli('scripts/verify/product-flow.mjs');
   expect(final.status).toBe(0);
@@ -89,19 +84,7 @@ test('real Discovery entry changes select three journeys across CLI and publicat
     publication: { flows: expected, categories: ['auth', 'billing', 'changed-journey'] } });
   git('add', '.'); git('commit', '-qm', 'entry change');
   mkdirSync(join(directory, '.evidence'), { recursive: true });
-  const event = join(directory, '.evidence/event.json'), output = join(directory, '.evidence/output');
   const base = git('rev-parse', 'origin/main').toString().trim(), head = git('rev-parse', 'HEAD').toString().trim();
-  for (const [eventName, body] of [['push', { before: base, after: head }],
-    ['pull_request', { pull_request: { base: { sha: base }, head: { sha: head } } }]] as const) {
-    writeFileSync(event, JSON.stringify(body)); writeFileSync(output, '');
-    const hosted = spawnSync(process.execPath, [resolve(__dirname, 'simulator-actions.mjs')], {
-      cwd: directory, env: { ...env(), CI: 'true', FITSY_PRODUCT_ROOT: directory,
-        GITHUB_EVENT_NAME: eventName, GITHUB_EVENT_PATH: event, GITHUB_OUTPUT: output }, encoding: 'utf8',
-    });
-    expect(hosted.status).toBe(0);
-    expect(readFileSync(output, 'utf8')).toBe('required=true\nscope=flow\ntimeout_minutes=30\nworker_timeout_seconds=1800\n');
-    expect(JSON.parse(hosted.stdout.replace(/^Simulator: /, '')).flows).toEqual(expected);
-  }
   git('checkout', '-q', '--detach', base);
   const historical = spawnSync(process.execPath, ['scripts/verify/impact-plan.mjs', `--base=${base}`, `--head=${head}`, '--simulator'],
     { cwd: directory, env: env(), encoding: 'utf8' });
@@ -111,7 +94,6 @@ test('real Discovery entry changes select three journeys across CLI and publicat
   for (const mutate of [
     () => writeFileSync(map, originalMap + '\nexport const newRendererBehavior = true;\n'),
     () => writeFileSync(screen, changedScreen.replace('const showMap = mapEnabled', 'const showMap = !mapEnabled')),
-    () => writeFileSync(workflow, budget.replace('NODE_ENV: development', 'NODE_ENV: production')),
     // The Shuffle-style policy would let remote flags enable Android Map.
     // It is not equivalent to Map's existing iOS-only availability boundary.
     () => writeFileSync(flag, originalFlag
@@ -124,7 +106,7 @@ test('real Discovery entry changes select three journeys across CLI and publicat
   ]) {
     mutate();
     expect(JSON.parse(cli('scripts/verify/product-flow.mjs').stdout).simulator.scope).toBe('full');
-    writeFileSync(map, originalMap); writeFileSync(screen, changedScreen); writeFileSync(workflow, budget); writeFileSync(flag, originalFlag);
+    writeFileSync(map, originalMap); writeFileSync(screen, changedScreen); writeFileSync(flag, originalFlag);
   }
   const unknownConfig = spawnSync(process.execPath, ['--input-type=module', '-e',
     `import {candidatePlan} from ${JSON.stringify(modulePath)}; process.stdout.write(JSON.stringify(candidatePlan(['<unknown>'])));`],
@@ -212,36 +194,6 @@ const card = <HeroMealContent result={result} locked={locked} hideDishName={hide
       "  return `${result.name}${m ? `, ${published ? 'Published' : 'Estimated'} nutrition, ${m.confidence.toLowerCase()} confidence, ${published ? '' : 'approximately '}${m.calories} kcal, protein ${m.proteinG}g` : \"\"}`;\n}"],
   };
   const prefix = 'apps/mobile/components/';
-  const budgetControls: Record<string, [string, string]> = {
-    '.github/workflows/simulator.yml': [
-      `permissions: { contents: read }
-      scope: \${{ steps.plan.outputs.scope }}
-    timeout-minutes: \${{ needs.select.outputs.scope == 'full' && 90 || 30 }}
-      FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS: \${{ needs.select.outputs.scope == 'full' && '5400' || '1800' }}`,
-      `permissions: { contents: read }
-      scope: \${{ steps.plan.outputs.scope }}
-      timeout_minutes: \${{ steps.plan.outputs.timeout_minutes }}
-      worker_timeout_seconds: \${{ steps.plan.outputs.worker_timeout_seconds }}
-    timeout-minutes: \${{ fromJSON(needs.select.outputs.timeout_minutes) }}
-      FITSY_DISPATCH_WORKER_TIMEOUT_SECONDS: \${{ needs.select.outputs.worker_timeout_seconds }}`],
-    'scripts/verify/simulator-actions.mjs': [
-      `import { changedFiles, isMain, simulatorSelection } from './impact-plan.mjs';
-  const labels = [];
-  if (plan.required) return { required: true, scope: plan.scope === 'full' ? 'full' : 'flow', flows: plan.flows, reason: plan.reason };
-  return { required: controls, scope: controls ? 'smoke' : 'none', flows: [],
-    reason: controls ? 'Changed simulator controls require the three maintained hosted smoke journeys' : plan.reason };
-      for (const key of ['required', 'scope']) appendFileSync(process.env.GITHUB_OUTPUT, \`\${key}=\${selection[key]}\\n\`);`,
-      `import { changedFiles, isMain, simulatorSelection, simulatorBudget } from './impact-plan.mjs';
-  const result = selection => ({ ...selection, ...simulatorBudget(selection, options.cwd) });
-  const labels = [];
-  if (plan.required) return result({ required: true, scope: plan.scope === 'full' ? 'full' : 'flow', flows: plan.flows, reason: plan.reason });
-  return result({ required: controls, scope: controls ? 'smoke' : 'none', flows: [],
-    reason: controls ? 'Changed simulator controls require the three maintained hosted smoke journeys' : plan.reason });
-      for (const [key, value] of Object.entries({ required: selection.required, scope: selection.scope,
-        timeout_minutes: selection.timeoutMinutes, worker_timeout_seconds: selection.workerTimeoutSeconds }))
-        appendFileSync(process.env.GITHUB_OUTPUT, \`\${key}=\${value}\\n\`);`],
-  };
-  for (const [path, versions] of Object.entries(budgetControls)) write(path, versions[0]);
   for (const [name, versions] of Object.entries(modules)) write(prefix + name, versions[0]);
   for (const path of ['components/DiscoveryChrome.tsx', 'components/PaywallHero.tsx', 'app/welcome/preview.tsx',
     'app/welcome/resubscribe.tsx', 'app/(tabs)/search.tsx']) {
@@ -254,7 +206,7 @@ const card = <HeroMealContent result={result} locked={locked} hideDishName={hide
     '- waitForAnimationToEnd:\n    timeout: 10000\n- extendedWaitUntil:\n    visible:\n      id: welcome-login\n    timeout: 60000');
   expect(originalHelper).not.toBe(repairedHelper);
   write(helper, originalHelper);
-  for (const path of ['scripts/sim/actions.mjs', 'scripts/sim/ci.mjs', 'scripts/sim/product-flow.mjs',
+  for (const path of ['scripts/sim/ci.mjs', 'scripts/sim/product-flow.mjs',
     'scripts/sim/active-entitlement.mjs', 'scripts/sim/journey-fixtures.mjs', 'scripts/sim/runner-controls.mjs'])
     write(path, readFileSync(resolve(__dirname, '../..', path), 'utf8'));
   const git = (...args: string[]) => execFileSync('git', ['-c', 'gc.auto=0', '-c', 'maintenance.auto=false', ...args],
@@ -267,7 +219,6 @@ const card = <HeroMealContent result={result} locked={locked} hideDishName={hide
     for (const [name, versions] of Object.entries(modules)) write(prefix + name, versions[1]);
     write(helper, retryStartup ? repairedHelper : originalHelper);
   };
-  for (const [path, versions] of Object.entries(budgetControls)) write(path, versions[1]);
   restore();
   const cli = (file = 'scripts/verify/product-flow.mjs', args: string[] = ['--plan']) => {
     const result = spawnSync(process.execPath, [file, ...args], { cwd: directory, env: env(), encoding: 'utf8' });
@@ -292,35 +243,6 @@ const card = <HeroMealContent result={result} locked={locked} hideDishName={hide
   expect({ status: consumers.status, stderr: consumers.stderr }).toEqual({ status: 0, stderr: '' });
   expect(JSON.parse(consumers.stdout)).toMatchObject({ collection: expected, finish: { flows: expected }, publication: { flows: expected } });
   git('add', '.'); git('commit', '-qm', 'preview adaptation');
-  const head = git('rev-parse', 'HEAD'), output = join(directory, '.evidence/output'), event = join(directory, '.evidence/event.json');
-  mkdirSync(dirname(output), { recursive: true });
-  for (const [eventName, body] of [['push', { before: base, after: head }],
-    ['pull_request', { pull_request: { base: { sha: base }, head: { sha: head } } }]] as const) {
-    writeFileSync(event, JSON.stringify(body)); writeFileSync(output, '');
-    const hosted = spawnSync(process.execPath, [resolve(__dirname, 'simulator-actions.mjs')], {
-      cwd: directory, env: { ...env(), CI: 'true', FITSY_PRODUCT_ROOT: directory,
-        GITHUB_EVENT_NAME: eventName, GITHUB_EVENT_PATH: event, GITHUB_OUTPUT: output }, encoding: 'utf8',
-    });
-    expect(hosted.status).toBe(0);
-    expect(JSON.parse(hosted.stdout.replace(/^Simulator: /, ''))).toMatchObject({ flows: expected,
-      scope: 'flow', timeoutMinutes: 90, workerTimeoutSeconds: 5400 });
-    expect(readFileSync(output, 'utf8')).toBe('required=true\nscope=flow\ntimeout_minutes=90\nworker_timeout_seconds=5400\n');
-  }
-  for (const [path, from, to] of [
-    ['.github/workflows/simulator.yml', 'contents: read', 'contents: write'],
-    ['.github/workflows/simulator.yml', 'fromJSON(needs.select.outputs.timeout_minutes)', '30'],
-    ['.github/workflows/simulator.yml', 'needs.select.outputs.worker_timeout_seconds', "'1800'"],
-    ['scripts/verify/simulator-actions.mjs', 'worker_timeout_seconds: selection.workerTimeoutSeconds', 'worker_timeout_seconds: 1800'],
-    ['scripts/verify/simulator-actions.mjs', 'required: true', 'required: false'],
-  ]) {
-    const original = budgetControls[path!]![1]; expect(original).toContain(from);
-    write(path!, original.replace(from!, to!));
-    expect(cli().simulator.scope).toBe('full'); write(path!, original);
-  }
-  for (const [path, versions] of Object.entries(budgetControls)) {
-    write(path, versions[0]);
-    expect(cli().simulator.scope).toBe('full'); write(path, versions[1]);
-  }
   if (retryStartup) {
     for (const [from, to] of [
       ['maxRetries: 2', 'maxRetries: 3'],

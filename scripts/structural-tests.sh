@@ -184,7 +184,7 @@ if [ -d "$REPO_ROOT/docs" ]; then
   for entry in "$REPO_ROOT/docs"/*; do
     [ -f "$entry" ] || continue
     fname=$(basename "$entry")
-    [[ "$fname" = README.md || "$fname" = branch-protection.md || "$fname" = ci-simulator.md ]] && continue
+    [[ "$fname" = README.md || "$fname" = branch-protection.md ]] && continue
     git -C "$REPO_ROOT" ls-files --error-unmatch "docs/$fname" >/dev/null 2>&1 || continue
     BAD_DOCS="$BAD_DOCS\n  $fname is a file directly in docs/ — move it under a domain"
   done
