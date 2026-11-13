@@ -1,5 +1,6 @@
 import React, { Suspense, useCallback, useReducer, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, FlatList, Pressable, RefreshControl, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View, useWindowDimensions } from 'react-native';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WelcomeNav } from './WelcomeNav';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -20,7 +21,7 @@ import { HeroCard, PreviewTourButton, RestaurantSection } from './DiscoveryCards
 import { useMapSearchFlag } from '@/lib/useMapSearchFlag';
 import { useFloatingNavClearance } from '@/lib/floatingNav';
 import { DiscoveryViewToggle } from './DiscoveryViewToggle';
-const VIEW_FADE_MS = 150;
+const SHEET_SLIDE_MS = 280;
 // Load the native map only on eligible iOS entries.
 const DiscoveryMap = React.lazy(async () => require('./DiscoveryMap') as typeof import('./DiscoveryMap'));
 const FREE_RESULT_COUNT = 3;
@@ -33,20 +34,24 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
   const mapEnabled = useMapSearchFlag(mapDebug === '1' || onboardingPreview);
   const [view, setView] = useState<'map' | 'list'>('map');
   const showMap = mapEnabled && view === 'map';
-  const viewFade = useRef(new Animated.Value(1)).current;
+  // The list rides up over the map as a full-screen sheet, and back down to
+  // reveal it - map stays mounted underneath the whole time (#829), so the
+  // swipe never flickers or reloads it. sheetY is in screen points: 0 = the
+  // sheet fully covers the map (list showing), windowHeight = fully hidden
+  // below the bottom edge (map showing).
+  const { height: windowHeight } = useWindowDimensions();
+  const sheetY = useSharedValue(windowHeight);
   // The view switch itself is synchronous (so callers can rely on the new
-  // screen being mounted immediately after calling this); only the opacity
-  // fade-in is animated, as a lightweight transition rather than a hard cut.
+  // screen being mounted immediately after calling this); only the slide is
+  // animated, as a lightweight transition rather than a hard cut.
   const switchView = useCallback((next: 'map' | 'list') => {
     setView(next);
-    // Native-driver timing on a reused Animated.Value can race its own detach
-    // when retriggered within one JS tick (rapid back-to-back toggles), leaving
-    // opacity stuck at 0. Run this fade on the JS thread instead - it's a single
-    // 150ms opacity tween, not a cost worth the native-bridge race.
-    viewFade.stopAnimation();
-    viewFade.setValue(0);
-    Animated.timing(viewFade, { toValue: 1, duration: VIEW_FADE_MS, useNativeDriver: false }).start();
-  }, [viewFade]);
+    if (mapEnabled) {
+      sheetY.value = withTiming(next === 'list' ? 0 : windowHeight,
+        { duration: SHEET_SLIDE_MS, easing: Easing.out(Easing.cubic) });
+    }
+  }, [mapEnabled, sheetY, windowHeight]);
+  const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: sheetY.value }] }));
   const discovery = useDiscoveryState({ onboardingPreview });
   const { navigation, isOnboardingPreview, tried, inputs, filterMode, query, setQuery, canSearch, hasQuery, location,
     locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea,
@@ -197,22 +202,12 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
       </View>
     );
   }, [loadingMore, locked, results.length, hiddenCount, nextCursor, unlocking, resyncNow, unlockTitle, unlockSubtitle, unlockLabel, isOnboardingPreview, unlockPreview, loading, error, outOfArea, tourMoreRef]);
-  return (
-    <SafeAreaView
-      edges={showMap ? [] : isOnboardingPreview ? ['top', 'right', 'bottom', 'left'] : ['top', 'right', 'left']}
-      style={{ flex: 1, backgroundColor: EDITORIAL.cream }}
-    >
-      <Animated.View style={{ flex: 1, opacity: viewFade }}>
-      {showMap ? <Suspense fallback={<ActivityIndicator accessibilityLabel="Loading map" />}>
-        <DiscoveryMap discovery={discovery} onShowList={() => switchView('list')}
-          previewHeader={isOnboardingPreview ? <>{previewNav}{previewIntro}</> : undefined}
-          onTourLayoutChange={onTourLayoutChange} />
-      </Suspense> : <>
+  const listContent = (
+    <>
       {previewNav}
       {isOnboardingPreview
         ? <Masthead preview locationRef={tourLocationRef} locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker} />
         : <DiscoveryToolbar query={query} onQueryChange={setQuery} onClear={handleClearQuery} searchRef={tourSearchRef}
-            locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker} locationRef={tourLocationRef}
             onMacrosPress={() => setFilterVisible(true)} canShuffle={canShuffle} onShuffle={handleShuffle}
             onViewToggle={mapEnabled ? () => switchView('map') : undefined} />}
       {!loading && error !== null && (
@@ -251,8 +246,11 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
             />
           }
         /></View>
-      </>}
-      </Animated.View>
+    </>
+  );
+  const listEdges = isOnboardingPreview ? (['top', 'right', 'bottom', 'left'] as const) : (['top', 'right', 'left'] as const);
+  const overlays = (
+    <>
       <CoachMarks
         visible={tourVisible && locked === true}
         steps={tourSteps}
@@ -284,6 +282,35 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
         }}
         onClose={() => setLocationPickerVisible(false)}
       />
-    </SafeAreaView>
+    </>
+  );
+  if (!mapEnabled) {
+    return (
+      <SafeAreaView testID="discovery-screen" edges={listEdges} style={{ flex: 1, backgroundColor: EDITORIAL.cream }}>
+        {listContent}
+        {overlays}
+      </SafeAreaView>
+    );
+  }
+  // The map stays mounted at all times here - the list rides over it as a
+  // full-screen sheet that slides up/down (#829), instead of mounting one
+  // screen or the other, so toggling never flickers or reloads the map.
+  return (
+    <View testID="discovery-screen" style={{ flex: 1, backgroundColor: EDITORIAL.cream }}>
+      <View style={{ flex: 1 }} accessibilityElementsHidden={view === 'list'} importantForAccessibility={view === 'list' ? 'no-hide-descendants' : 'auto'}>
+        <Suspense fallback={<ActivityIndicator accessibilityLabel="Loading map" />}>
+          <DiscoveryMap discovery={discovery} onShowList={() => switchView('list')}
+            previewHeader={isOnboardingPreview ? <>{previewNav}{previewIntro}</> : undefined}
+            onTourLayoutChange={onTourLayoutChange} />
+        </Suspense>
+      </View>
+      <Animated.View testID="discovery-sheet" style={[s.listSheet, sheetStyle]} pointerEvents={view === 'list' ? 'auto' : 'none'}
+        accessibilityElementsHidden={view === 'map'} importantForAccessibility={view === 'map' ? 'no-hide-descendants' : 'auto'}>
+        <SafeAreaView edges={listEdges} style={{ flex: 1, backgroundColor: EDITORIAL.cream }}>
+          {listContent}
+        </SafeAreaView>
+      </Animated.View>
+      {overlays}
+    </View>
   );
 }

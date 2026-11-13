@@ -145,23 +145,26 @@ it.each(['map', 'list'])('mapDebug keeps visible Shuffle in the %s controls with
   const screen = open('/search?mapDebug=1&query=meal');
   await screen.findByTestId('map-pin-0');
   if (view === 'list') await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
+  // The map and list each keep their own ShuffleButton instance now that both
+  // stay mounted for the swipe sheet (#829) - distinct testIDs disambiguate.
+  const shuffleTestId = view === 'map' ? 'shuffle-button' : 'discovery-shuffle-button';
   const shuffle = screen.getByRole('button', { name: 'Shuffle results' });
   const controls = screen.getByTestId(view === 'map' ? 'map-toolbar' : 'discovery-toolbar');
-  expect(within(controls).getByTestId('shuffle-button')).toBe(shuffle);
+  expect(within(controls).getByTestId(shuffleTestId)).toBe(shuffle);
   expect(StyleSheet.flatten(shuffle.props.style)).toMatchObject({ width: 44, height: 44 });
-  expect(screen.getAllByTestId('shuffle-button')).toHaveLength(1);
+  expect(screen.getAllByRole('button', { name: 'Shuffle results' })).toHaveLength(1);
   expect(within(controls).getByRole('button', { name: 'Edit macros' })).toBeTruthy();
 
   const pending = deferred<Response>();
   searchResponse = () => pending.promise;
   await act(async () => fireEvent.press(shuffle));
-  expect(screen.getByTestId('shuffle-button').props.accessibilityState.disabled).toBe(true);
+  expect(screen.getByTestId(shuffleTestId).props.accessibilityState.disabled).toBe(true);
   expect(searchParams()).toMatchObject({ q: 'meal', shuffle: '1', ...values });
   await act(async () => pending.resolve({ ok: false, status: 503, json: async () => ({ error: 'offline' }) } as Response));
-  expect(screen.getByTestId('shuffle-button')).toBeTruthy();
+  expect(screen.getByTestId(shuffleTestId)).toBeTruthy();
   searchResponse = async () => response({ data: rows, meta: { locked: false } });
   await act(async () => fireEvent.press(screen.getByTestId('preview-retry')));
-  expect(screen.getByTestId('shuffle-button').props.accessibilityState.disabled).toBe(false);
+  expect(screen.getByTestId(shuffleTestId).props.accessibilityState.disabled).toBe(false);
   expect(searchParams().q).toBe('meal');
   expect(screen.getByTestId(view === 'map' ? 'map-pin-0' : 'discovery-hero')).toBeTruthy();
 });
@@ -194,7 +197,12 @@ it.each(['flows/floating-nav', 'helpers/map-search-setup'].flatMap(caller =>
         }
       }
       await screen.findByTestId('discovery-list');
-      expect(screen.queryByTestId('discovery-map')).toBeNull();
+      // The map stays mounted under the list sheet (#829) so the swipe back
+      // never flickers or reloads it - it's merely off-screen, not unmounted.
+      // (No sheet at all when the map flag is off - list is the only screen.)
+      if (screen.queryByTestId('discovery-sheet')) {
+        expect(screen.getByTestId('discovery-sheet').props.pointerEvents).toBe('auto');
+      }
     }
   },
 );
@@ -246,10 +254,11 @@ it('opens the chosen full-photo card, then returns using the saved iOS flow cont
   expect(screen.getByLabelText('Search: meal')).toBeTruthy();
   await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
   // The list matches the map's own chrome now (#824): no macro values or
-  // "picks near" heading, the same location pill and Macros button instead.
+  // "picks near" heading, the same Macros button. Location lives on the map
+  // only now (#829) - the map stays mounted under this sheet.
   expect(screen.getByTestId('discovery-goals')).toBeTruthy();
   expect(screen.queryByText(/YOUR PICKS NEAR/)).toBeNull();
-  expect(screen.getByLabelText('Location: DTLA')).toBeTruthy();
+  expect(screen.queryByLabelText('Location: DTLA')).toBeNull();
 });
 
 it.each(['LOW', 'MEDIUM'] as const)('keeps actual meal content and %s confidence through the single Map control', async confidence => {
@@ -270,7 +279,8 @@ it.each(['LOW', 'MEDIUM'] as const)('keeps actual meal content and %s confidence
   await screen.findByTestId('discovery-list');
   for (const text of meal) expect(within(screen.getByTestId('discovery-hero')).getByText(text)).toBeTruthy();
   expect(screen.getByTestId('discovery-hero').props.accessibilityLabel).toContain(qualified);
-  expect(screen.getByTestId('discovery-location')).toBeTruthy();
+  // Location lives on the map only now (#829) - it's not reachable from the list.
+  expect(screen.queryByTestId('discovery-location')).toBeNull();
   const mapControl = commands[start + 1].tapOn;
   if (typeof mapControl !== 'object') throw new Error('The native list journey must use its rendered Map control');
   await act(async () => fireEvent.press(screen.getByTestId(mapControl.id)));
@@ -347,7 +357,8 @@ it('searches a settled dragged area only after confirmation and ignores stale ar
   expect(screen.getByTestId('discovery-search').props.value).toBe('salmon');
   expect(within(screen.getByTestId('discovery-hero')).getByText('Pizza House')).toBeTruthy();
   expect(screen.getByTestId('discovery-goals')).toBeTruthy();
-  expect(screen.getByTestId('discovery-location')).toBeTruthy();
+  // Location lives on the map only now (#829) - not reachable from the list.
+  expect(screen.queryByTestId('discovery-location')).toBeNull();
 });
 
 it.each(['published', 'locked', 'missing'])('preserves %s meal disclosure through map and list', async state => {
@@ -597,7 +608,7 @@ it('recovers the production map preview, preserves sample disclosure, and carrie
   expect(screen.getByTestId('map-card-1').props.accessibilityLabel).toContain('approximately 531 kcal');
   expect(screen.getByTestId('map-card-2').props.accessibilityLabel).toContain('Published nutrition, high confidence');
   expect(screen.getByTestId('map-card-2').props.accessibilityLabel).not.toContain('approximately');
-  expect(screen.getByTestId('preview-hidden-dish-spot-1', { includeHiddenElements: true })).toBeTruthy();
+  expect(within(screen.getByTestId('map-card-1')).getByTestId('preview-hidden-dish-spot-1', { includeHiddenElements: true })).toBeTruthy();
   expect(screen.getByTestId('locked-value-cta')).toBeTruthy();
   await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
   await screen.findByTestId('discovery-list');
@@ -690,7 +701,7 @@ it.each(['', '&mapDebug=1&shuffleDebug=1'])('opens production iOS on the map wit
   await screen.findByTestId('map-pin-0');
   await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
   expect(screen.getByTestId('discovery-search').props.value).toBe('meal');
-  expect(screen.getByTestId('shuffle-button')).toBeTruthy();
+  expect(screen.getByTestId('discovery-shuffle-button')).toBeTruthy();
   await act(async () => fireEvent.press(screen.getByTestId('discovery-view-toggle')));
   await screen.findByTestId('map-pin-0');
 });
@@ -702,7 +713,7 @@ it.each([false, true])('keeps Android on the list, including debug links (dev=%s
   const screen = open('/search?query=meal&mapDebug=1');
   await screen.findByTestId('discovery-hero');
   expect(screen.queryByTestId('discovery-map')).toBeNull();
-  expect(Boolean(screen.queryByTestId('shuffle-button'))).toBe(dev);
+  expect(Boolean(screen.queryByTestId('discovery-shuffle-button'))).toBe(dev);
 });
 
 it('allows explicit local opt-in and removes the map on a remote flag update without losing search', async () => {
