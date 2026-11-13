@@ -34,6 +34,7 @@ jobs:
       build: ${{ steps.t.outputs.build }}
       docs_only: ${{ steps.t.outputs.docs_only }}
       simulator: ${{ steps.t.outputs.simulator }}
+      media: ${{ steps.media.outputs.media }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -41,6 +42,21 @@ jobs:
           persist-credentials: false
       - id: t
         run: node scripts/verify/impact-plan.mjs --github-output
+      # #846 follow-up (AI review, CONFIRMED P2): a change needing no
+      # simulator work can still require local media-integration evidence
+      # (scripts/verify/media-integration.mjs). Computed as its own step,
+      # not inside impact-plan.mjs's own CLI, to avoid a circular import -
+      # media-integration.mjs already imports isMain from impact-plan.mjs,
+      # so having impact-plan.mjs import back from it deadlocks Node's ESM
+      # loader under top-level await.
+      - id: media
+        run: |
+          echo "media=$(node --input-type=module -e "
+            import { changedFiles } from './scripts/verify/impact-plan.mjs';
+            import { mediaIntegrationRequired } from './scripts/verify/media-integration.mjs';
+            const { files } = changedFiles();
+            console.log(files ? mediaIntegrationRequired(files) : true);
+          ")" >> "$GITHUB_OUTPUT"
       # Candidate scripts and baseline checks receive read-only access.
       - name: Install gitleaks (docs PRs can leak secrets too)
         run: curl -sL "$(curl -s https://api.github.com/repos/gitleaks/gitleaks/releases/latest | grep browser_download_url | grep linux_x64.tar.gz | head -1 | cut -d '"' -f4)" | tar xz -C /usr/local/bin gitleaks || echo "gitleaks install failed; grep fallback covers"
@@ -126,7 +142,7 @@ jobs:
   mark-non-product:
     name: product-flow/local (non-product)
     needs: classify
-    if: github.event_name == 'pull_request' && needs.classify.outputs.simulator != 'true'
+    if: github.event_name == 'pull_request' && needs.classify.outputs.simulator != 'true' && needs.classify.outputs.media != 'true'
     runs-on: ubuntu-latest
     permissions:
       statuses: write
@@ -298,5 +314,5 @@ jobs:
             ."test-other".result == expected(.classify.outputs.tests) and
             .build.result == expected(.classify.outputs.build) and
             ."domain-check".result == (if $event == "pull_request" then "success" else "skipped" end) and
-            ."mark-non-product".result == (if $event == "pull_request" and .classify.outputs.simulator != "true" then "success" else "skipped" end)
+            ."mark-non-product".result == (if $event == "pull_request" and .classify.outputs.simulator != "true" and .classify.outputs.media != "true" then "success" else "skipped" end)
           ' <<<"$NEEDS_JSON"
