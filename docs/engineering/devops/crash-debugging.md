@@ -1,8 +1,8 @@
-**TL;DR:** Sentry receives sanitized JavaScript crash stacks; Axiom and PostHog retain monitoring and paging responsibilities.
+**TL;DR:** Sentry receives sanitized JavaScript crash stacks and, since #832, native crash reports too; Axiom and PostHog retain monitoring and paging responsibilities.
 
 # Crash debugging
 
-> **Status:** living · **Last verified:** 2026-11-05
+> **Status:** living · **Last verified:** 2026-11-13
 
 [Issue #747](https://github.com/dgmolla/fitsy/issues/747) holds activation, account ownership, received-event proof and release status.
 Installing the SDK or passing local tests does not establish live Sentry delivery.
@@ -11,7 +11,7 @@ Installing the SDK or passing local tests does not establish live Sentry deliver
 
 | System | Responsibility | Data |
 | --- | --- | --- |
-| Sentry | Group JS exceptions and resolve code locations | Sanitized error class, code frames, debug IDs, release, dist and environment |
+| Sentry | Group JS exceptions and native crashes, resolve code locations | JS: sanitized error class, code frames, debug IDs, release, dist and environment. Native: Sentry's standard native crash payload (device model/OS/app version, native stack trace, binary images) - see below |
 | Axiom and GitHub Production Monitor | API health, failure rates and existing Slack paging | Existing bounded request/dependency telemetry |
 | PostHog | Product analytics and existing client_error counts | Existing allowlisted properties, without crash messages or stacks |
 
@@ -27,8 +27,12 @@ Function identifiers and source coordinates remain for grouping and source-map r
 The synthetic `0.0.0.0` user IP prevents Sentry from inferring the mobile device's address, as described in [Sentry's React Native data collection documentation](https://docs.sentry.io/platforms/react-native/data-management/data-collected/).
 Enable the project's IP-address scrubbing setting as defense in depth and inspect the received event before any broader use.
 
-Native crash capture and native SDK initialization are disabled in this phase because native events bypass JavaScript `beforeSend`.
-The native library/plugin is installed for the next binary and source-map uploads; activating native crash capture requires equivalent native sanitization and new received-event proof.
+Native crash capture is enabled (Dawit, 2026-11-13, after #832's native `NSRangeException` would have been missed by JS-only Sentry).
+`beforeSend`/`beforeBreadcrumb` do not run for native crash events - this is a documented, verified SDK limitation (the native layer strips JS-only callbacks before it starts and transports a captured crash before the JS engine runs), not something a config option closes.
+Native crash reports therefore carry Sentry's standard native crash payload instead of the JS allowlist above: device model, OS version, app version, native stack trace and binary images for symbolication.
+`sendDefaultPii: false` still applies at the native layer and suppresses IP/user-identifying data there; `attachScreenshot`, `attachViewHierarchy` and `attachThreads` are explicitly disabled rather than left to SDK defaults.
+No `setUser`/`setContext`/`setTag` call exists anywhere in the app, so a native crash has no app-specific user data to carry regardless.
+There is no custom native (Swift/Kotlin) sanitization layer; this is an accepted, informed tradeoff, not an oversight.
 Missing DSNs leave runtime reporting inactive and do not affect app/API availability.
 API capture covers uncaught Node request errors through Next's `onRequestError`; handled responses still use existing monitoring.
 No browser/landing-page or Edge SDK is initialized.

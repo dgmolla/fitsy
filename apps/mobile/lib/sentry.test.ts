@@ -19,7 +19,8 @@ test('unconfigured installs are inert and configured installs use the privacy bo
   initializeSentry();
   const options = jest.mocked(Sentry.init).mock.calls[0]?.[0];
   expect(options).toMatchObject({
-    sendDefaultPii: false, enableNative: false, enableNativeCrashHandling: false, autoInitializeNativeSdk: false,
+    sendDefaultPii: false, enableNative: true, enableNativeCrashHandling: true, autoInitializeNativeSdk: true,
+    attachScreenshot: false, attachViewHierarchy: false, attachThreads: false,
     enableAutoSessionTracking: false, enableAutoPerformanceTracing: false, enableLogs: false,
     maxBreadcrumbs: 0, sendClientReports: false, beforeSend: sanitizeCrashEvent,
   });
