@@ -79,7 +79,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
     });
   }), [showMap]);
   const closeTour = () => { finishTour(); listRef.current?.scrollToOffset({ offset: 0, animated: false }); };
-  const renderSearchBar = (action?: React.ReactNode) => <SearchBar value={query} onChangeText={setQuery} onClear={handleClearQuery} containerRef={tourSearchRef} action={action} frosted={mapEnabled} />;
+  const renderSearchBar = (action?: React.ReactNode) => <SearchBar value={query} onChangeText={setQuery} onClear={handleClearQuery} containerRef={!showMap ? tourSearchRef : undefined} action={action} frosted={mapEnabled} />;
   const previewGoBack = onPreviewBack ?? (navigation.canGoBack() ? () => router.back() : undefined);
   // The map preview is the real map screen, not an onboarding step: no
   // progress-bar chrome there, just a small back control inline with the tip.
@@ -96,7 +96,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
     <>
       {isOnboardingPreview && <>
         {previewIntro}
-        <MacroStrip macros={inputs} onEdit={() => setFilterVisible(true)} editRef={tourEditRef} />
+        <MacroStrip macros={inputs} onEdit={() => setFilterVisible(true)} editRef={!showMap ? tourEditRef : undefined} />
         {renderSearchBar()}
       </>}
       {!canSearch && (
@@ -165,7 +165,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
       const title = empty ? 'Keep exploring.' : 'Explore full menus.';
       const subtitle = empty ? 'Try another dish or area. Unlock full menus with Pro.' : 'Explore full menus with Pro.';
       const ctaLabel = empty ? 'Explore Pro plans' : 'Explore full menus';
-      return <View ref={tourMoreRef} collapsable={false}><LockedUnlockCard
+      return <View ref={!showMap ? tourMoreRef : undefined} collapsable={false}><LockedUnlockCard
         title={title}
         subtitle={subtitle}
         ctaLabel={ctaLabel}
@@ -206,9 +206,9 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
     <>
       {previewNav}
       {isOnboardingPreview
-        ? <Masthead preview locationRef={tourLocationRef} locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker} />
-        : <DiscoveryToolbar query={query} onQueryChange={setQuery} onClear={handleClearQuery} searchRef={tourSearchRef}
-            locationRef={tourLocationRef} locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker}
+        ? <Masthead preview locationRef={!showMap ? tourLocationRef : undefined} locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker} />
+        : <DiscoveryToolbar query={query} onQueryChange={setQuery} onClear={handleClearQuery} searchRef={!showMap ? tourSearchRef : undefined}
+            locationRef={!showMap ? tourLocationRef : undefined} locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker}
             onMacrosPress={() => setFilterVisible(true)} canShuffle={canShuffle} onShuffle={handleShuffle}
             onViewToggle={mapEnabled ? () => switchView('map') : undefined} />}
       {!loading && error !== null && (
