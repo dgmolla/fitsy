@@ -1,3 +1,4 @@
+// #843 verification scratch commit - throwaway, closing without merging.
 import { useEffect } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { Stack } from 'expo-router';
