@@ -25,10 +25,12 @@ const RestaurantMarker = React.memo(function RestaurantMarker({ result, position
 }) {
   const [tracking, setTracking] = useState(true);
   useEffect(() => {
+    // A deselected pin needs no re-snapshot; it reverts to an already-correct look.
+    if (!selected) { setTracking(false); return; }
     setTracking(true);
     const timer = setTimeout(() => setTracking(false), 250);
     return () => clearTimeout(timer);
-  }, [selected, result.name]);
+  }, [selected]);
   return <Marker identifier={result.id} coordinate={{ latitude: result.lat, longitude: result.lng }}
     anchor={{ x: 0.5, y: 0.5 }} stopPropagation tracksViewChanges={tracking}
     zIndex={selected ? 1000 : 100 - position} testID={`map-pin-${position}`}
