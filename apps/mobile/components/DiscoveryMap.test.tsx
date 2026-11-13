@@ -849,3 +849,21 @@ it('selects a pin without changing results and stops marker tracking after paint
   await waitFor(() => expect(screen.getByTestId('map-pin-1').props.tracksViewChanges).toBe(false));
   expect(searchRequests()).toHaveLength(before);
 });
+
+it('does not re-arm a deselected pin\'s native tracking, bounding concurrent snapshots under rapid taps', async () => {
+  // A deselected pin reverts to its already-rendered unselected look - no
+  // re-render to capture, so it must drop tracking immediately rather than
+  // riding out another 250ms window. Letting every pin a rapid tap-storm
+  // touches keep tracking live for its own window left an unbounded,
+  // growing set of markers mid-snapshot at once - a real react-native-maps
+  // stability hazard this guards against.
+  const screen = open('/search?query=meal');
+  await screen.findByTestId('map-pin-0');
+  await act(async () => fireEvent.press(screen.getByTestId('map-pin-1')));
+  await waitFor(() => expect(screen.getByTestId('map-pin-1').props.tracksViewChanges).toBe(false));
+  await act(async () => fireEvent.press(screen.getByTestId('map-pin-2')));
+  expect(screen.getByTestId('map-pin-1').props.accessibilityState.selected).toBe(false);
+  expect(screen.getByTestId('map-pin-1').props.tracksViewChanges).toBe(false);
+  expect(screen.getByTestId('map-pin-2').props.tracksViewChanges).toBe(true);
+  await waitFor(() => expect(screen.getByTestId('map-pin-2').props.tracksViewChanges).toBe(false));
+});
