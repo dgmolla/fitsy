@@ -6,9 +6,23 @@
 // personas don't depend on a real Test Store purchase ever registering.
 import { backendOrigin } from './backend-identity.mjs';
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { resolve } from 'node:path';
 
 const rcOrigin = 'https://api.revenuecat.com/v1';
 const uuid = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i;
+
+// #880: the operator-provisioned secret lives outside the repo/.env chain
+// (chmod 600, never printed). Only consulted for the real process.env -
+// never a test-injected env object - so a test asserting "no secret
+// configured" can't accidentally pick up a real developer machine's key.
+function configuredRevenueCatSecret() {
+  try {
+    const text = readFileSync(resolve(homedir(), '.config/fitsy/revenuecat.env'), 'utf8');
+    return /^REVENUECAT_SECRET_KEY=(\S+)/m.exec(text)?.[1];
+  } catch { return undefined; }
+}
 
 export function evidenceStore(built, env) {
   backendOrigin(env.EXPO_PUBLIC_API_URL);
@@ -118,7 +132,7 @@ export async function verifyRemainingLifetime({ built, env = process.env, fetchI
 // REVENUECAT_SECRET_KEY is server-only and must never be EXPO_PUBLIC_*.
 export async function provisionEntitlement({ fixture, built, env = process.env, fetchImpl = fetch, now = Date.now, expiredDelayMs = 2000 }) {
   if (!['entitled-dev', 'expired-subscription'].includes(fixture)) throw new Error('Unknown provisioned billing fixture');
-  const secret = env.REVENUECAT_SECRET_KEY;
+  const secret = env.REVENUECAT_SECRET_KEY || (env === process.env ? configuredRevenueCatSecret() : undefined);
   if (!secret) throw new Error('Provisioning requires REVENUECAT_SECRET_KEY (server-only; never ships client-side)');
   evidenceStore(built, env);
   const origin = backendOrigin(env.EXPO_PUBLIC_API_URL);
