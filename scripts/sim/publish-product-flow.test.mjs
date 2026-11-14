@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { requiredBillingFixtures } from './publish-product-flow.mjs';
+import { applyBillingPersonaSkip, billingPersonaFlowNames, requiredBillingFixtures } from './publish-product-flow.mjs';
 
 // journeyFixture requires FITSY_E2E_FIXTURES for any selected flow carrying a
 // fixture tag (every real selected flow does), so build one real config per
@@ -57,4 +57,42 @@ test('billing category plus an entitled-dev flow reports both personas, each wit
   // The regression this guards: empty-store and entitled-dev cannot be the
   // same account, so their resolved overrides must differ.
   assert.notDeepEqual(result[0].env, result[1].env);
+});
+
+test('billingPersonaFlowNames finds only the flows tagged for a named persona', () => {
+  assert.deepEqual(billingPersonaFlowNames({ flows: ['map-search', 'map-search-location-denied', 'onboarding-search-highlight'], required: true },
+    ['entitled-dev']), ['map-search', 'map-search-location-denied']);
+  assert.deepEqual(billingPersonaFlowNames({ flows: ['onboarding-search-highlight'], required: true }, ['entitled-dev', 'expired-subscription']), []);
+});
+
+test('applyBillingPersonaSkip is a no-op when not requested, even if billing flows are selected', () => {
+  const plan = { flows: ['map-search', 'onboarding-search-highlight'], required: true, categories: ['billing', 'discovery'] };
+  assert.deepEqual(applyBillingPersonaSkip(plan, {}), { plan, skippedFlows: [] });
+  assert.deepEqual(applyBillingPersonaSkip(plan), { plan, skippedFlows: [] });
+});
+
+test('applyBillingPersonaSkip requires a non-empty reason whenever requested', () => {
+  const plan = { flows: ['map-search'], required: true };
+  assert.throws(() => applyBillingPersonaSkip(plan, { skipBillingPersonas: true }), /requires --reason/);
+  assert.throws(() => applyBillingPersonaSkip(plan, { skipBillingPersonas: true, skipBillingReason: '  ' }), /requires --reason/);
+});
+
+test('applyBillingPersonaSkip drops only the billing-tagged flows, keeping every other flow required', () => {
+  const plan = { flows: ['map-search', 'onboarding-search-highlight'], required: true, categories: ['billing', 'discovery'] };
+  const result = applyBillingPersonaSkip(plan, { skipBillingPersonas: true, skipBillingReason: 'Dawit 5:07 PM PT Nov 13, #853' });
+  assert.deepEqual(result, { plan: { flows: ['onboarding-search-highlight'], required: true, categories: ['billing', 'discovery'] }, skippedFlows: ['map-search'] });
+});
+
+test('applyBillingPersonaSkip flips required to false when every selected flow was billing-gated (#834)', () => {
+  const plan = { flows: ['map-search', 'map-search-location-denied'], required: true, categories: ['billing', 'discovery', 'changed-journey'] };
+  const result = applyBillingPersonaSkip(plan, { skipBillingPersonas: true, skipBillingReason: 'Dawit 5:07 PM PT Nov 13, #853' });
+  assert.deepEqual(result.plan.flows, []);
+  assert.equal(result.plan.required, false);
+  assert.deepEqual(result.skippedFlows, ['map-search', 'map-search-location-denied']);
+});
+
+test('applyBillingPersonaSkip changes nothing when requested but no selected flow is billing-tagged', () => {
+  const plan = { flows: ['onboarding-search-highlight'], required: true, categories: ['discovery'] };
+  assert.deepEqual(applyBillingPersonaSkip(plan, { skipBillingPersonas: true, skipBillingReason: 'no billing surface' }),
+    { plan, skippedFlows: [] });
 });

@@ -15,6 +15,17 @@ export function isMain(url) {
 // This service-only observability endpoint has no mobile caller or journey.
 // Any other API, shared, or mobile path still requires native proof.
 export const serviceHealthPath = path => /^apps\/api\/app\/api\/health\/route(?:\.test)?\.ts$/.test(path);
+// Operator-triggered routes (cron/ops/diagnostics, CRON_SECRET-gated); the
+// mobile client never calls apps/api/app/api/internal/** so they carry no
+// simulator-mapped journey and shouldn't force full coverage on every edit.
+export const internalOpsPath = path => /^apps\/api\/app\/api\/internal\//.test(path);
+// Dependency-free so classify's media step can import it directly; the real
+// home for this predicate is media-integration.mjs, which re-exports it -
+// importing that module instead would pull in product-flow.mjs's chain down
+// to screen-guard.mjs's js-yaml require, which classify never npm-installs.
+export function mediaIntegrationRequired(paths) {
+  return paths.some(path => /^scripts\/sim\/|^scripts\/delivery\/loop\/(?:host|context|driver|install|loop\.test|worktrees(?:\.test)?)\.py$|^scripts\/verify\/(?:product-flow|media-integration|test\.sh|registry\.yml)/.test(path));
+}
 // The loop sandbox points these at a scratch, credential-free config.
 const TRUSTED_GIT_SELECTORS = new Set(['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM']);
 export const gitEnv = (env = process.env) => Object.fromEntries(Object.entries(env).filter(([key]) => !key.startsWith('GIT_') || TRUSTED_GIT_SELECTORS.has(key)));
@@ -549,10 +560,10 @@ export function simulatorSelection(files, { cwd = repository, env = process.env,
   if (configKeys.length) return full(`Public native configuration changed: ${configKeys.join(', ')}`);
   const sharedUI = source.find(sharedUIPath);
   if (sharedUI) return full(`Shared UI or app shell requires the full smoke suite: ${sharedUI}`);
-  const contracts = source.filter(path => mobileContract(path) && !serviceHealthPath(path));
+  const contracts = source.filter(path => mobileContract(path) && !serviceHealthPath(path) && !internalOpsPath(path));
   const mobile = contracts.filter(path => path.startsWith('apps/mobile/'));
   let selection = result('low', 'none', [], 'Verification tooling or non-mobile change; unit and focused tests only');
-  if (mobile.length || source.some(path => uiPath(path) || (mobileContract(path) && !serviceHealthPath(path)))) {
+  if (mobile.length || source.some(path => uiPath(path) || (mobileContract(path) && !serviceHealthPath(path) && !internalOpsPath(path)))) {
     let reviewTier;
     try {
       reviewTier = simulatorReviewTier(source, cwd, env);
