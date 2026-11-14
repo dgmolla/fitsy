@@ -15,37 +15,53 @@ export function evidenceMode(value = 'development', requestedRecording = false) 
   return { name: value, recordVideo: requestedRecording || value === 'requested-video', publishable: value === 'final-candidate' };
 }
 
-export function runSelection(args) {
-  const [udid, ...rawRest] = args;
-  // #860/#867: same opt-in, auditable contract as publish-product-flow.mjs -
-  // never default-on, a reason required alongside either exclusion kind.
-  const reasonIndex = rawRest.indexOf('--reason');
-  const skipBillingReason = reasonIndex === -1 ? undefined : rawRest[reasonIndex + 1];
-  const withoutReason = reasonIndex === -1 ? rawRest : [...rawRest.slice(0, reasonIndex), ...rawRest.slice(reasonIndex + 2)];
+// #860/#867/#876: same opt-in, auditable contract everywhere a plan is
+// consumed (run/finish/publish) - never default-on, a reason required
+// alongside either exclusion kind.
+export function billingSkipSelection(args) {
+  const reasonIndex = args.indexOf('--reason');
+  const skipBillingReason = reasonIndex === -1 ? undefined : args[reasonIndex + 1];
+  const withoutReason = reasonIndex === -1 ? args : [...args.slice(0, reasonIndex), ...args.slice(reasonIndex + 2)];
   const excludeFlowsArgs = withoutReason.filter(arg => arg.startsWith('--exclude-flows='));
   if (excludeFlowsArgs.length > 1) throw new Error('Pass --exclude-flows at most once');
   const excludeFlows = excludeFlowsArgs.length ? excludeFlowsArgs[0].slice('--exclude-flows='.length).split(',').filter(Boolean) : [];
-  const rest = withoutReason.filter(arg => !arg.startsWith('--exclude-flows='));
+  const skipPersonas = withoutReason.filter(arg => arg === '--skip-billing-personas');
+  if (skipPersonas.length > 1) throw new Error('Pass --skip-billing-personas at most once');
+  if ((skipPersonas.length === 1 || excludeFlows.length > 0) !== (reasonIndex !== -1))
+    throw new Error('--skip-billing-personas/--exclude-flows requires --reason "<text>"');
+  const rest = withoutReason.filter(arg => arg !== '--skip-billing-personas' && !arg.startsWith('--exclude-flows='));
+  return { rest, skipBillingPersonas: skipPersonas.length === 1, skipBillingReason, excludeFlows };
+}
+
+export function runSelection(args) {
+  const [udid, ...rawRest] = args;
+  const { rest, skipBillingPersonas, skipBillingReason, excludeFlows } = billingSkipSelection(rawRest);
   const modes = rest.filter(arg => arg.startsWith('--mode='));
   const recording = rest.filter(arg => arg === '--record-video');
   const exceptions = rest.filter(arg => arg.startsWith('--release-exception='));
   const noRetry = rest.filter(arg => arg === '--no-environment-retry');
-  const skipPersonas = rest.filter(arg => arg === '--skip-billing-personas');
   if (modes.length > 1) throw new Error('Pass exactly one --mode option');
   if (recording.length > 1) throw new Error('Pass --record-video at most once');
   if (exceptions.length > 1 || (exceptions.length && exceptions[0] !== '--release-exception=6716597294'))
     throw new Error('Unknown or repeated native release exception');
   if (noRetry.length > 1) throw new Error('Pass --no-environment-retry at most once');
-  if (skipPersonas.length > 1) throw new Error('Pass --skip-billing-personas at most once');
-  if ((skipPersonas.length === 1 || excludeFlows.length > 0) !== (reasonIndex !== -1))
-    throw new Error('--skip-billing-personas/--exclude-flows requires --reason "<text>"');
   if (rest.some(arg => arg.startsWith('--') && !arg.startsWith('--mode=') &&
-      !arg.startsWith('--release-exception=') && !['--record-video', '--no-environment-retry', '--skip-billing-personas'].includes(arg)))
+      !arg.startsWith('--release-exception=') && !['--record-video', '--no-environment-retry'].includes(arg)))
     throw new Error('Unknown run option');
   const mode = evidenceMode(modes[0]?.slice('--mode='.length), recording.length === 1);
   return { udid, names: rest.filter(arg => !arg.startsWith('--')), mode,
     approvalId: exceptions[0]?.slice('--release-exception='.length), environmentRetryAllowed: !noRetry.length,
-    skipBillingPersonas: skipPersonas.length === 1, skipBillingReason, excludeFlows };
+    skipBillingPersonas, skipBillingReason, excludeFlows };
+}
+
+// #876: finish never had a CLI arg parser at all, unlike run/publish - this
+// is the minimal shape (optional positional report file, same trailing flags).
+export function finishSelection(args) {
+  const hasWalkthrough = args.length > 0 && !args[0].startsWith('--');
+  const walkthrough = hasWalkthrough ? args[0] : undefined;
+  const { rest, skipBillingPersonas, skipBillingReason, excludeFlows } = billingSkipSelection(hasWalkthrough ? args.slice(1) : args);
+  if (rest.length) throw new Error('Unknown finish option');
+  return { walkthrough, skipBillingPersonas, skipBillingReason, excludeFlows };
 }
 
 export function matchesFinalCandidate(report, { udid, appHash, configHash, backendDeployment, fixture, flows, recordVideo = false }) {

@@ -18,7 +18,7 @@ import { admitDisk, appendRecordedFlowFailure, applyCapturePolicy, archiveFailur
 import { classifySimulatorFailure, maestroFailure, withEnvironmentRetry } from './failure-policy.mjs';
 import { prepareActiveEntitlement, verifyInactiveEntitlement } from './active-entitlement.mjs';
 import { inspectScreenshot, inspectScreenshotDirectory, inspectWalkthrough, requireScreenRecognition } from './screen-guard.mjs';
-import { matchesFinalCandidate, readPreviousReportForReuse, runSelection } from './evidence-mode.mjs';
+import { matchesFinalCandidate, readPreviousReportForReuse, runSelection, finishSelection } from './evidence-mode.mjs';
 export { readPreviousReportForReuse } from './evidence-mode.mjs';
 import { closeoutXCTestAttachments, snapshotXCTestAttachments } from './xctest-attachments.mjs';
 const yaml = createRequire(import.meta.url)('js-yaml');
@@ -931,7 +931,7 @@ async function execute(udid, names, mode, { approvalId, environmentRetryAllowed 
     throw error;
   } finally { releaseDevice(); }
 }
-async function finish(walkthrough) {
+async function finish(walkthrough, { skipBillingPersonas = false, skipBillingReason, excludeFlows = [] } = {}) {
   const report = read(join(out, 'report.json'));
   const r = receipt(report.simulator);
   assert(report.result === 'awaiting-walkthrough', 'A completed deterministic run is required');
@@ -946,7 +946,14 @@ async function finish(walkthrough) {
     o.sha256 = digest(readFileSync(join(out, o.trace)));
   }
   report.result = 'pass'; report.finishedAt = new Date().toISOString();
-  const result = await validateAcceptance(report, candidatePlan(requiredPublicConfigKeys(report, r, environment())), inputHash(), out,
+  // #876: execute()/publishProductFlow() both narrow the plan through
+  // applyBillingPersonaSkip before validating; finish() must match, or a run
+  // that legitimately used --skip-billing-personas/--exclude-flows can never
+  // pass its own completeness check.
+  const { applyBillingPersonaSkip } = await import('./publish-product-flow.mjs');
+  const { plan } = applyBillingPersonaSkip(candidatePlan(requiredPublicConfigKeys(report, r, environment())),
+    { skipBillingPersonas, skipBillingReason, excludeFlows });
+  const result = await validateAcceptance(report, plan, inputHash(), out,
     Date.now(), root, r.nativeIdentity.hash, report.evidenceMode);
   if (report.evidenceMode === 'final-candidate')
     report.publicConfigAcceptance.verifiedConfigHash = report.configHash;
@@ -996,7 +1003,7 @@ try {
     assert(args.length === 1, 'finish-walkthrough requires one trace path relative to .evidence/product-flow');
     await finishWalkthrough(args[0]);
   }
-  else if (command === 'finish') await finish(args[0]);
+  else if (command === 'finish') { const selected = finishSelection(args); await finish(selected.walkthrough, selected); }
   else if (command === 'check') await check();
   else if (command === 'stop-metro') await stopMetro();
   else throw new Error('Usage: node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build UDID | run UDID [flow names] [--mode=development|final-candidate|requested-video] [--record-video] [--release-exception=6716597294] [--no-environment-retry] | prepare-walkthrough UDID category [executed-flow] | finish-walkthrough relative-trace | finish [walkthrough.json]');
