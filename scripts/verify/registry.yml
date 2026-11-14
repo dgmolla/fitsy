@@ -184,3 +184,16 @@ checks:
       The dev environment must track main's schema and keep seed data so E2E
       (L6, L7) runs against a known state. Added with the dev environment,
       2026-08-29 (autonomous-shipping rollout step 4b).
+
+  - name: config-drift
+    script: config-drift.sh
+    layer: 3
+    blocking: shadow
+    runs: [scheduled, local]
+    paths: ["scripts/verify/expected-external-config.json"]
+    why: >
+      Externally-configured settings (Supabase auth providers so far) drift
+      silently from what tests depend on (#866: anonymous sign-in flipped on
+      with no record, breaking onboarding flows). Read-only; never prints
+      secrets - Supabase's auth settings endpoint only needs the public
+      anon key.
