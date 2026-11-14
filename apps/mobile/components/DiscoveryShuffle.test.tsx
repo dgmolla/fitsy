@@ -84,22 +84,23 @@ it('replaces search cards through the same endpoint with one tiny button and no 
   const first = screen.getByTestId('discovery-hero').props.accessibilityLabel;
   const before = requests.filter(url => url.pathname === '/api/restaurants').length;
   rows = restaurants.map(row => ({ ...row, id: row.id + '-fresh', name: row.name + ' fresh' }));
-  await act(async () => fireEvent.press(screen.getByTestId('shuffle-button')));
+  await act(async () => fireEvent.press(screen.getByTestId('discovery-shuffle-button')));
   expect(requests.filter(url => url.pathname === '/api/restaurants')).toHaveLength(before + 1);
   expect(screen.getByTestId('discovery-hero').props.accessibilityLabel).not.toBe(first);
   expect(screen.getByTestId('discovery-search').props.value).toBe('meal');
-  expect(within(screen.getByTestId('discovery-search-bar')).getByTestId('shuffle-button')).toBeTruthy();
+  expect(within(screen.getByTestId('discovery-toolbar')).getByTestId('discovery-shuffle-button')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Shuffle results' })).toBeTruthy();
-  const button = screen.getByTestId('shuffle-button');
-  expect(StyleSheet.flatten(button.props.style)).toMatchObject({ width: 24, height: 24 });
+  const button = screen.getByTestId('discovery-shuffle-button');
+  // Matches the map's own Shuffle sizing now (#824) - the list no longer has its own smaller variant.
+  expect(StyleSheet.flatten(button.props.style)).toMatchObject({ width: 44, height: 44 });
   expect(button.props.hitSlop).toBe(10);
-  expect(screen.getAllByTestId('shuffle-button')).toHaveLength(1);
+  expect(screen.getAllByTestId('discovery-shuffle-button')).toHaveLength(1);
   for (const id of ['shuffle-section', 'shuffle-result', 'shuffle-again', 'shuffle-view-menu', 'shuffle-empty', 'shuffle-error', 'shuffle-loading', 'shuffle-edit-targets']) {
     expect(screen.queryByTestId(id)).toBeNull();
   }
-  await waitFor(() => expect(screen.getByTestId('discovery-macro-strip')).toBeTruthy());
+  await waitFor(() => expect(screen.getByTestId('discovery-goals')).toBeTruthy());
   // Replay the saved flow's post-tap assertions against the real search screen.
-  const firstTap = commands.findIndex(command => command.tapOn?.id === 'shuffle-button');
+  const firstTap = commands.findIndex(command => command.tapOn?.id === 'discovery-shuffle-button');
   const capture = commands.findIndex(command => command.takeScreenshot === 'shuffle-search');
   expect(firstTap).toBeGreaterThan(0);
   expect(capture).toBeGreaterThan(firstTap);
@@ -116,7 +117,7 @@ it('replaces search cards through the same endpoint with one tiny button and no 
   expect(shuffleParams.seed).toBeTruthy();
   const second = screen.getByTestId('discovery-hero').props.accessibilityLabel;
   rows = restaurants.map(row => ({ ...row, id: row.id + '-again', name: row.name + ' again' }));
-  await act(async () => fireEvent.press(screen.getByTestId('shuffle-button')));
+  await act(async () => fireEvent.press(screen.getByTestId('discovery-shuffle-button')));
   expect(screen.getByTestId('discovery-hero').props.accessibilityLabel).not.toBe(second);
   for (const row of rows) expect(screen.getByText(row.name)).toBeTruthy();
   expect(requests.filter(url => url.pathname === '/api/restaurants')).toHaveLength(before + 2);
@@ -126,7 +127,6 @@ it('replaces search cards through the same endpoint with one tiny button and no 
   expect(againParams.excludeRestaurantIds.split(',')).toEqual([
     ...restaurants.map(row => row.id), ...restaurants.map(row => row.id + '-fresh'),
   ]);
-  expect(screen.getByRole('button', { name: 'Location: DTLA' })).toBeTruthy();
   expect(requests.some(url => url.pathname.endsWith('/shuffle'))).toBe(false);
   expect(screen.getPathname()).toBe('/search');
   const selected = rows.find(row => screen.getByTestId('discovery-hero').props.accessibilityLabel.startsWith(row.name))!;
@@ -138,14 +138,14 @@ it('supports a query without macro targets and keeps search and clear usable', a
   await saveDiscoveryMacroTargets({ calories: '', protein: '', carbs: '', fat: '' }, 'search');
   const screen = renderJourney('/search?query=meal', { ...routes, '(tabs)/search': () => <Search /> });
   await screen.findByTestId('discovery-hero');
-  expect(screen.getByTestId('shuffle-button').props.accessibilityState.disabled).toBe(false);
+  expect(screen.getByTestId('discovery-shuffle-button').props.accessibilityState.disabled).toBe(false);
   const before = requests.length;
-  await act(async () => fireEvent.press(screen.getByTestId('shuffle-button')));
+  await act(async () => fireEvent.press(screen.getByTestId('discovery-shuffle-button')));
   expect(requests).toHaveLength(before + 1);
   expect(screen.getByTestId('discovery-search').props.value).toBe('meal');
   await act(async () => fireEvent.press(screen.getByTestId('discovery-clear-search')));
   expect(screen.getByTestId('discovery-search').props.value).toBe('');
-  expect(screen.getByTestId('shuffle-button').props.accessibilityState.disabled).toBe(true);
+  expect(screen.getByTestId('discovery-shuffle-button').props.accessibilityState.disabled).toBe(true);
 });
 
 it('disables the icon with no results and adds no Shuffle panel', async () => {
@@ -155,8 +155,8 @@ it('disables the icon with no results and adds no Shuffle panel', async () => {
   if (count) await screen.findByTestId('discovery-hero');
   else await screen.findByText('No matches for this search');
   const before = requests.length;
-  expect(screen.getByTestId('shuffle-button').props.accessibilityState.disabled).toBe(true);
-  await act(async () => fireEvent.press(screen.getByTestId('shuffle-button')));
+  expect(screen.getByTestId('discovery-shuffle-button').props.accessibilityState.disabled).toBe(true);
+  await act(async () => fireEvent.press(screen.getByTestId('discovery-shuffle-button')));
   expect(requests).toHaveLength(before);
   expect(screen.queryByTestId('shuffle-section')).toBeNull();
 });
@@ -165,17 +165,17 @@ it('disables the icon while the search transport is pending', async () => {
   const pending = deferred<Response>();
   searchResponse = () => pending.promise;
   const screen = renderJourney('/search?query=meal', { ...routes, '(tabs)/search': () => <Search /> });
-  await screen.findByTestId('shuffle-button');
-  expect(screen.getByTestId('shuffle-button').props.accessibilityState.disabled).toBe(true);
+  await screen.findByTestId('discovery-shuffle-button');
+  expect(screen.getByTestId('discovery-shuffle-button').props.accessibilityState.disabled).toBe(true);
   await act(async () => pending.resolve(response({ data: restaurants, meta: { locked: false, nextCursor: null } })));
-  await waitFor(() => expect(screen.getByTestId('shuffle-button').props.accessibilityState.disabled).toBe(false));
+  await waitFor(() => expect(screen.getByTestId('discovery-shuffle-button').props.accessibilityState.disabled).toBe(false));
 });
 
 it.each([undefined, false, 'control', 'true'])('keeps normal search usable with a disabled rollout flag (%s)', async value => {
   flag = value;
   const screen = renderJourney('/search?query=meal', { ...routes, '(tabs)/search': () => <Search /> });
   await screen.findByTestId('discovery-hero');
-  expect(screen.queryByTestId('shuffle-button')).toBeNull();
+  expect(screen.queryByTestId('discovery-shuffle-button')).toBeNull();
   await act(async () => fireEvent.changeText(screen.getByTestId('discovery-search'), 'juice'));
   expect(screen.getByTestId('discovery-search').props.value).toBe('juice');
 });
@@ -185,14 +185,14 @@ it('allows the explicit Debug override without a remote opt-in', async () => {
   flag = false;
   const screen = renderJourney('/search?query=meal&shuffleDebug=1', { ...routes, '(tabs)/search': () => <Search /> });
   await screen.findByTestId('discovery-hero');
-  expect(screen.getByTestId('shuffle-button')).toBeTruthy();
+  expect(screen.getByTestId('discovery-shuffle-button')).toBeTruthy();
 });
 
 it.each(['0', 'true', '', '1&shuffleDebug=1'])('rejects a Debug override other than a single 1 (%s)', async value => {
   flag = false;
   const screen = renderJourney(`/search?query=meal&shuffleDebug=${value}`, { ...routes, '(tabs)/search': () => <Search /> });
   await screen.findByTestId('discovery-hero');
-  expect(screen.queryByTestId('shuffle-button')).toBeNull();
+  expect(screen.queryByTestId('discovery-shuffle-button')).toBeNull();
 });
 
 it('removes the icon on live flag updates without changing the displayed results', async () => {
@@ -200,7 +200,7 @@ it('removes the icon on live flag updates without changing the displayed results
   await screen.findByTestId('discovery-hero');
   const first = screen.getByTestId('discovery-hero').props.accessibilityLabel;
   act(() => { flag = false; listeners.forEach(listener => listener()); });
-  expect(screen.queryByTestId('shuffle-button')).toBeNull();
+  expect(screen.queryByTestId('discovery-shuffle-button')).toBeNull();
   expect(screen.getByTestId('discovery-hero').props.accessibilityLabel).toBe(first);
   screen.unmount();
   expect(listeners.size).toBe(0);
@@ -217,7 +217,7 @@ it('keeps locked results locked and uses the existing subscription entry after f
   await screen.findByTestId('search-value-cta');
   const first = screen.getByTestId('discovery-hero').props.accessibilityLabel;
   rows = rows.map(row => ({ ...row, id: row.id + '-locked', name: row.name + ' locked' }));
-  await act(async () => fireEvent.press(screen.getByTestId('shuffle-button')));
+  await act(async () => fireEvent.press(screen.getByTestId('discovery-shuffle-button')));
   expect(screen.getByTestId('discovery-hero').props.accessibilityLabel).not.toBe(first);
   for (const row of restaurants) expect(screen.queryByText(row.bestMatch!.name)).toBeNull();
   await act(async () => fireEvent.press(screen.getByTestId('search-value-cta')));
@@ -232,8 +232,8 @@ it('keeps Shuffle out of onboarding preview', async () => {
   await saveOnboardingField('area', { lat: 34.04, lng: -118.24, name: 'DTLA', source: 'manual' });
   const screen = renderJourney('/welcome/preview', { ...routes, 'welcome/preview': () => <DiscoveryScreen onboardingPreview /> });
   await screen.findByTestId('discovery-map');
-  expect(screen.queryByTestId('shuffle-button')).toBeNull();
+  expect(screen.queryByTestId('discovery-shuffle-button')).toBeNull();
   await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
   await screen.findByTestId('discovery-search');
-  expect(screen.queryByTestId('shuffle-button')).toBeNull();
+  expect(screen.queryByTestId('discovery-shuffle-button')).toBeNull();
 });

@@ -25,10 +25,12 @@ const RestaurantMarker = React.memo(function RestaurantMarker({ result, position
 }) {
   const [tracking, setTracking] = useState(true);
   useEffect(() => {
+    // A deselected pin needs no re-snapshot; it reverts to an already-correct look.
+    if (!selected) { setTracking(false); return; }
     setTracking(true);
     const timer = setTimeout(() => setTracking(false), 250);
     return () => clearTimeout(timer);
-  }, [selected, result.name]);
+  }, [selected]);
   return <Marker identifier={result.id} coordinate={{ latitude: result.lat, longitude: result.lng }}
     anchor={{ x: 0.5, y: 0.5 }} stopPropagation tracksViewChanges={tracking}
     zIndex={selected ? 1000 : 100 - position} testID={`map-pin-${position}`}
@@ -41,8 +43,8 @@ const RestaurantMarker = React.memo(function RestaurantMarker({ result, position
 });
 
 // Loaded only when the iOS Discovery map is selected.
-export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, onTourLayoutChange }: {
-  discovery: Discovery; onShowList: () => void; previewHeader?: React.ReactNode; onTourLayoutChange?: () => void;
+export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, onTourLayoutChange, active = true }: {
+  discovery: Discovery; onShowList: () => void; previewHeader?: React.ReactNode; onTourLayoutChange?: () => void; active?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const tabBarClearance = useFloatingNavClearance();
@@ -129,7 +131,12 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
     <Text style={s.link}>{d.loadingMore ? 'Loading more…' : 'More spots'}</Text>
   </Pressable>;
   return <View style={s.root} testID="discovery-map" onLayout={event => setLayoutHeight(event.nativeEvent.layout.height)}>
-    {!d.location.loading && <MapView ref={map} style={s.map} testID="discovery-map-surface"
+    {/* Always mounted, even while location is loading (it has a fallback
+        coordinate from first render) - tearing the native MapView down and
+        rebuilding it is what let a stale Fabric legacy-interop mounting
+        transaction apply a marker-insert batch sized for the old instance
+        against the fresh one's near-empty child array (crash #832). */}
+    <MapView ref={map} style={s.map} testID="discovery-map-surface"
       initialRegion={{ latitude: lat, longitude: lng, ...DELTA }} onMapReady={() => setMapRevision(value => value + 1)}
       onLayout={() => setMapRevision(value => value + 1)}
       onTouchStart={event => { panning.current = false; touchStart.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY }; }}
@@ -157,7 +164,7 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
       showsCompass={false} showsPointsOfInterest={false} scrollEnabled rotateEnabled={false}>
       {pins.map(result => <RestaurantMarker key={result.id} result={result} position={cards.indexOf(result)}
         selected={result.id === selectedId} onSelect={select} />)}
-    </MapView>}
+    </MapView>
     {pendingArea && <View pointerEvents="none" style={s.areaCenter} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       <Ionicons name="add" size={28} color={EDITORIAL.green} />
     </View>}
@@ -227,7 +234,7 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
             const result = cards[Math.min(cards.length - 1, Math.max(0, Math.round(event.nativeEvent.contentOffset.x / stride)))];
             if (result) select(result, false);
           }}>
-          {cards.map((result, position) => <View key={result.id} ref={position === 0 ? d.tourHeroRef : undefined} collapsable={false} testID={result.id === selectedId ? 'map-preview' : undefined}>
+          {cards.map((result, position) => <View key={result.id} ref={position === 0 && active ? d.tourHeroRef : undefined} collapsable={false} testID={result.id === selectedId ? 'map-preview' : undefined}>
             <DiscoveryMapCard result={result} locked={(d.locked === true && !d.isOnboardingPreview) || result.id === d.lockedTeaser?.id}
               onboardingPreview={d.isOnboardingPreview} hideDishName={d.isOnboardingPreview && position > 0}
               style={{ width: cardWidth, height: compact ? 174 : 210 }}

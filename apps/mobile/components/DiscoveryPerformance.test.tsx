@@ -43,7 +43,7 @@ it('does no additional card work when opening and closing the meal editor', asyn
   await screen.findByTestId('discovery-dish-perf-2');
   await act(async () => {});
   mockCardRenders.mockClear();
-  await act(async () => fireEvent.press(screen.getByTestId('preview-edit-targets')));
+  await act(async () => fireEvent.press(screen.getByTestId('discovery-goals')));
   for (const command of dismissCommands) {
     if (command.assertVisible) expect(screen.getByTestId(command.assertVisible.id)).toBeTruthy();
     if (command.tapOn) {

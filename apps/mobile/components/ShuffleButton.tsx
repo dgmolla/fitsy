@@ -5,14 +5,14 @@ import { useLocalSearchParams } from 'expo-router';
 import { EDITORIAL } from '@/lib/brand';
 import { useShuffleFlag } from '@/lib/useShuffleFlag';
 
-export function ShuffleButton({ disabled, onPress, style }: { disabled: boolean; onPress: () => void; style?: StyleProp<ViewStyle> }) {
+export function ShuffleButton({ disabled, onPress, style, testID = 'shuffle-button' }: { disabled: boolean; onPress: () => void; style?: StyleProp<ViewStyle>; testID?: string }) {
   const { shuffleDebug, mapDebug } = useLocalSearchParams<{ shuffleDebug?: string; mapDebug?: string }>();
   const enabled = useShuffleFlag(shuffleDebug === '1' || mapDebug === '1');
   if (!enabled) return null;
   return <Pressable onPress={onPress} disabled={disabled} hitSlop={10}
     accessibilityRole="button" accessibilityLabel="Shuffle results"
     accessibilityHint="Find a fresh set of restaurants for this search"
-    accessibilityState={{ disabled }} testID="shuffle-button"
+    accessibilityState={{ disabled }} testID={testID}
     style={({ pressed }) => [s.button, style, (disabled || pressed) && s.dimmed]}>
     <Ionicons name="shuffle" size={16} color={EDITORIAL.greenAccent} />
   </Pressable>;

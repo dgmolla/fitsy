@@ -145,23 +145,26 @@ it.each(['map', 'list'])('mapDebug keeps visible Shuffle in the %s controls with
   const screen = open('/search?mapDebug=1&query=meal');
   await screen.findByTestId('map-pin-0');
   if (view === 'list') await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
+  // The map and list each keep their own ShuffleButton instance now that both
+  // stay mounted for the swipe sheet (#829) - distinct testIDs disambiguate.
+  const shuffleTestId = view === 'map' ? 'shuffle-button' : 'discovery-shuffle-button';
   const shuffle = screen.getByRole('button', { name: 'Shuffle results' });
-  const controls = screen.getByTestId(view === 'map' ? 'map-toolbar' : 'discovery-search-bar');
-  expect(within(controls).getByTestId('shuffle-button')).toBe(shuffle);
+  const controls = screen.getByTestId(view === 'map' ? 'map-toolbar' : 'discovery-toolbar');
+  expect(within(controls).getByTestId(shuffleTestId)).toBe(shuffle);
   expect(StyleSheet.flatten(shuffle.props.style)).toMatchObject({ width: 44, height: 44 });
-  expect(screen.getAllByTestId('shuffle-button')).toHaveLength(1);
-  if (view === 'map') expect(within(controls).getByRole('button', { name: 'Edit macros' })).toBeTruthy();
+  expect(screen.getAllByRole('button', { name: 'Shuffle results' })).toHaveLength(1);
+  expect(within(controls).getByRole('button', { name: 'Edit macros' })).toBeTruthy();
 
   const pending = deferred<Response>();
   searchResponse = () => pending.promise;
   await act(async () => fireEvent.press(shuffle));
-  expect(screen.getByTestId('shuffle-button').props.accessibilityState.disabled).toBe(true);
+  expect(screen.getByTestId(shuffleTestId).props.accessibilityState.disabled).toBe(true);
   expect(searchParams()).toMatchObject({ q: 'meal', shuffle: '1', ...values });
   await act(async () => pending.resolve({ ok: false, status: 503, json: async () => ({ error: 'offline' }) } as Response));
-  expect(screen.getByTestId('shuffle-button')).toBeTruthy();
+  expect(screen.getByTestId(shuffleTestId)).toBeTruthy();
   searchResponse = async () => response({ data: rows, meta: { locked: false } });
   await act(async () => fireEvent.press(screen.getByTestId('preview-retry')));
-  expect(screen.getByTestId('shuffle-button').props.accessibilityState.disabled).toBe(false);
+  expect(screen.getByTestId(shuffleTestId).props.accessibilityState.disabled).toBe(false);
   expect(searchParams().q).toBe('meal');
   expect(screen.getByTestId(view === 'map' ? 'map-pin-0' : 'discovery-hero')).toBeTruthy();
 });
@@ -194,7 +197,12 @@ it.each(['flows/floating-nav', 'helpers/map-search-setup'].flatMap(caller =>
         }
       }
       await screen.findByTestId('discovery-list');
-      expect(screen.queryByTestId('discovery-map')).toBeNull();
+      // The map stays mounted under the list sheet (#829) so the swipe back
+      // never flickers or reloads it - it's merely off-screen, not unmounted.
+      // (No sheet at all when the map flag is off - list is the only screen.)
+      if (screen.queryByTestId('discovery-sheet')) {
+        expect(screen.getByTestId('discovery-sheet').props.pointerEvents).toBe('auto');
+      }
     }
   },
 );
@@ -245,9 +253,12 @@ it('opens the chosen full-photo card, then returns using the saved iOS flow cont
   expect(screen.getPathname()).toBe('/search');
   expect(screen.getByLabelText('Search: meal')).toBeTruthy();
   await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
-  expect(screen.getByText('40g')).toBeTruthy();
-  expect(screen.getByText('YOUR PICKS NEAR DTLA')).toBeTruthy();
-  expect(screen.queryByTestId('discovery-location')).toBeNull();
+  // The list matches the map's own chrome now (#824): no macro values or
+  // "picks near" heading, the same Macros button. Location lives on the map
+  // only now (#829) - the map stays mounted under this sheet.
+  expect(screen.getByTestId('discovery-goals')).toBeTruthy();
+  expect(screen.queryByText(/YOUR PICKS NEAR/)).toBeNull();
+  expect(screen.queryByLabelText('Location: DTLA')).toBeNull();
 });
 
 it.each(['LOW', 'MEDIUM'] as const)('keeps actual meal content and %s confidence through the single Map control', async confidence => {
@@ -268,6 +279,7 @@ it.each(['LOW', 'MEDIUM'] as const)('keeps actual meal content and %s confidence
   await screen.findByTestId('discovery-list');
   for (const text of meal) expect(within(screen.getByTestId('discovery-hero')).getByText(text)).toBeTruthy();
   expect(screen.getByTestId('discovery-hero').props.accessibilityLabel).toContain(qualified);
+  // Location lives on the map only now (#829) - it's not reachable from the list.
   expect(screen.queryByTestId('discovery-location')).toBeNull();
   const mapControl = commands[start + 1].tapOn;
   if (typeof mapControl !== 'object') throw new Error('The native list journey must use its rendered Map control');
@@ -344,7 +356,8 @@ it('searches a settled dragged area only after confirmation and ignores stale ar
   await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
   expect(screen.getByTestId('discovery-search').props.value).toBe('salmon');
   expect(within(screen.getByTestId('discovery-hero')).getByText('Pizza House')).toBeTruthy();
-  expect(screen.getByText('40g')).toBeTruthy();
+  expect(screen.getByTestId('discovery-goals')).toBeTruthy();
+  // Location lives on the map only now (#829) - not reachable from the list.
   expect(screen.queryByTestId('discovery-location')).toBeNull();
 });
 
@@ -379,7 +392,7 @@ it('opens the real search list and Macros editor while preserving bounded result
   await screen.findByTestId('map-pin-0');
   await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
   expect(screen.queryByTestId('discovery-map')).toBeNull();
-  expect(screen.getByTestId('discovery-macro-strip')).toBeTruthy();
+  expect(screen.getByTestId('discovery-goals')).toBeTruthy();
   await act(async () => fireEvent.changeText(screen.getByTestId('discovery-search'), 'pizza'));
   await waitFor(() => expect(searchParams().q).toBe('pizza'));
   await act(async () => fireEvent.press(screen.getByTestId('discovery-view-toggle')));
@@ -435,7 +448,7 @@ it('opens the real search list and Macros editor while preserving bounded result
   expect(searchParams().seed).toBeTruthy();
   await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
   expect(screen.getByLabelText('Search restaurants or dishes')).toBeTruthy();
-  expect(screen.getByText('40g')).toBeTruthy();
+  expect(screen.getByTestId('discovery-goals')).toBeTruthy();
   expect(screen.getByTestId('discovery-hero').props.accessibilityLabel).toBe('Flor do Ave new');
 });
 
@@ -505,6 +518,25 @@ it('opens around the actual GPS fix when permission is granted', async () => {
   await waitFor(() => expect(mockFit).toHaveBeenCalled());
   expect(mockAnimate).not.toHaveBeenCalled();
   expect(Object.fromEntries(searchRequests().at(-1)!.searchParams)).toMatchObject({ lat: '34.08', lng: '-118.27' });
+});
+
+it('keeps the native map mounted while location is still resolving, instead of tearing it down and rebuilding it (#832)', async () => {
+  await SecureStore.deleteItemAsync(MANUAL_LOCATION_KEY);
+  let resolvePermission: (value: { status: string }) => void;
+  // Defer the permission check itself (not GPS) so this does not depend on
+  // locationCache's warm module-level cache from an earlier test in this file.
+  jest.mocked(ExpoLocation.requestForegroundPermissionsAsync).mockImplementation(
+    () => new Promise(resolve => { resolvePermission = resolve; }) as never);
+  const screen = open();
+  // Location is deliberately still pending here - a prior version of this
+  // component unmounted MapView entirely while location.loading was true,
+  // which (combined with a stale Fabric mounting transaction) crashed with an
+  // out-of-bounds native array insert once the map remounted afterward.
+  await screen.findByTestId('discovery-map-surface');
+  await waitFor(() => expect(resolvePermission).toBeDefined());
+  act(() => resolvePermission({ status: 'denied' }));
+  await screen.findByTestId('map-location-fallback');
+  expect(screen.getByTestId('discovery-map-surface')).toBeTruthy();
 });
 
 it('keeps C status actions content-sized and recovers through retry, targets and Clear search', async () => {
@@ -595,7 +627,7 @@ it('recovers the production map preview, preserves sample disclosure, and carrie
   expect(screen.getByTestId('map-card-1').props.accessibilityLabel).toContain('approximately 531 kcal');
   expect(screen.getByTestId('map-card-2').props.accessibilityLabel).toContain('Published nutrition, high confidence');
   expect(screen.getByTestId('map-card-2').props.accessibilityLabel).not.toContain('approximately');
-  expect(screen.getByTestId('preview-hidden-dish-spot-1', { includeHiddenElements: true })).toBeTruthy();
+  expect(within(screen.getByTestId('map-card-1')).getByTestId('preview-hidden-dish-spot-1', { includeHiddenElements: true })).toBeTruthy();
   expect(screen.getByTestId('locked-value-cta')).toBeTruthy();
   await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
   await screen.findByTestId('discovery-list');
@@ -688,7 +720,7 @@ it.each(['', '&mapDebug=1&shuffleDebug=1'])('opens production iOS on the map wit
   await screen.findByTestId('map-pin-0');
   await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
   expect(screen.getByTestId('discovery-search').props.value).toBe('meal');
-  expect(screen.getByTestId('shuffle-button')).toBeTruthy();
+  expect(screen.getByTestId('discovery-shuffle-button')).toBeTruthy();
   await act(async () => fireEvent.press(screen.getByTestId('discovery-view-toggle')));
   await screen.findByTestId('map-pin-0');
 });
@@ -700,7 +732,12 @@ it.each([false, true])('keeps Android on the list, including debug links (dev=%s
   const screen = open('/search?query=meal&mapDebug=1');
   await screen.findByTestId('discovery-hero');
   expect(screen.queryByTestId('discovery-map')).toBeNull();
-  expect(Boolean(screen.queryByTestId('shuffle-button'))).toBe(dev);
+  expect(Boolean(screen.queryByTestId('discovery-shuffle-button'))).toBe(dev);
+  // With no map, the list toolbar is the only way to change or clear the
+  // search area - losing this control here was a real regression #829
+  // introduced when it moved the location picker onto the map only.
+  await act(async () => fireEvent.press(screen.getByTestId('discovery-location')));
+  await screen.findByText('Choose a neighborhood');
 });
 
 it('allows explicit local opt-in and removes the map on a remote flag update without losing search', async () => {
@@ -848,4 +885,22 @@ it('selects a pin without changing results and stops marker tracking after paint
   expect(screen.getByTestId('map-pin-1').props.accessibilityState.selected).toBe(true);
   await waitFor(() => expect(screen.getByTestId('map-pin-1').props.tracksViewChanges).toBe(false));
   expect(searchRequests()).toHaveLength(before);
+});
+
+it('does not re-arm a deselected pin\'s native tracking, bounding concurrent snapshots under rapid taps', async () => {
+  // A deselected pin reverts to its already-rendered unselected look - no
+  // re-render to capture, so it must drop tracking immediately rather than
+  // riding out another 250ms window. Letting every pin a rapid tap-storm
+  // touches keep tracking live for its own window left an unbounded,
+  // growing set of markers mid-snapshot at once - a real react-native-maps
+  // stability hazard this guards against.
+  const screen = open('/search?query=meal');
+  await screen.findByTestId('map-pin-0');
+  await act(async () => fireEvent.press(screen.getByTestId('map-pin-1')));
+  await waitFor(() => expect(screen.getByTestId('map-pin-1').props.tracksViewChanges).toBe(false));
+  await act(async () => fireEvent.press(screen.getByTestId('map-pin-2')));
+  expect(screen.getByTestId('map-pin-1').props.accessibilityState.selected).toBe(false);
+  expect(screen.getByTestId('map-pin-1').props.tracksViewChanges).toBe(false);
+  expect(screen.getByTestId('map-pin-2').props.tracksViewChanges).toBe(true);
+  await waitFor(() => expect(screen.getByTestId('map-pin-2').props.tracksViewChanges).toBe(false));
 });
