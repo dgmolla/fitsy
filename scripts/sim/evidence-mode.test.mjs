@@ -192,6 +192,22 @@ test('the final-candidate CLI admits only the scoped release option and preserve
   assert.throws(() => runSelection(['owned-device', '--no-environment-retry', '--no-environment-retry']), /at most once/);
 });
 
+test('#860: --skip-billing-personas parses alongside --reason, never alone, and never swallows the reason value as a flow name', () => {
+  const selection = runSelection(['device', 'cold-start-welcome', '--mode=final-candidate',
+    '--skip-billing-personas', '--reason', 'Dawit 5:07 PM PT Nov 13, #853']);
+  assert.equal(selection.skipBillingPersonas, true);
+  assert.equal(selection.skipBillingReason, 'Dawit 5:07 PM PT Nov 13, #853');
+  assert.deepEqual(selection.names, ['cold-start-welcome']);
+  assert.equal(selection.mode.publishable, true);
+  const unset = runSelection(['device', 'cold-start-welcome']);
+  assert.equal(unset.skipBillingPersonas, false);
+  assert.equal(unset.skipBillingReason, undefined);
+  assert.throws(() => runSelection(['device', '--skip-billing-personas']), /requires --reason/);
+  assert.throws(() => runSelection(['device', '--reason', 'no flag']), /requires --reason/);
+  assert.throws(() => runSelection(['device', '--skip-billing-personas', '--reason', 'x', '--skip-billing-personas', '--reason', 'y']),
+    /at most once/);
+});
+
 test('a final candidate reuses complete supersets only with the same passing source-bound inputs', () => {
   const selected = { udid: 'device', appHash: 'app', configHash: 'config', backendDeployment: 'backend', fixture: 'fixture',
     flows: [{ name: 'welcome', sourceHash: 'source' }] };
