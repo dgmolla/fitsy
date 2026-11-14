@@ -153,6 +153,7 @@ export interface ScoredRow {
   dietaryOptions: string[];
   menuItemId: string;
   itemName: string;
+  price: number | null;
   calories: number;
   proteinG: number;
   carbsG: number;
@@ -279,6 +280,7 @@ export async function findNearbyRestaurants(
       r."dietaryOptions" AS "dietaryOptions",
       best."menuItemId",
       best."itemName",
+      best.price,
       best.calories,
       best."proteinG",
       best."carbsG",
@@ -291,6 +293,7 @@ export async function findNearbyRestaurants(
       SELECT
         m.id            AS "menuItemId",
         m.name          AS "itemName",
+        m.price         AS price,
         m.calories      AS calories,
         m."proteinG"    AS "proteinG",
         m."carbsG"      AS "carbsG",
@@ -374,6 +377,7 @@ export function restaurantResultFromRow(r: ScoredRow, targetsActive: boolean, in
     bestMatch: {
       menuItemId: r.menuItemId,
       name: r.itemName,
+      ...(r.price !== null ? { price: r.price } : {}),
       calories: r.calories,
       proteinG: r.proteinG,
       carbsG: r.carbsG,
