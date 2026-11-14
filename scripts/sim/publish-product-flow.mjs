@@ -87,6 +87,21 @@ export function requiredBillingFixtures(plan) {
   }
   return [...fixtures.entries()].map(([name, env]) => ({ name, env })).sort((a, b) => a.name.localeCompare(b.name));
 }
+// #873: surface which flows ran and why in the product-flow/local status,
+// not just a generic "verified" message - GitHub's status description has a
+// hard 140-character limit, so fall back progressively rather than guessing
+// one fixed truncation point that might not fit every plan.
+export function requiredStatusDescription(plan, suffix = '') {
+  const flows = plan.flows || [], reason = plan.simulator?.reason || '';
+  const withFlows = flows.length > 0, withReason = Boolean(reason);
+  const candidates = [
+    withFlows && withReason && `${flows.length} flow(s): ${flows.join(',')} - ${reason}`,
+    withFlows && `${flows.length} flow(s): ${flows.join(',')}`,
+    withReason && `${flows.length} flow(s) required - ${reason}`,
+    `${flows.length} flow(s) required`,
+  ].filter(Boolean).map(text => text + suffix);
+  return candidates.find(text => text.length <= 140) || candidates.at(-1).slice(0, 140);
+}
 export function publicationPlan(evidenceDirectory, buildReceiptFile, paths = changedPaths('origin/main'), current = publicConfigIdentity(), options = {}) {
   const { recoverHistoricalReport = false, ...impactOptions } = options;
   const readReceipt = file => existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
@@ -270,8 +285,8 @@ console.log(JSON.stringify(out));`],
   const latest = JSON.parse(gh(['pr', 'view', prNumber, '--repo', repo, '--json', 'headRefOid']));
   assert(latest.headRefOid === head, 'PR head changed during publication');
   const skipNote = skippedFlows.length ? ` (skipped ${skippedFlows.join(', ')}: ${skipBillingReason})` : '';
-  status('success', (evidenceRequired ? 'Local Maestro and required product evidence verified' :
-    media?.required ? 'Local media integration verified; product flow not applicable' :
+  status('success', evidenceRequired ? requiredStatusDescription(plan, skipNote) :
+    (media?.required ? 'Local media integration verified; product flow not applicable' :
       'Not applicable: no mobile-facing product changes') + skipNote, target);
   return { status: 'pass', context, head, applicability: evidenceRequired ? 'required' : 'not_applicable',
     mediaIntegration: media?.required ? 'required' : 'not_applicable', url: target };
