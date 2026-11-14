@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import yaml from 'js-yaml';
-import { evidenceStore, prepareActiveEntitlement, sandboxState, verifyInactiveEntitlement, verifyRemainingLifetime } from './active-entitlement.mjs';
+import { evidenceStore, prepareActiveEntitlement, provisionEntitlement, sandboxState, verifyInactiveEntitlement, verifyRemainingLifetime } from './active-entitlement.mjs';
 import { prepareEntitledEvidence, prepareBillingEvidence } from './product-flow.mjs';
 import { classifySimulatorFailure, withEnvironmentRetry } from './failure-policy.mjs';
 
@@ -191,6 +191,44 @@ test('remaining-lifetime preflight accepts ample time, and rejects expired or ne
   }
 });
 
+test('provisionEntitlement grants entitled-dev a 6h window after a best-effort revoke', async () => {
+  const b = boundary([login, {}, {}]);
+  const fixtureEnv = { ...env, REVENUECAT_SECRET_KEY: 'sk_fixture' };
+  const receipt = await provisionEntitlement({ fixture: 'entitled-dev', built, env: fixtureEnv, now, fetchImpl: b.fetchImpl });
+  assert.equal(receipt.fixture, 'entitled-dev');
+  assert.equal(b.calls.length, 3);
+  assert.ok(b.calls[1].url.endsWith('/entitlements/pro/revoke_promotionals'));
+  assert.equal(b.calls[1].options.headers.authorization, 'Bearer sk_fixture');
+  assert.ok(b.calls[2].url.endsWith('/entitlements/pro/promotional'));
+  assert.deepEqual(JSON.parse(b.calls[2].options.body), { end_time_ms: now() + 6 * 3600_000 });
+  assert.doesNotMatch(JSON.stringify(receipt), /fixture-token|test-password|sk_fixture/);
+});
+
+test('provisionEntitlement grants expired-subscription a short window and waits past it before returning', async () => {
+  const b = boundary([login, {}, {}]);
+  const fixtureEnv = { ...env, REVENUECAT_SECRET_KEY: 'sk_fixture' };
+  const started = Date.now();
+  const receipt = await provisionEntitlement({ fixture: 'expired-subscription', built, env: fixtureEnv, now, fetchImpl: b.fetchImpl, expiredDelayMs: 10 });
+  assert.ok(Date.now() - started >= 10);
+  assert.equal(receipt.fixture, 'expired-subscription');
+  assert.deepEqual(JSON.parse(b.calls[2].options.body), { end_time_ms: now() + 10 });
+});
+
+test('provisionEntitlement tolerates an account with nothing to revoke', async () => {
+  const b = boundary([login, new Error('nothing to revoke'), {}]);
+  const fixtureEnv = { ...env, REVENUECAT_SECRET_KEY: 'sk_fixture' };
+  const receipt = await provisionEntitlement({ fixture: 'entitled-dev', built, env: fixtureEnv, now, fetchImpl: b.fetchImpl });
+  assert.equal(receipt.fixture, 'entitled-dev');
+  assert.equal(b.calls.length, 3);
+});
+
+test('provisionEntitlement requires the secret key and a known fixture name, and never calls out without them', async () => {
+  const unreachable = async () => { assert.fail('must not call RevenueCat'); };
+  await assert.rejects(provisionEntitlement({ fixture: 'entitled-dev', built, env, fetchImpl: unreachable }), /REVENUECAT_SECRET_KEY/);
+  await assert.rejects(provisionEntitlement({ fixture: 'empty-store', built, env: { ...env, REVENUECAT_SECRET_KEY: 'sk_fixture' }, fetchImpl: unreachable }),
+    /Unknown provisioned/);
+});
+
 test('real Test Store history plus a fresh successful server sync establishes active evidence', async () => {
   const b = boundary([login, subscriber(), { synced: true }, status]);
   const receipt = await prepareActiveEntitlement({ built, env, now, fetchImpl: b.fetchImpl });
@@ -276,11 +314,20 @@ test('expired Apple sandbox cannot invoke the Test Store renewal callback', asyn
     renew: async () => assert.fail('must not purchase') }), /inactive/);
 });
 
-test('production, promotional, malformed and unknown RevenueCat state cannot establish evidence', () => {
+test('production, malformed and unknown RevenueCat state cannot establish evidence', () => {
   for (const body of [{}, { subscriber: {} }, { subscriber: { entitlements: [], subscriptions: {} } },
-    subscriber(expiresAt, 'app_store', false), subscriber(expiresAt, 'promotional'),
+    subscriber(expiresAt, 'app_store', false),
     subscriber('invalid'), subscriber(null), subscriber(expiresAt, 'unknown_store')])
     assert.throws(() => sandboxState(body, true, now()));
+});
+
+// #853: provisionEntitlement grants these directly; sandboxState must accept
+// the resulting promotional store regardless of is_sandbox (not a store
+// concept that applies to a RevenueCat-internal grant).
+test('a promotional entitlement is accepted regardless of is_sandbox, and still honors its own expiry', () => {
+  assert.deepEqual(sandboxState(subscriber(expiresAt, 'promotional', false), true, now()), { active: true, expiresAt });
+  assert.deepEqual(sandboxState(subscriber('2020-01-01T00:00:00Z', 'promotional'), true, now()),
+    { active: false, expiresAt: '2020-01-01T00:00:00.000Z' });
 });
 
 for (const changed of [{ synced: false }, { stale: true }, { active: false }, { status: null },

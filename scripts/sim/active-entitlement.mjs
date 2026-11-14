@@ -1,5 +1,9 @@
 // Local evidence setup uses genuine store state and the ordinary server sync.
-// No grants, subscription-row writes, registration or release-build bypasses.
+// No subscription-row writes, registration or release-build bypasses. The
+// one deliberate exception (#853, Dawit-authorized): provisionEntitlement
+// grants/revokes a RevenueCat promotional entitlement directly on the known
+// synthetic entitled-dev/expired-subscription fixture accounts, so billing
+// personas don't depend on a real Test Store purchase ever registering.
 import { backendOrigin } from './backend-identity.mjs';
 import { createHash } from 'node:crypto';
 
@@ -39,10 +43,15 @@ export function sandboxState(body, testStore, now = Date.now()) {
   const pro = subscriber.entitlements?.pro;
   if (!pro) return { active: false, expiresAt: null };
   const subscription = subscriber.subscriptions?.[pro.product_identifier];
-  // Even a real platform key must prove sandbox origin before evidence setup
-  // can use the account. Never renew an Apple purchase automatically.
-  if (subscription?.is_sandbox !== true || (testStore ? subscription.store !== 'test_store' : subscription.store !== 'app_store'))
-    throw new Error('Evidence refuses a production, promotional or unknown-store entitlement');
+  // #853: a promotional entitlement (provisionEntitlement) isn't tied to any
+  // store's sandbox/production distinction, so is_sandbox/store don't apply
+  // the same way - accepted here because this function only ever runs
+  // against a known synthetic fixture account for one named billing persona.
+  // A real platform key must still prove genuine sandbox origin for any
+  // other entitlement; never renew an Apple purchase automatically.
+  if (subscription?.store !== 'promotional' &&
+      (subscription?.is_sandbox !== true || (testStore ? subscription.store !== 'test_store' : subscription.store !== 'app_store')))
+    throw new Error('Evidence refuses a production or unknown-store entitlement');
   const expiresAt = Date.parse(pro.expires_date);
   if (!Number.isFinite(expiresAt)) throw new Error('Evidence requires a dated sandbox subscription');
   return { active: expiresAt > now, expiresAt: new Date(expiresAt).toISOString() };
@@ -98,6 +107,41 @@ export async function verifyRemainingLifetime({ built, env = process.env, fetchI
       : 'Entitled-dev fixture has no active paid lifetime; renew the Test Store purchase before this run');
   return { version: 1, fixture: 'entitled-dev', active: true, expiresAt: state.expiresAt, remainingMs,
     accountHash: createHash('sha256').update(login.user.id).digest('hex'), verifiedAt: new Date(now()).toISOString() };
+}
+
+// #853: entitled-dev/expired-subscription are synthetic, known-ahead-of-time
+// fixture accounts (never real customers), so a RevenueCat promotional grant
+// is a legitimate way to establish their state directly - no real Test
+// Store purchase has reliably registered for these accounts (traced and
+// confirmed on #853: no identity-sync bug found, RevenueCat's own subscriber
+// record never saw either of two independent genuine purchase attempts).
+// REVENUECAT_SECRET_KEY is server-only and must never be EXPO_PUBLIC_*.
+export async function provisionEntitlement({ fixture, built, env = process.env, fetchImpl = fetch, now = Date.now, expiredDelayMs = 2000 }) {
+  if (!['entitled-dev', 'expired-subscription'].includes(fixture)) throw new Error('Unknown provisioned billing fixture');
+  const secret = env.REVENUECAT_SECRET_KEY;
+  if (!secret) throw new Error('Provisioning requires REVENUECAT_SECRET_KEY (server-only; never ships client-side)');
+  evidenceStore(built, env);
+  const origin = backendOrigin(env.EXPO_PUBLIC_API_URL);
+  const login = await jsonRequest(fetchImpl, `${origin}/api/auth/login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: env.EXPO_PUBLIC_DEV_LOGIN_EMAIL, password: env.EXPO_PUBLIC_DEV_LOGIN_PASSWORD }),
+  });
+  if (!uuid.test(login.user?.id || '')) throw new Error('Evidence login returned no account identity');
+  const entitlementPath = `${rcOrigin}/subscribers/${encodeURIComponent(login.user.id)}/entitlements/pro`;
+  const admin = (path, body) => jsonRequest(fetchImpl, `${entitlementPath}${path}`, {
+    method: 'POST', headers: { authorization: `Bearer ${secret}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  });
+  // Best-effort cleanup: nothing to revoke is not a failure.
+  try { await admin('/revoke_promotionals', {}); } catch { /* no existing grant */ }
+  if (fixture === 'entitled-dev') {
+    await admin('/promotional', { end_time_ms: now() + 6 * 3600_000 });
+  } else {
+    const endTimeMs = now() + expiredDelayMs;
+    await admin('/promotional', { end_time_ms: endTimeMs });
+    await new Promise(resolveWait => setTimeout(resolveWait, Math.max(0, endTimeMs - now()) + 250));
+  }
+  return { version: 1, fixture, provisionedAt: new Date(now()).toISOString(),
+    accountHash: createHash('sha256').update(login.user.id).digest('hex') };
 }
 
 export async function prepareActiveEntitlement({ built, env = process.env, renew, fetchImpl = fetch, now = Date.now }) {
