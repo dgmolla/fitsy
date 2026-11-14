@@ -636,7 +636,8 @@ export function collectionPublicConfigKeys(previousFile, build, current, preflig
       .map(path => path.slice('public-env:'.length)),
   ])].sort();
 }
-async function execute(udid, names, mode, { approvalId, environmentRetryAllowed = true } = {}) {
+async function execute(udid, names, mode, { approvalId, environmentRetryAllowed = true,
+  skipBillingPersonas = false, skipBillingReason } = {}) {
   const runFlow = options => runSelectedRecordedFlow(mode, options);
   if (process.env.NODE_ENV === 'test' && process.env.FITSY_PRODUCT_FLOW_TEST_FIXTURE) {
     const fixture = read(process.env.FITSY_PRODUCT_FLOW_TEST_FIXTURE);
@@ -674,7 +675,8 @@ async function execute(udid, names, mode, { approvalId, environmentRetryAllowed 
   // Use the real publication consumer's prerequisites and label-aware plan
   // before any device, fixture, recording or evidence-directory mutation.
   const finalPreflight = mode.publishable
-    ? await (await import('./publish-product-flow.mjs')).publishProductFlow(undefined, { preflight: true }) : null;
+    ? await (await import('./publish-product-flow.mjs')).publishProductFlow(undefined,
+      { preflight: true, skipBillingPersonas, skipBillingReason }) : null;
   if (mode.recordVideo) {
     try { run('ffprobe', ['-version'], { timeout: 5000 }); run('ffmpeg', ['-version'], { timeout: 5000 }); }
     catch { throw new Error('ffprobe and ffmpeg are required to validate recorded product-flow video before running Maestro'); }
