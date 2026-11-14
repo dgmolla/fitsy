@@ -257,14 +257,25 @@ console.log(JSON.stringify(out));`],
       assert(!failed.length, `Billing persona preflight failed: ${failed.map(([fixture, r]) => `${fixture}: ${r.reason}`).join('; ')}`);
     }
   }
-  if (preflight) return { status: 'ready', head, plan, mediaIntegration: media?.required ? 'required' : 'not_applicable',
-    evidenceRequired, excludedFlows: skippedFlows, ...(skippedFlows.length ? { skipBillingReason } : {}),
-    report: '.evidence/product-flow/report.json',
-    requiredProof: evidenceRequired ? ['final-candidate report with source/app/native/JS/config/backend/store/runtime identities',
-      'selected-flow commands, screenshots and real before/after XCTest closeouts',
-      'actual primary/recovery MCP traces for each selected category',
-      'final check and private archive byte/digest readback'] : [],
-    note: 'Preflight is not product acceptance or evidence reuse; final validation and publication remain required' };
+  if (preflight) {
+    // #874: advisory only (never blocks preflight) - an externally-flipped
+    // setting a flow depends on (e.g. #866's anonymous sign-in) should be
+    // visible here before a run fails mysteriously downstream, not instead
+    // of the real check elsewhere.
+    let configDrift;
+    try { configDrift = JSON.parse(execute('bash', ['scripts/verify/config-drift.sh'])); }
+    catch (e) { try { configDrift = JSON.parse(e.stdout); } catch { configDrift = { status: 'fail', summary: e.message, fix: '' }; } }
+    if (configDrift.status === 'fail') console.error(`config-drift (advisory, does not block preflight): ${configDrift.summary}`);
+    return { status: 'ready', head, plan, mediaIntegration: media?.required ? 'required' : 'not_applicable',
+      evidenceRequired, excludedFlows: skippedFlows, ...(skippedFlows.length ? { skipBillingReason } : {}),
+      configDrift,
+      report: '.evidence/product-flow/report.json',
+      requiredProof: evidenceRequired ? ['final-candidate report with source/app/native/JS/config/backend/store/runtime identities',
+        'selected-flow commands, screenshots and real before/after XCTest closeouts',
+        'actual primary/recovery MCP traces for each selected category',
+        'final check and private archive byte/digest readback'] : [],
+      note: 'Preflight is not product acceptance or evidence reuse; final validation and publication remain required' };
+  }
   let target = pr.url;
   if (evidenceRequired) {
     const dir = evidenceDirectory, reportFile = resolve(dir, 'report.json');
