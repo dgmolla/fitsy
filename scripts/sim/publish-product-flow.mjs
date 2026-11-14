@@ -173,13 +173,18 @@ export async function publishProductFlow(prNumber, {
       let results;
       try {
         results = JSON.parse(execute(process.execPath, ['--env-file=apps/mobile/.env.development.local', '--input-type=module', '-e',
-          `import {verifyInactiveEntitlement, verifyRemainingLifetime} from ${JSON.stringify(new URL('./active-entitlement.mjs', import.meta.url).href)};
+          `import {provisionEntitlement, verifyInactiveEntitlement, verifyRemainingLifetime} from ${JSON.stringify(new URL('./active-entitlement.mjs', import.meta.url).href)};
 const built = {storeMode:'test-store', configuration:'Debug', buildMode:'owned-metro-test-store'};
 const out = {};
 for (const {name, env: override} of ${JSON.stringify(fixtures)}) {
   const env = { ...process.env, ...override };
-  try { out[name] = { ok: true, ...(name === 'entitled-dev' ? await verifyRemainingLifetime({ built, env }) : await verifyInactiveEntitlement({ fixture: name, built, env })) }; }
-  catch (e) { out[name] = { ok: false, reason: e.message }; }
+  try {
+    // #853: entitled-dev/expired-subscription are provisioned directly via a
+    // RevenueCat promotional grant instead of depending on a real Test
+    // Store purchase ever having registered for these synthetic accounts.
+    if (name === 'entitled-dev' || name === 'expired-subscription') await provisionEntitlement({ fixture: name, built, env });
+    out[name] = { ok: true, ...(name === 'entitled-dev' ? await verifyRemainingLifetime({ built, env }) : await verifyInactiveEntitlement({ fixture: name, built, env })) };
+  } catch (e) { out[name] = { ok: false, reason: e.message }; }
 }
 console.log(JSON.stringify(out));`],
         { stdio: ['ignore', 'pipe', 'pipe'] }));
