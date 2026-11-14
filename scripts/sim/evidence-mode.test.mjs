@@ -5,7 +5,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { evidenceMode, matchesFinalCandidate, runSelection } from './evidence-mode.mjs';
+import { evidenceMode, finishSelection, matchesFinalCandidate, runSelection } from './evidence-mode.mjs';
 import { runSelectedRecordedFlow } from './product-flow.mjs';
 import { runOwnedMaestro } from './runner-controls.mjs';
 
@@ -224,6 +224,30 @@ test('#867: --exclude-flows names an arbitrary flow to omit, independent of --sk
   assert.deepEqual(unset.excludeFlows, []);
   assert.throws(() => runSelection(['device', '--exclude-flows=cold-start-welcome']), /requires --reason/);
   assert.throws(() => runSelection(['device', '--exclude-flows=a', '--exclude-flows=b', '--reason', 'x']), /at most once/);
+});
+
+test('#876: finishSelection parses an optional walkthrough path alongside the same skip-billing/exclude-flows flags as run', () => {
+  const withWalkthrough = finishSelection(['walkthrough.json', '--skip-billing-personas', '--reason', 'Dawit #866']);
+  assert.equal(withWalkthrough.walkthrough, 'walkthrough.json');
+  assert.equal(withWalkthrough.skipBillingPersonas, true);
+  assert.equal(withWalkthrough.skipBillingReason, 'Dawit #866');
+  assert.deepEqual(withWalkthrough.excludeFlows, []);
+
+  const noWalkthrough = finishSelection(['--exclude-flows=cold-start-welcome', '--reason', 'Dawit #866']);
+  assert.equal(noWalkthrough.walkthrough, undefined);
+  assert.deepEqual(noWalkthrough.excludeFlows, ['cold-start-welcome']);
+  assert.equal(noWalkthrough.skipBillingPersonas, false);
+
+  const bare = finishSelection([]);
+  assert.equal(bare.walkthrough, undefined);
+  assert.equal(bare.skipBillingPersonas, false);
+  assert.deepEqual(bare.excludeFlows, []);
+
+  const pathOnly = finishSelection(['walkthrough.json']);
+  assert.equal(pathOnly.walkthrough, 'walkthrough.json');
+
+  assert.throws(() => finishSelection(['walkthrough.json', '--skip-billing-personas']), /requires --reason/);
+  assert.throws(() => finishSelection(['walkthrough.json', '--unknown-flag']), /Unknown finish option/);
 });
 
 test('a final candidate reuses complete supersets only with the same passing source-bound inputs', () => {
