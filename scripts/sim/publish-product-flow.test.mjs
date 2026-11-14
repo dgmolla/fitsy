@@ -96,3 +96,10 @@ test('applyBillingPersonaSkip changes nothing when requested but no selected flo
   assert.deepEqual(applyBillingPersonaSkip(plan, { skipBillingPersonas: true, skipBillingReason: 'no billing surface' }),
     { plan, skippedFlows: [] });
 });
+
+test('#862: applyBillingPersonaSkip also drops fixture:apple-history (a real Apple-sandbox build requirement, not a Test Store persona)', () => {
+  const plan = { flows: ['subscription-restore-expired', 'onboarding-search-highlight'], required: true, categories: ['billing', 'onboarding'] };
+  const result = applyBillingPersonaSkip(plan, { skipBillingPersonas: true, skipBillingReason: 'Dawit 5:07 PM PT Nov 13, #853' });
+  assert.deepEqual(result, { plan: { flows: ['onboarding-search-highlight'], required: true, categories: ['billing', 'onboarding'] },
+    skippedFlows: ['subscription-restore-expired'] });
+});

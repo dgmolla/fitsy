@@ -51,14 +51,19 @@ export function billingPersonaFlowNames(plan, personas) {
     return personas.includes(fixtureName);
   });
 }
-// Opt-in, auditable escape hatch (#857): never default-on, and only ever
-// omits the two named billing-persona flows/their fixture prep - every
-// other selected flow is untouched and still fully required/validated.
+// #862: apple-history (subscription-restore-expired) needs a real
+// Apple-sandbox build, not a Test Store persona - a different kind of
+// billing prep than entitled-dev/expired-subscription, but Dawit's
+// map-flows-only exception explicitly covers it too (coordinator handoff).
+const SKIPPABLE_BILLING_PERSONAS = ['entitled-dev', 'expired-subscription', 'apple-history'];
+// Opt-in, auditable escape hatch (#857, widened #862): never default-on,
+// and only ever omits the named billing-persona flows/their fixture prep -
+// every other selected flow is untouched and still fully required/validated.
 export function applyBillingPersonaSkip(plan, { skipBillingPersonas = false, skipBillingReason } = {}) {
   assert(!skipBillingPersonas || (typeof skipBillingReason === 'string' && skipBillingReason.trim()),
     '--skip-billing-personas requires --reason "<text>"');
   if (!skipBillingPersonas) return { plan, skippedFlows: [] };
-  const skippedFlows = billingPersonaFlowNames(plan, ['entitled-dev', 'expired-subscription']);
+  const skippedFlows = billingPersonaFlowNames(plan, SKIPPABLE_BILLING_PERSONAS);
   if (!skippedFlows.length) return { plan, skippedFlows };
   const remaining = plan.flows.filter(name => !skippedFlows.includes(name));
   return { plan: { ...plan, flows: remaining, required: plan.required && remaining.length > 0 }, skippedFlows };
