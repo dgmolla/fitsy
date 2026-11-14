@@ -4,7 +4,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync, existsSync, openSync, closeSync, renameSync, realpathSync, copyFileSync, cpSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { randomUUID } from 'node:crypto';
-import { resolve, relative, join, dirname, delimiter } from 'node:path';
+import { resolve, relative, join, dirname, delimiter, basename } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { isMain } from '../verify/impact-plan.mjs';
@@ -40,6 +40,12 @@ const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { cwd: root, encod
 
 function files(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory() ? files(join(dir, e.name)) : [join(dir, e.name)]).sort();
+}
+// #864: Maestro 2.12.1 writes a bare commands.json (confirmed via its own
+// manifest.json COMMAND_METADATA entry); older/other versions may still
+// suffix it, so match both rather than re-pinning to one exact name.
+export function isCommandReceiptPath(path) {
+  return /^commands(-.*)?\.json$/.test(basename(path));
 }
 export function environment() {
   const origin = backendOrigin(process.env.EXPO_PUBLIC_API_URL);
@@ -88,7 +94,7 @@ export async function prepareEntitledEvidence(built, udid, directory, { signIn =
       diagnostic: () => run('xcrun', ['simctl', 'io', udid, 'screenshot', join(dir, 'failure.png')]),
     });
     if (result.code !== 0 || result.reason) {
-      const reports = files(dir).filter(file => /commands-.*\.json$/.test(file));
+      const reports = files(dir).filter(isCommandReceiptPath);
       const parsed = reports.length === 1 ? read(reports[0]) : null;
       throw maestroFailure('Active Test Store fixture preparation failed; inspect its raw evidence', result,
         Array.isArray(parsed) ? nearestFailure(parsed) : null);
@@ -118,7 +124,7 @@ export async function prepareBillingEvidence(built, udid, directory, fixture, { 
       FITSY_XCTEST_SIM_UDID: udid, FITSY_XCTEST_CAPTURE_RECEIPT: join(directory, 'capture.jsonl') },
     diagnostic: () => run('xcrun', ['simctl', 'io', udid, 'screenshot', join(directory, 'failure.png')]),
   });
-  const reports = files(directory).filter(file => /commands-.*\.json$/.test(file));
+  const reports = files(directory).filter(isCommandReceiptPath);
   const parsed = reports.length === 1 ? read(reports[0]) : null;
   if (result.code !== 0 || result.reason)
     throw maestroFailure('Billing fixture native sign-in failed; inspect its raw evidence', result,
@@ -842,7 +848,7 @@ async function execute(udid, names, mode, { approvalId, environmentRetryAllowed 
             captureEvents.every(item => item.udid === udid && item.preferredScreenCaptureFormat === 'screenshots');
           event(timeline, { type: 'xctest-capture-check', flow: flow.name, outcome: captureVerified ? 'verified' : 'missing-or-invalid',
             expected: 'owned xcodebuild uses screenshots, never screenRecording', receipt: relative(out, captureReceipt) });
-          const commands = files(dir).filter(f => /commands-.*\.json$/.test(f) &&
+          const commands = files(dir).filter(f => isCommandReceiptPath(f) &&
             !['active-setup', 'billing-setup'].some(setup => f.startsWith(join(dir, setup) + '/')));
           let parsed = null, commandParseError = null;
           if (commands.length === 1) {
