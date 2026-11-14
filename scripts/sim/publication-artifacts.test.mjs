@@ -70,6 +70,12 @@ test('final collection preflights the actual child environment and publisher inp
           return JSON.stringify({ 'empty-store': { ok: true }, 'expired-subscription': { ok: true }, 'entitled-dev': { ok: true } });
         return JSON.stringify({ configHash: staleConfig ? 'stale' : publicConfigIdentity().configHash });
       }
+      // #874: config-drift is advisory-only and never throws from preflight;
+      // this is the real script's exact "unavailable locally" shape.
+      if (command === 'bash') {
+        assert.deepEqual(args, ['scripts/verify/config-drift.sh']);
+        return JSON.stringify({ name: 'config-drift', status: 'skipped', summary: 'SUPABASE_URL/SUPABASE_ANON_KEY not set', fix: 'npm run dev:env' });
+      }
       if (command === 'git') {
         if (args[0] === 'branch') {
           assert.deepEqual(args, ['branch', '--show-current']);
@@ -110,7 +116,7 @@ test('final collection preflights the actual child environment and publisher inp
       await assert.rejects(publishWithMediaEvidence(undefined, options), message);
       set(false);
     }
-    assert.ok(calls.every(([command]) => ['gh', 'git', process.execPath].includes(command)));
+    assert.ok(calls.every(([command]) => ['gh', 'git', 'bash', process.execPath].includes(command)));
     const interrupted = join(dir, 'report.json');
     writeFileSync(interrupted, '{');
     const recovered = await publishWithMediaEvidence(undefined, options);
