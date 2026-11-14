@@ -103,3 +103,25 @@ test('#862: applyBillingPersonaSkip also drops fixture:apple-history (a real App
   assert.deepEqual(result, { plan: { flows: ['onboarding-search-highlight'], required: true, categories: ['billing', 'onboarding'] },
     skippedFlows: ['subscription-restore-expired'] });
 });
+
+test('#867: applyBillingPersonaSkip also drops explicitly named flows, for a failure unrelated to any billing persona', () => {
+  const plan = { flows: ['cold-start-welcome', 'chain-menu-serving'], required: true, categories: ['onboarding', 'discovery'] };
+  const result = applyBillingPersonaSkip(plan, { excludeFlows: ['cold-start-welcome'], skipBillingReason: 'Coordinator #867: unrelated auth flake' });
+  assert.deepEqual(result, { plan: { flows: ['chain-menu-serving'], required: true, categories: ['onboarding', 'discovery'] },
+    skippedFlows: ['cold-start-welcome'] });
+});
+
+test('#867: excludeFlows composes with skipBillingPersonas and ignores names absent from the plan', () => {
+  const plan = { flows: ['cold-start-welcome', 'map-search', 'chain-menu-serving'], required: true, categories: ['billing', 'onboarding', 'discovery'] };
+  const result = applyBillingPersonaSkip(plan, { skipBillingPersonas: true, excludeFlows: ['cold-start-welcome', 'never-selected'],
+    skipBillingReason: 'both exclusions together' });
+  assert.deepEqual(result.plan.flows, ['chain-menu-serving']);
+  assert.deepEqual(result.skippedFlows, ['cold-start-welcome', 'map-search']);
+});
+
+test('#867: excludeFlows requires a reason, and a no-op exclusion changes nothing', () => {
+  const plan = { flows: ['chain-menu-serving'], required: true, categories: ['discovery'] };
+  assert.throws(() => applyBillingPersonaSkip(plan, { excludeFlows: ['chain-menu-serving'] }), /requires --reason/);
+  assert.deepEqual(applyBillingPersonaSkip(plan, { excludeFlows: ['never-selected'], skipBillingReason: 'x' }),
+    { plan, skippedFlows: [] });
+});

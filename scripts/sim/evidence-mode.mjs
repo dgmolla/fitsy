@@ -17,11 +17,15 @@ export function evidenceMode(value = 'development', requestedRecording = false) 
 
 export function runSelection(args) {
   const [udid, ...rawRest] = args;
-  // #860: same opt-in, auditable contract as publish-product-flow.mjs -
-  // never default-on, both required together.
+  // #860/#867: same opt-in, auditable contract as publish-product-flow.mjs -
+  // never default-on, a reason required alongside either exclusion kind.
   const reasonIndex = rawRest.indexOf('--reason');
   const skipBillingReason = reasonIndex === -1 ? undefined : rawRest[reasonIndex + 1];
-  const rest = reasonIndex === -1 ? rawRest : [...rawRest.slice(0, reasonIndex), ...rawRest.slice(reasonIndex + 2)];
+  const withoutReason = reasonIndex === -1 ? rawRest : [...rawRest.slice(0, reasonIndex), ...rawRest.slice(reasonIndex + 2)];
+  const excludeFlowsArgs = withoutReason.filter(arg => arg.startsWith('--exclude-flows='));
+  if (excludeFlowsArgs.length > 1) throw new Error('Pass --exclude-flows at most once');
+  const excludeFlows = excludeFlowsArgs.length ? excludeFlowsArgs[0].slice('--exclude-flows='.length).split(',').filter(Boolean) : [];
+  const rest = withoutReason.filter(arg => !arg.startsWith('--exclude-flows='));
   const modes = rest.filter(arg => arg.startsWith('--mode='));
   const recording = rest.filter(arg => arg === '--record-video');
   const exceptions = rest.filter(arg => arg.startsWith('--release-exception='));
@@ -33,14 +37,15 @@ export function runSelection(args) {
     throw new Error('Unknown or repeated native release exception');
   if (noRetry.length > 1) throw new Error('Pass --no-environment-retry at most once');
   if (skipPersonas.length > 1) throw new Error('Pass --skip-billing-personas at most once');
-  if ((skipPersonas.length === 1) !== (reasonIndex !== -1)) throw new Error('--skip-billing-personas requires --reason "<text>"');
+  if ((skipPersonas.length === 1 || excludeFlows.length > 0) !== (reasonIndex !== -1))
+    throw new Error('--skip-billing-personas/--exclude-flows requires --reason "<text>"');
   if (rest.some(arg => arg.startsWith('--') && !arg.startsWith('--mode=') &&
       !arg.startsWith('--release-exception=') && !['--record-video', '--no-environment-retry', '--skip-billing-personas'].includes(arg)))
     throw new Error('Unknown run option');
   const mode = evidenceMode(modes[0]?.slice('--mode='.length), recording.length === 1);
   return { udid, names: rest.filter(arg => !arg.startsWith('--')), mode,
     approvalId: exceptions[0]?.slice('--release-exception='.length), environmentRetryAllowed: !noRetry.length,
-    skipBillingPersonas: skipPersonas.length === 1, skipBillingReason };
+    skipBillingPersonas: skipPersonas.length === 1, skipBillingReason, excludeFlows };
 }
 
 export function matchesFinalCandidate(report, { udid, appHash, configHash, backendDeployment, fixture, flows, recordVideo = false }) {

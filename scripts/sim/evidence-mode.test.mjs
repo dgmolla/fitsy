@@ -208,6 +208,24 @@ test('#860: --skip-billing-personas parses alongside --reason, never alone, and 
     /at most once/);
 });
 
+test('#867: --exclude-flows names an arbitrary flow to omit, independent of --skip-billing-personas', () => {
+  const selection = runSelection(['device', 'chain-menu-serving', '--mode=final-candidate',
+    '--exclude-flows=cold-start-welcome', '--reason', 'Coordinator #867: unrelated auth flake']);
+  assert.deepEqual(selection.excludeFlows, ['cold-start-welcome']);
+  assert.equal(selection.skipBillingReason, 'Coordinator #867: unrelated auth flake');
+  assert.equal(selection.skipBillingPersonas, false);
+  assert.deepEqual(selection.names, ['chain-menu-serving']);
+  const multiple = runSelection(['device', '--exclude-flows=cold-start-welcome,log-meal', '--reason', 'x']);
+  assert.deepEqual(multiple.excludeFlows, ['cold-start-welcome', 'log-meal']);
+  const both = runSelection(['device', '--skip-billing-personas', '--exclude-flows=cold-start-welcome', '--reason', 'x']);
+  assert.equal(both.skipBillingPersonas, true);
+  assert.deepEqual(both.excludeFlows, ['cold-start-welcome']);
+  const unset = runSelection(['device']);
+  assert.deepEqual(unset.excludeFlows, []);
+  assert.throws(() => runSelection(['device', '--exclude-flows=cold-start-welcome']), /requires --reason/);
+  assert.throws(() => runSelection(['device', '--exclude-flows=a', '--exclude-flows=b', '--reason', 'x']), /at most once/);
+});
+
 test('a final candidate reuses complete supersets only with the same passing source-bound inputs', () => {
   const selected = { udid: 'device', appHash: 'app', configHash: 'config', backendDeployment: 'backend', fixture: 'fixture',
     flows: [{ name: 'welcome', sourceHash: 'source' }] };
