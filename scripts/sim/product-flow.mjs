@@ -4,7 +4,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync, existsSync, openSync, closeSync, renameSync, realpathSync, copyFileSync, cpSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { randomUUID } from 'node:crypto';
-import { resolve, relative, join, dirname, delimiter } from 'node:path';
+import { resolve, relative, join, dirname, delimiter, basename } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { isMain } from '../verify/impact-plan.mjs';
@@ -18,7 +18,7 @@ import { admitDisk, appendRecordedFlowFailure, applyCapturePolicy, archiveFailur
 import { classifySimulatorFailure, maestroFailure, withEnvironmentRetry } from './failure-policy.mjs';
 import { prepareActiveEntitlement, verifyInactiveEntitlement } from './active-entitlement.mjs';
 import { inspectScreenshot, inspectScreenshotDirectory, inspectWalkthrough, requireScreenRecognition } from './screen-guard.mjs';
-import { matchesFinalCandidate, readPreviousReportForReuse, runSelection } from './evidence-mode.mjs';
+import { matchesFinalCandidate, readPreviousReportForReuse, runSelection, finishSelection } from './evidence-mode.mjs';
 export { readPreviousReportForReuse } from './evidence-mode.mjs';
 import { closeoutXCTestAttachments, snapshotXCTestAttachments } from './xctest-attachments.mjs';
 const yaml = createRequire(import.meta.url)('js-yaml');
@@ -40,6 +40,12 @@ const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { cwd: root, encod
 
 function files(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory() ? files(join(dir, e.name)) : [join(dir, e.name)]).sort();
+}
+// #864: Maestro 2.12.1 writes a bare commands.json (confirmed via its own
+// manifest.json COMMAND_METADATA entry); older/other versions may still
+// suffix it, so match both rather than re-pinning to one exact name.
+export function isCommandReceiptPath(path) {
+  return /^commands(-.*)?\.json$/.test(basename(path));
 }
 export function environment() {
   const origin = backendOrigin(process.env.EXPO_PUBLIC_API_URL);
@@ -88,7 +94,7 @@ export async function prepareEntitledEvidence(built, udid, directory, { signIn =
       diagnostic: () => run('xcrun', ['simctl', 'io', udid, 'screenshot', join(dir, 'failure.png')]),
     });
     if (result.code !== 0 || result.reason) {
-      const reports = files(dir).filter(file => /commands-.*\.json$/.test(file));
+      const reports = files(dir).filter(isCommandReceiptPath);
       const parsed = reports.length === 1 ? read(reports[0]) : null;
       throw maestroFailure('Active Test Store fixture preparation failed; inspect its raw evidence', result,
         Array.isArray(parsed) ? nearestFailure(parsed) : null);
@@ -118,7 +124,7 @@ export async function prepareBillingEvidence(built, udid, directory, fixture, { 
       FITSY_XCTEST_SIM_UDID: udid, FITSY_XCTEST_CAPTURE_RECEIPT: join(directory, 'capture.jsonl') },
     diagnostic: () => run('xcrun', ['simctl', 'io', udid, 'screenshot', join(directory, 'failure.png')]),
   });
-  const reports = files(directory).filter(file => /commands-.*\.json$/.test(file));
+  const reports = files(directory).filter(isCommandReceiptPath);
   const parsed = reports.length === 1 ? read(reports[0]) : null;
   if (result.code !== 0 || result.reason)
     throw maestroFailure('Billing fixture native sign-in failed; inspect its raw evidence', result,
@@ -636,7 +642,8 @@ export function collectionPublicConfigKeys(previousFile, build, current, preflig
       .map(path => path.slice('public-env:'.length)),
   ])].sort();
 }
-async function execute(udid, names, mode, { approvalId, environmentRetryAllowed = true } = {}) {
+async function execute(udid, names, mode, { approvalId, environmentRetryAllowed = true,
+  skipBillingPersonas = false, skipBillingReason, excludeFlows = [] } = {}) {
   const runFlow = options => runSelectedRecordedFlow(mode, options);
   if (process.env.NODE_ENV === 'test' && process.env.FITSY_PRODUCT_FLOW_TEST_FIXTURE) {
     const fixture = read(process.env.FITSY_PRODUCT_FLOW_TEST_FIXTURE);
@@ -674,7 +681,8 @@ async function execute(udid, names, mode, { approvalId, environmentRetryAllowed 
   // Use the real publication consumer's prerequisites and label-aware plan
   // before any device, fixture, recording or evidence-directory mutation.
   const finalPreflight = mode.publishable
-    ? await (await import('./publish-product-flow.mjs')).publishProductFlow(undefined, { preflight: true }) : null;
+    ? await (await import('./publish-product-flow.mjs')).publishProductFlow(undefined,
+      { preflight: true, skipBillingPersonas, skipBillingReason, excludeFlows }) : null;
   if (mode.recordVideo) {
     try { run('ffprobe', ['-version'], { timeout: 5000 }); run('ffmpeg', ['-version'], { timeout: 5000 }); }
     catch { throw new Error('ffprobe and ffmpeg are required to validate recorded product-flow video before running Maestro'); }
@@ -840,7 +848,7 @@ async function execute(udid, names, mode, { approvalId, environmentRetryAllowed 
             captureEvents.every(item => item.udid === udid && item.preferredScreenCaptureFormat === 'screenshots');
           event(timeline, { type: 'xctest-capture-check', flow: flow.name, outcome: captureVerified ? 'verified' : 'missing-or-invalid',
             expected: 'owned xcodebuild uses screenshots, never screenRecording', receipt: relative(out, captureReceipt) });
-          const commands = files(dir).filter(f => /commands-.*\.json$/.test(f) &&
+          const commands = files(dir).filter(f => isCommandReceiptPath(f) &&
             !['active-setup', 'billing-setup'].some(setup => f.startsWith(join(dir, setup) + '/')));
           let parsed = null, commandParseError = null;
           if (commands.length === 1) {
@@ -923,7 +931,7 @@ async function execute(udid, names, mode, { approvalId, environmentRetryAllowed 
     throw error;
   } finally { releaseDevice(); }
 }
-async function finish(walkthrough) {
+async function finish(walkthrough, { skipBillingPersonas = false, skipBillingReason, excludeFlows = [] } = {}) {
   const report = read(join(out, 'report.json'));
   const r = receipt(report.simulator);
   assert(report.result === 'awaiting-walkthrough', 'A completed deterministic run is required');
@@ -938,7 +946,14 @@ async function finish(walkthrough) {
     o.sha256 = digest(readFileSync(join(out, o.trace)));
   }
   report.result = 'pass'; report.finishedAt = new Date().toISOString();
-  const result = await validateAcceptance(report, candidatePlan(requiredPublicConfigKeys(report, r, environment())), inputHash(), out,
+  // #876: execute()/publishProductFlow() both narrow the plan through
+  // applyBillingPersonaSkip before validating; finish() must match, or a run
+  // that legitimately used --skip-billing-personas/--exclude-flows can never
+  // pass its own completeness check.
+  const { applyBillingPersonaSkip } = await import('./publish-product-flow.mjs');
+  const { plan } = applyBillingPersonaSkip(candidatePlan(requiredPublicConfigKeys(report, r, environment())),
+    { skipBillingPersonas, skipBillingReason, excludeFlows });
+  const result = await validateAcceptance(report, plan, inputHash(), out,
     Date.now(), root, r.nativeIdentity.hash, report.evidenceMode);
   if (report.evidenceMode === 'final-candidate')
     report.publicConfigAcceptance.verifiedConfigHash = report.configHash;
@@ -988,7 +1003,7 @@ try {
     assert(args.length === 1, 'finish-walkthrough requires one trace path relative to .evidence/product-flow');
     await finishWalkthrough(args[0]);
   }
-  else if (command === 'finish') await finish(args[0]);
+  else if (command === 'finish') { const selected = finishSelection(args); await finish(selected.walkthrough, selected); }
   else if (command === 'check') await check();
   else if (command === 'stop-metro') await stopMetro();
   else throw new Error('Usage: node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build UDID | run UDID [flow names] [--mode=development|final-candidate|requested-video] [--record-video] [--release-exception=6716597294] [--no-environment-retry] | prepare-walkthrough UDID category [executed-flow] | finish-walkthrough relative-trace | finish [walkthrough.json]');

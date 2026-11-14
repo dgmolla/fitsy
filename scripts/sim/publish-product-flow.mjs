@@ -41,6 +41,38 @@ const billingFixtureNames = new Set(['empty-store', 'expired-subscription', 'ent
 // is typically entitled and can never satisfy an empty-history assertion.
 // With no fixtures file configured at all, keep checking the caller, exactly
 // as prepareWalkthrough's own 'default' journey (env: {}) does today.
+// The exact flow names tagged for one of the named personas (#857): used to
+// both drop them from the required flow set and report what was skipped.
+export function billingPersonaFlowNames(plan, personas) {
+  return selectedFlows(plan).filter(name => {
+    const source = readFileSync(resolve(root, 'apps/mobile/e2e/flows', `${name}.yaml`), 'utf8');
+    const tags = yaml.load(source.split(/^---\s*$/m)[0]).tags || [];
+    const fixtureName = tags.filter(tag => tag.startsWith('fixture:')).map(tag => tag.slice(8))[0];
+    return personas.includes(fixtureName);
+  });
+}
+// #862: apple-history (subscription-restore-expired) needs a real
+// Apple-sandbox build, not a Test Store persona - a different kind of
+// billing prep than entitled-dev/expired-subscription, but Dawit's
+// map-flows-only exception explicitly covers it too (coordinator handoff).
+const SKIPPABLE_BILLING_PERSONAS = ['entitled-dev', 'expired-subscription', 'apple-history'];
+// Opt-in, auditable escape hatch (#857, widened #862, generalized #867):
+// never default-on, and only ever omits the named billing-persona flows or
+// explicitly named flows (plus their fixture prep) - every other selected
+// flow is untouched and still fully required/validated. #867: a flow can
+// fail for reasons that have nothing to do with billing (e.g. an unrelated
+// pre-existing auth/onboarding flake); --exclude-flows names it directly
+// rather than widening the persona list for an unrelated failure mode.
+export function applyBillingPersonaSkip(plan, { skipBillingPersonas = false, skipBillingReason, excludeFlows = [] } = {}) {
+  assert(!(skipBillingPersonas || excludeFlows.length) || (typeof skipBillingReason === 'string' && skipBillingReason.trim()),
+    '--skip-billing-personas/--exclude-flows requires --reason "<text>"');
+  const personaFlows = skipBillingPersonas ? billingPersonaFlowNames(plan, SKIPPABLE_BILLING_PERSONAS) : [];
+  const namedFlows = excludeFlows.filter(name => plan.flows.includes(name));
+  const skippedFlows = [...new Set([...personaFlows, ...namedFlows])].sort();
+  if (!skippedFlows.length) return { plan, skippedFlows };
+  const remaining = plan.flows.filter(name => !skippedFlows.includes(name));
+  return { plan: { ...plan, flows: remaining, required: plan.required && remaining.length > 0 }, skippedFlows };
+}
 export function requiredBillingFixtures(plan) {
   const fixtures = new Map();
   if (plan.categories?.includes('billing'))
@@ -54,6 +86,21 @@ export function requiredBillingFixtures(plan) {
     if (billingFixtureNames.has(fixtureName)) fixtures.set(fixtureName, journeyFixture({ tags }).env);
   }
   return [...fixtures.entries()].map(([name, env]) => ({ name, env })).sort((a, b) => a.name.localeCompare(b.name));
+}
+// #873: surface which flows ran and why in the product-flow/local status,
+// not just a generic "verified" message - GitHub's status description has a
+// hard 140-character limit, so fall back progressively rather than guessing
+// one fixed truncation point that might not fit every plan.
+export function requiredStatusDescription(plan, suffix = '') {
+  const flows = plan.flows || [], reason = plan.simulator?.reason || '';
+  const withFlows = flows.length > 0, withReason = Boolean(reason);
+  const candidates = [
+    withFlows && withReason && `${flows.length} flow(s): ${flows.join(',')} - ${reason}`,
+    withFlows && `${flows.length} flow(s): ${flows.join(',')}`,
+    withReason && `${flows.length} flow(s) required - ${reason}`,
+    `${flows.length} flow(s) required`,
+  ].filter(Boolean).map(text => text + suffix);
+  return candidates.find(text => text.length <= 140) || candidates.at(-1).slice(0, 140);
 }
 export function publicationPlan(evidenceDirectory, buildReceiptFile, paths = changedPaths('origin/main'), current = publicConfigIdentity(), options = {}) {
   const { recoverHistoricalReport = false, ...impactOptions } = options;
@@ -115,6 +162,9 @@ export async function publishProductFlow(prNumber, {
   sourceHash = inputHash,
   validateEvidence = validateAcceptance,
   validateMediaEvidence = candidate => validateMediaReceipt(changedPaths('origin/main'), candidate, sourceHash()),
+  skipBillingPersonas = false,
+  skipBillingReason,
+  excludeFlows = [],
 } = {}) {
   if (preflight) {
     const invoke = execute;
@@ -165,7 +215,8 @@ export async function publishProductFlow(prNumber, {
   const media = validateMediaEvidence(candidate);
   const resolved = resolvePlan({ labels: (pr.labels || []).map(label => label.name), recoverHistoricalReport: preflight }),
     includeBaseline = process.argv.includes('--include-baseline');
-  const plan = includeBaseline ? { ...resolved, flows: [...new Set([...(resolved.flows || []), ...baseline])].sort(), baseline } : resolved;
+  const unfiltered = includeBaseline ? { ...resolved, flows: [...new Set([...(resolved.flows || []), ...baseline])].sort(), baseline } : resolved;
+  const { plan, skippedFlows } = applyBillingPersonaSkip(unfiltered, { skipBillingPersonas, skipBillingReason, excludeFlows });
   const evidenceRequired = plan.required || includeBaseline;
   if (preflight && evidenceRequired) {
     const fixtures = requiredBillingFixtures(plan);
@@ -196,7 +247,8 @@ console.log(JSON.stringify(out));`],
     }
   }
   if (preflight) return { status: 'ready', head, plan, mediaIntegration: media?.required ? 'required' : 'not_applicable',
-    evidenceRequired, report: '.evidence/product-flow/report.json',
+    evidenceRequired, excludedFlows: skippedFlows, ...(skippedFlows.length ? { skipBillingReason } : {}),
+    report: '.evidence/product-flow/report.json',
     requiredProof: evidenceRequired ? ['final-candidate report with source/app/native/JS/config/backend/store/runtime identities',
       'selected-flow commands, screenshots and real before/after XCTest closeouts',
       'actual primary/recovery MCP traces for each selected category',
@@ -237,9 +289,10 @@ console.log(JSON.stringify(out));`],
   }
   const latest = JSON.parse(gh(['pr', 'view', prNumber, '--repo', repo, '--json', 'headRefOid']));
   assert(latest.headRefOid === head, 'PR head changed during publication');
-  status('success', evidenceRequired ? 'Local Maestro and required product evidence verified' :
-    media?.required ? 'Local media integration verified; product flow not applicable' :
-      'Not applicable: no mobile-facing product changes', target);
+  const skipNote = skippedFlows.length ? ` (skipped ${skippedFlows.join(', ')}: ${skipBillingReason})` : '';
+  status('success', evidenceRequired ? requiredStatusDescription(plan, skipNote) :
+    (media?.required ? 'Local media integration verified; product flow not applicable' :
+      'Not applicable: no mobile-facing product changes') + skipNote, target);
   return { status: 'pass', context, head, applicability: evidenceRequired ? 'required' : 'not_applicable',
     mediaIntegration: media?.required ? 'required' : 'not_applicable', url: target };
   } catch (e) {
@@ -249,11 +302,21 @@ console.log(JSON.stringify(out));`],
 }
 if (isMain(import.meta.url)) {
   try {
-    const flags = process.argv.slice(3);
+    const args = process.argv.slice(3);
+    const reasonIndex = args.indexOf('--reason');
+    const reason = reasonIndex === -1 ? undefined : args[reasonIndex + 1];
+    const withoutReason = reasonIndex === -1 ? args : [...args.slice(0, reasonIndex), ...args.slice(reasonIndex + 2)];
+    const excludeFlowsArgs = withoutReason.filter(arg => arg.startsWith('--exclude-flows='));
+    assert(excludeFlowsArgs.length <= 1, 'Pass --exclude-flows at most once');
+    const excludeFlows = excludeFlowsArgs.length ? excludeFlowsArgs[0].slice('--exclude-flows='.length).split(',').filter(Boolean) : [];
+    const flags = withoutReason.filter(arg => !arg.startsWith('--exclude-flows='));
+    const skipBillingPersonas = flags.includes('--skip-billing-personas');
     assert(process.argv[2] && new Set(flags).size === flags.length &&
-      flags.every(flag => ['--preflight', '--include-baseline'].includes(flag)),
-    'Usage: node scripts/sim/publish-product-flow.mjs PR_NUMBER [--preflight] [--include-baseline]');
-    console.log(JSON.stringify(await publishProductFlow(process.argv[2], { preflight: flags.includes('--preflight') })));
+      flags.every(flag => ['--preflight', '--include-baseline', '--skip-billing-personas'].includes(flag)) &&
+      (skipBillingPersonas || excludeFlows.length > 0) === (reasonIndex !== -1),
+    'Usage: node scripts/sim/publish-product-flow.mjs PR_NUMBER [--preflight] [--include-baseline] [--skip-billing-personas|--exclude-flows=<name1,name2>] [--reason "<text>"]');
+    console.log(JSON.stringify(await publishProductFlow(process.argv[2],
+      { preflight: flags.includes('--preflight'), skipBillingPersonas, skipBillingReason: reason, excludeFlows })));
   } catch (e) {
     console.error(e.message); process.exitCode = 1;
   }
