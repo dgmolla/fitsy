@@ -3,11 +3,12 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync, existsSync, openSync, closeSync, renameSync, realpathSync, copyFileSync, cpSync } from 'node:fs';
 import { createServer } from 'node:net';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { resolve, relative, join, dirname, delimiter, basename } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { isMain } from '../verify/impact-plan.mjs';
+import { GENESIS, hasInteractionAndObservation, parseCapture, projectTrace, sealRecord } from '../verify/mcp-capture.mjs';
 import { root, inputHash, candidatePlan, selectedFlows, acceptanceExceptions, digest, validateAcceptance, repoEnv, publicConfigIdentity, requiredPublicConfigKeys, buildPublicConfigAcceptance, assertFlowCommands, artifact, artifactPath, walkthroughState } from '../verify/product-flow.mjs';
 import { journeyFixture, withFixtureEnvironment, prepareJourney, assertJourneyStore } from './journey-fixtures.mjs';
 import { backendOrigin, backendRevision, maestroApiArgs } from './backend-identity.mjs';
@@ -136,7 +137,7 @@ export async function prepareBillingEvidence(built, udid, directory, fixture, { 
 function walkthroughCaller(udid) {
   const report = read(join(out, 'report.json'));
   const built = receipt(udid);
-  assert(report.walkthroughProtocol === 1 && report.result === 'awaiting-walkthrough' && report.simulator === udid,
+  assert(report.walkthroughProtocol === 2 && report.result === 'awaiting-walkthrough' && report.simulator === udid,
     'A current deterministic run with fixture-bound walkthroughs is required');
   assert(built.storeMode === 'test-store' && built.buildMode === 'owned-metro-test-store', 'Walkthrough fixtures require the Debug Test Store build');
   assert(report.inputHash === inputHash() && report.appHash === built.appHash && report.configHash === environment().configHash &&
@@ -170,7 +171,8 @@ async function prepareWalkthrough(udid, category, flowName) {
     ...Object.fromEntries(['inputHash', 'jsHash', 'appHash', 'simulator', 'os', 'backendRevision', 'backendDeployment', 'storeMode'].map(key => [key, report[key]])),
     nativeHash: built.nativeIdentity.hash, callerBefore: current.metro, startedAt: new Date().toISOString(),
     attachmentBefore: relative(out, before), attachmentBeforeHash: digest(readFileSync(before)),
-    captureReceipt: relative(out, join(dir, 'mcp-capture.jsonl')), state: 'preparing' };
+    captureReceipt: relative(out, join(dir, 'xctest-capture.jsonl')),
+    mcpCapture: relative(out, join(dir, 'mcp-capture.jsonl')), captureNonce: randomBytes(16).toString('hex'), state: 'preparing' };
   // Persist the original live caller before stopping it. An interrupted switch
   // remains explicitly pending and cannot pass finish/check/publication.
   report.walkthroughPending = pending;
@@ -191,21 +193,65 @@ async function prepareWalkthrough(udid, category, flowName) {
     save(join(out, 'report.json'), report);
   });
   console.log(JSON.stringify({ status: 'ready', category, fixture: journey.name,
-    captureReceipt: join(out, pending.captureReceipt), configHash: pending.configHash, bundleHash: pending.metro.bundleHash }));
+    mcpCommand: [process.execPath, '--env-file=apps/mobile/.env.development.local', 'scripts/sim/product-flow.mjs', 'capture-walkthrough'],
+    configHash: pending.configHash, bundleHash: pending.metro.bundleHash }));
 }
-async function finishWalkthrough(trace) {
+// stdio MCP proxy (#888): relays the real `maestro mcp` byte for byte and
+// appends every line, hash-chained and bound to this session's nonce, so the
+// walkthrough trace is a projection of tool output and never agent-authored.
+async function captureWalkthrough() {
+  const report = read(join(out, 'report.json')), pending = report.walkthroughPending;
+  assert(report.walkthroughProtocol === 2 && pending?.state === 'ready' && pending.captureNonce,
+    'capture-walkthrough requires a ready prepared walkthrough (run prepare-walkthrough first)');
+  const captureFile = join(out, pending.mcpCapture);
+  assert(!existsSync(captureFile), 'This walkthrough already has a capture; finish it or prepare again');
+  mkdirSync(dirname(captureFile), { recursive: true });
+  const fd = openSync(captureFile, 'a');
+  let prev = GENESIS, seq = 0;
+  const append = (dir, raw) => {
+    const record = sealRecord(prev, seq++, dir, raw);
+    prev = record.hash;
+    writeFileSync(fd, `${JSON.stringify(record)}\n`);
+  };
+  append('meta', JSON.stringify({ nonce: pending.captureNonce, startedAt: new Date().toISOString(), simulator: report.simulator }));
+  const child = spawn(process.env.MAESTRO_BIN || 'maestro', ['mcp', '--no-viewer'], {
+    cwd: root, stdio: ['pipe', 'pipe', 'inherit'],
+    env: { ...repoEnv(), PATH: `${controlDirectory}${delimiter}${process.env.PATH || ''}`,
+      FITSY_XCTEST_SIM_UDID: report.simulator, FITSY_XCTEST_CAPTURE_RECEIPT: join(out, pending.captureReceipt) } });
+  const tee = (stream, dir, sink) => {
+    let partial = '';
+    stream.on('data', chunk => {
+      sink.write(chunk);
+      partial += chunk.toString('utf8');
+      let index;
+      while ((index = partial.indexOf('\n')) >= 0) {
+        const line = partial.slice(0, index); partial = partial.slice(index + 1);
+        if (line.trim()) append(dir, line);
+      }
+    });
+    stream.on('end', () => { if (partial.trim()) append(dir, partial); });
+  };
+  tee(process.stdin, 'in', child.stdin);
+  tee(child.stdout, 'out', process.stdout);
+  process.stdin.on('end', () => child.stdin.end());
+  await new Promise(resolveExit => child.on('exit', code => { closeSync(fd); process.exitCode = code ?? 1; resolveExit(); }));
+}
+async function finishWalkthrough() {
   const original = read(join(out, 'report.json'));
   const { report, built } = walkthroughCaller(original.simulator);
   const pending = report.walkthroughPending;
   assert(pending?.state === 'ready', 'A ready walkthrough fixture is required');
   const journey = walkthroughFixture(report, pending.flow);
   const dir = join(out, 'walkthrough', pending.category);
-  const traceFile = artifactPath(trace, out), traceBytes = readFileSync(traceFile);
-  const events = traceBytes.toString().trim().split('\n').map(line => JSON.parse(line));
+  const mcpCaptureBytes = artifact(pending.mcpCapture, out);
+  const records = parseCapture(mcpCaptureBytes, { nonce: pending.captureNonce });
+  const traceFile = join(dir, 'mcp-trace.jsonl'), traceText = projectTrace(records);
+  writeFileSync(traceFile, traceText);
+  const traceBytes = Buffer.from(traceText);
+  const events = traceText.trim().split('\n').filter(Boolean).map(line => JSON.parse(line));
   assert(events.length && events.every(item => Date.parse(item.at) >= Date.parse(pending.readyAt) &&
     Date.parse(item.at) <= Date.now() && !item.result?.isError && item.result?.content?.length), 'Invalid walkthrough fixture trace');
-  assert(events.some(item => ['tap_on', 'input_text', 'back', 'launch_app'].includes(item.command?.name)) &&
-    events.some(item => item.command?.name === 'inspect_view_hierarchy'), 'Walkthrough requires real MCP interaction and observation');
+  assert(hasInteractionAndObservation(events), 'Walkthrough requires real MCP interaction (run) and observation (inspect_screen)');
   const flow = pending.flow && report.flows.find(item => item.name === pending.flow);
   inspectWalkthrough(events, flow ? readFileSync(join(root, flow.source)) : '');
   claimDevice();
@@ -228,6 +274,7 @@ async function finishWalkthrough(trace) {
     'Missing or invalid walkthrough screenshots-only XCTest capture');
   const completed = { ...pending, state: 'complete', completedAt: new Date().toISOString(),
     trace: relative(out, traceFile), traceHash: digest(traceBytes),
+    mcpCaptureHash: digest(mcpCaptureBytes),
     captureReceiptHash: digest(captureBytes),
     attachmentAfter: relative(out, afterFile), attachmentAfterHash: digest(readFileSync(afterFile)),
     attachmentCloseout: relative(out, closeout), attachmentCloseoutHash: digest(readFileSync(closeout)) };
@@ -242,7 +289,7 @@ async function finishWalkthrough(trace) {
   const file = join(dir, 'identity.json'); save(file, completed);
   delete report.walkthroughPending;
   report.walkthroughSessions.push({ category: pending.category, receipt: relative(out, file), sha256: digest(readFileSync(file)),
-    artifacts: [completed.attachmentBefore, completed.attachmentAfter, completed.captureReceipt, completed.attachmentCloseout] });
+    artifacts: [completed.attachmentBefore, completed.attachmentAfter, completed.captureReceipt, completed.attachmentCloseout, completed.mcpCapture] });
   walkthroughState(report, out);
   await checkBundle(report);
   save(join(out, 'report.json'), report);
@@ -772,7 +819,7 @@ async function execute(udid, names, mode, { approvalId, environmentRetryAllowed 
       result: 'running', startedAt: new Date().toISOString(),
       fixture, keychainReset: false, evidenceMode: mode.name, videoRequested: mode.recordVideo,
       maestroVersion: run(process.env.MAESTRO_BIN || 'maestro', ['--version']), flows: [], exploration: [],
-      ...(r.buildMode === 'owned-metro-test-store' ? { walkthroughProtocol: 1, walkthroughSessions: [] } : {}) };
+      ...(r.buildMode === 'owned-metro-test-store' ? { walkthroughProtocol: 2, walkthroughSessions: [] } : {}) };
     save(join(out, 'report.json'), report);
     if (process.env.FITSY_SIM_RESET_KEYCHAIN) {
       assert(process.env.FITSY_SIM_RESET_KEYCHAIN === udid, 'Keychain reset must explicitly name the selected disposable simulator');
@@ -1008,9 +1055,13 @@ try {
     assert(args.length >= 2 && args.length <= 3, 'prepare-walkthrough requires UDID category [executed-flow]');
     await prepareWalkthrough(...args);
   }
+  else if (command === 'capture-walkthrough') {
+    assert(!args.length, 'capture-walkthrough takes no arguments; it reads the prepared walkthrough from the report');
+    await captureWalkthrough();
+  }
   else if (command === 'finish-walkthrough') {
-    assert(args.length === 1, 'finish-walkthrough requires one trace path relative to .evidence/product-flow');
-    await finishWalkthrough(args[0]);
+    assert(!args.length, 'finish-walkthrough takes no trace: the trace is derived from the captured MCP session');
+    await finishWalkthrough();
   }
   else if (command === 'finish') { const selected = finishSelection(args); await finish(selected.walkthrough, selected); }
   else if (command === 'check') {
@@ -1019,7 +1070,7 @@ try {
     await check(selected);
   }
   else if (command === 'stop-metro') await stopMetro();
-  else throw new Error('Usage: node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build UDID | run UDID [flow names] [--mode=development|final-candidate|requested-video] [--record-video] [--release-exception=6716597294] [--no-environment-retry] | prepare-walkthrough UDID category [executed-flow] | finish-walkthrough relative-trace | finish [walkthrough.json]');
+  else throw new Error('Usage: node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build UDID | run UDID [flow names] [--mode=development|final-candidate|requested-video] [--record-video] [--release-exception=6716597294] [--no-environment-retry] | prepare-walkthrough UDID category [executed-flow] | capture-walkthrough | finish-walkthrough | finish [walkthrough.json]');
 } catch (e) {
   console.error(JSON.stringify({ status: 'fail', classification: classifySimulatorFailure(e), environmentRetries: e.environmentRetries || 0, summary: e.message })); process.exitCode = 1;
 }

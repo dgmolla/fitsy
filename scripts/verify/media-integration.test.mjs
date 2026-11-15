@@ -44,7 +44,7 @@ test('canonical media caller rejects unavailable tools and failed isolation befo
   const git = (...args) => execFileSync('git', args, { cwd: dir, env, encoding: 'utf8' });
   try {
     // Applicability imports product-flow and its shared impact planner before the preflight.
-    for (const name of ['media-integration.sh', 'media-integration.mjs', 'product-flow.mjs', 'impact-plan.mjs']) {
+    for (const name of ['media-integration.sh', 'media-integration.mjs', 'product-flow.mjs', 'impact-plan.mjs', 'mcp-capture.mjs']) {
       const path = join(dir, 'scripts/verify', name); mkdirSync(dirname(path), { recursive: true });
       copyFileSync(join(root, 'scripts/verify', name), path);
     }

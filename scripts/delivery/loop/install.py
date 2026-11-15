@@ -35,6 +35,7 @@ def sources():
     paths = [*sorted((root / 'scripts/sim').glob('*.mjs')), root / 'scripts/sim/sim', root / 'scripts/sim/xcodebuild',
              root / 'scripts/dev/cleanup-worktrees.mjs',
              *(root / name for name in ('scripts/verify/product-flow.mjs', 'scripts/verify/impact-plan.mjs',
+                                       'scripts/verify/mcp-capture.mjs',
                                        'scripts/verify/risk-tiers.yml', 'scripts/route-reviewers.sh'))]
     for path in paths:
         if '.test.' not in path.name:

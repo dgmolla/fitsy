@@ -83,7 +83,7 @@ export function inspectWalkthrough(events, source = '', recognize = recognizeScr
   for (const event of events) for (const item of event.result?.content || []) {
     // Read observation results only. An assertion command or prompt can mention
     // the forbidden screen without ever displaying it.
-    if (item.type === 'text' && ['inspect_view_hierarchy', 'mobile_list_elements_on_screen'].includes(event.command?.name) &&
+    if (item.type === 'text' && ['inspect_view_hierarchy', 'inspect_screen', 'mobile_list_elements_on_screen'].includes(event.command?.name) &&
         expiredScreen(item.text || '') && !expectedExpired)
       throw new Error('Unexpected subscription-expired screen in walkthrough observation');
     if (item.type !== 'image') continue;
