@@ -20,7 +20,7 @@ function check(port: number): string {
 }
 
 describe('Metro port ownership check', () => {
-  test.each([['a wildcard (dual-stack) listener', undefined], ['a 127.0.0.1 listener', '127.0.0.1']])('reports %s as busy with the owner action', async (_name, host) => {
+  test.each([['a wildcard (dual-stack) listener', undefined], ['a loopback listener', '127.0.0.1']])('reports %s as busy with the owner action', async (_name, host) => { // loopback test fixture
     const held = await listen(host);
     try {
       expect(check(held.port)).toMatch(/already in use by another process.*stop-metro/);
