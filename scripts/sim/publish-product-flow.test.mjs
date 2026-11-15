@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { applyBillingPersonaSkip, billingPersonaFlowNames, requiredBillingFixtures, requiredStatusDescription } from './publish-product-flow.mjs';
+import { applyBillingPersonaSkip, billingPersonaFlowNames, checkCliArgs, requiredBillingFixtures, requiredStatusDescription } from './publish-product-flow.mjs';
+import { billingSkipSelection } from './evidence-mode.mjs';
 
 // journeyFixture requires FITSY_E2E_FIXTURES for any selected flow carrying a
 // fixture tag (every real selected flow does), so build one real config per
@@ -163,4 +164,41 @@ test('#873: requiredStatusDescription appends the skip-note suffix and still res
 test('#873: requiredStatusDescription tolerates a missing reason or empty flow list', () => {
   assert.equal(requiredStatusDescription({ flows: [] }), '0 flow(s) required');
   assert.equal(requiredStatusDescription({ flows: ['signin-options'] }), '1 flow(s): signin-options');
+});
+
+test('#883: checkCliArgs round-trips through billingSkipSelection exactly like run/finish parse the same flags', () => {
+  for (const options of [
+    {},
+    { skipBillingPersonas: true, skipBillingReason: 'Dawit 5:07 PM PT Nov 13, #853' },
+    { excludeFlows: ['cold-start-welcome'], skipBillingReason: 'Coordinator #867: unrelated auth flake' },
+    { skipBillingPersonas: true, excludeFlows: ['cold-start-welcome', 'log-meal'], skipBillingReason: 'both exclusions together' },
+  ]) {
+    const args = checkCliArgs(options);
+    const parsed = billingSkipSelection(args);
+    assert.deepEqual(parsed.rest, []);
+    assert.equal(parsed.skipBillingPersonas, Boolean(options.skipBillingPersonas));
+    assert.deepEqual(parsed.excludeFlows, options.excludeFlows ?? []);
+    assert.equal(parsed.skipBillingReason, options.skipBillingReason);
+  }
+});
+
+test('#889: applyBillingPersonaSkip waives only the walkthrough and still requires every flow', () => {
+  const plan = { flows: ['map-search', 'chain-menu-serving'], required: true, categories: ['billing', 'changed-journey'] };
+  assert.throws(() => applyBillingPersonaSkip(plan, { waiveWalkthrough: true }), /requires --reason/);
+  const { plan: waived, skippedFlows } = applyBillingPersonaSkip(plan, { waiveWalkthrough: true, skipBillingReason: 'Dawit #887' });
+  assert.deepEqual(waived, { ...plan, waivedWalkthrough: true });
+  assert.deepEqual(skippedFlows, []);
+  assert.equal(applyBillingPersonaSkip(plan, {}).plan.waivedWalkthrough, undefined, 'never default-on');
+  const both = applyBillingPersonaSkip(plan, { waiveWalkthrough: true, excludeFlows: ['map-search'], skipBillingReason: 'x' });
+  assert.deepEqual(both.plan.flows, ['chain-menu-serving']);
+  assert.equal(both.plan.waivedWalkthrough, true);
+});
+
+test('#889: checkCliArgs forwards --waive-walkthrough and round-trips through billingSkipSelection', () => {
+  const args = checkCliArgs({ waiveWalkthrough: true, skipBillingReason: 'Dawit #887' });
+  assert.deepEqual(args, ['--waive-walkthrough', '--reason', 'Dawit #887']);
+  const parsed = billingSkipSelection(args);
+  assert.equal(parsed.waiveWalkthrough, true);
+  assert.equal(parsed.skipBillingReason, 'Dawit #887');
+  assert.deepEqual(parsed.rest, []);
 });

@@ -37,10 +37,21 @@ export function recordRunFailure(reportFile, timeline, error) {
   } catch (writeError) { evidenceErrors.push(`timeline: ${writeError.message}`); }
   return evidenceErrors;
 }
-export function admitDisk(path, phase, requiredGiB = 8) {
-  const disk = statfsSync(path);
-  const freeBytes = Number(disk.bavail) * Number(disk.bsize);
-  if (freeBytes < requiredGiB * GiB) throw new Error(`${phase} needs ${requiredGiB} GiB free on ${path}; ${Math.floor(freeBytes / GiB * 10) / 10} GiB available. Free owned disposable build data at an idle boundary, then retry.`);
+const freeBytesOf = path => { const disk = statfsSync(path); return Number(disk.bavail) * Number(disk.bsize); };
+// #892: on a shortage, first remove merged, clean, idle worktrees (audited by
+// scripts/dev/cleanup-worktrees.mjs) instead of waiting; a cleanup failure
+// never masks the real admission error.
+function cleanupMergedWorktrees(path) {
+  const script = fileURLToPath(new URL('../dev/cleanup-worktrees.mjs', import.meta.url));
+  execFileSync(process.execPath, [script, '--apply'], { cwd: path, stdio: 'ignore', timeout: 120_000 });
+}
+export function admitDisk(path, phase, requiredGiB = 8, cleanup = cleanupMergedWorktrees) {
+  let freeBytes = freeBytesOf(path), cleaned = false;
+  if (freeBytes < requiredGiB * GiB) {
+    try { cleanup(path); cleaned = true; } catch { /* report the original shortage below */ }
+    freeBytes = freeBytesOf(path);
+  }
+  if (freeBytes < requiredGiB * GiB) throw new Error(`${phase} needs ${requiredGiB} GiB free on ${path}; ${Math.floor(freeBytes / GiB * 10) / 10} GiB available${cleaned ? ' after removing merged worktrees' : ''}. Free owned disposable build data at an idle boundary, then retry.`);
   return { freeBytes, requiredBytes: requiredGiB * GiB };
 }
 export async function requireMetro(metro, { processIdentity, sourceHash, configHash, route }) {

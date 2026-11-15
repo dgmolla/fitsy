@@ -29,7 +29,10 @@ export function redactSecrets(bytes) {
   return lines.every(line => line !== null) ? Buffer.from(lines.join('\n')) : bytes;
 }
 
-export function publicationArtifacts(report, categories) {
+// #896: with an explicit walkthrough waiver (plan.waivedWalkthrough) the required
+// categories have no observation to archive; any observation that does exist is
+// still archived. Without the waiver every required category must have one.
+export function publicationArtifacts(report, categories, waivedWalkthrough = false) {
   const artifacts = new Set(['report.json']);
   for (const flow of report.flows) {
     artifacts.add(flow.commands);
@@ -39,7 +42,11 @@ export function publicationArtifacts(report, categories) {
     if (flow.attachmentCloseout) artifacts.add(flow.attachmentCloseout);
     if (flow.video) artifacts.add(flow.video);
   }
-  for (const category of categories) artifacts.add(report.exploration.find(item => item.category === category).trace);
+  for (const category of waivedWalkthrough ? [] : categories) {
+    const observation = (report.exploration || []).find(item => item.category === category);
+    if (!observation) throw new Error(`Missing walkthrough observation for ${category}; publish needs it or an explicit --waive-walkthrough`);
+    artifacts.add(observation.trace);
+  }
   for (const observation of report.exploration || []) artifacts.add(observation.trace);
   for (const session of report.walkthroughSessions || []) {
     artifacts.add(session.receipt);

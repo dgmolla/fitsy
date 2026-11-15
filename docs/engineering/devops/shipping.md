@@ -211,14 +211,18 @@ node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs 
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs run <UDID> --mode=final-candidate
 # Prepare each required category using the original run environment.
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs prepare-walkthrough <UDID> auth
-# Capture actual primary/recovery Maestro MCP observations, stop its driver, then:
-node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs finish-walkthrough mcp/auth.jsonl
+# Run the MCP client against the capture proxy (it launches the real `maestro mcp`
+# and records every request and response); drive the primary/recovery checkpoints, stop it, then:
+#   command: node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs capture-walkthrough
+node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs finish-walkthrough
 # Repeat for the remaining categories, then finish the complete observation set.
 node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs finish .evidence/walkthrough.json
 ```
 
 The final runner automatically includes every affected journey, including cold-start and sign-in only when selected.
 Explicit names add diagnostic journeys; they cannot replace mandatory flows.
+A run no longer stops at the first failing flow: it runs every selected flow and writes `.evidence/product-flow/failures-summary.json` listing each failure with a category - `fixture` (setup before Maestro), `flow` (a Maestro command failed: app regression or stale test, a person decides), `harness` (the runner's own checks after the flow) or `environment` (simulator/infrastructure; later flows are then not run and are named as not run).
+A single failure still throws its original error.
 Final acceptance executes the complete selected YAML even when local development used render smoke.
 Maintain flow tags for every category in `--plan`, with at least two non-optional outcome assertions per changed journey.
 Every selected flow and its mandatory source assertions must be present in the receipt; another tagged journey cannot substitute for an omitted flow.
@@ -230,12 +234,13 @@ When a reviewer explicitly requests video, add `--record-video` to the final can
 Development runs remain separate from final publication even when recorded.
 
 The walkthrough JSON is an array with one entry per category: `category`, `expected`, `observed`, `branches: ["primary", "recovery"]`, `result: "pass"`, and `trace` relative to `.evidence/product-flow/`.
-Traces are JSONL: one `{at, command: {name}, result: {content}}` object per line, recording actual Maestro MCP actions and screen observations.
+The walkthrough trace is never written by hand: `capture-walkthrough` is a byte-preserving stdio proxy in front of the real `maestro mcp --no-viewer` and appends every request and response to `walkthrough/<category>/mcp-capture.jsonl` as a hash-chained log bound to a per-session nonce recorded in the report, and `finish-walkthrough` derives `mcp-trace.jsonl` from it (one `{at, command: {name, arguments}, result}` per `tools/call`, keyed by the real MCP tool name).
+The validator re-checks the chain, the nonce and that the trace is exactly that projection, so a hand-written or edited trace is rejected; this proves provenance from the tooling, not that the screens are correct, and text typed through MCP (such as a fixture password in a `run` command) is retained verbatim in the private capture.
 For Debug Test Store walkthroughs, the optional executed-flow argument to `prepare-walkthrough` selects that journey's existing fixture without replacing the original caller environment.
-Use the returned XCTest capture path for MCP, and complete each category with `finish-walkthrough` before preparing another.
+Point the MCP client at the `mcpCommand` printed by `prepare-walkthrough` (it sets the XCTest capture receipt itself), and complete each category with `finish-walkthrough` before preparing another.
 The caller retains original identities, records actual Metro transitions and verifies restoration of the original configuration and bundle; private publication includes these receipts and their before/after attachment snapshots.
 Keep the verified restored Metro alive through publication and actual protected merge.
-Retain direct `tap_on`, `input_text`, `back` or `launch_app` interactions and `inspect_view_hierarchy` observations; a syntax check or scripted flow invocation alone does not establish an interactive walkthrough.
+Retain at least one `run` interaction and one `inspect_screen` observation (the real `maestro mcp` tools); a syntax check or scripted flow invocation alone does not establish an interactive walkthrough.
 Identify run-owned synthetic fixtures with `FITSY_FIXTURE`; reviewers judge scenario relevance and visual quality.
 
 ### Keep mobile walkthroughs focused and recoverable

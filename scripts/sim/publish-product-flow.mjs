@@ -63,15 +63,31 @@ const SKIPPABLE_BILLING_PERSONAS = ['entitled-dev', 'expired-subscription', 'app
 // fail for reasons that have nothing to do with billing (e.g. an unrelated
 // pre-existing auth/onboarding flake); --exclude-flows names it directly
 // rather than widening the persona list for an unrelated failure mode.
-export function applyBillingPersonaSkip(plan, { skipBillingPersonas = false, skipBillingReason, excludeFlows = [] } = {}) {
-  assert(!(skipBillingPersonas || excludeFlows.length) || (typeof skipBillingReason === 'string' && skipBillingReason.trim()),
-    '--skip-billing-personas/--exclude-flows requires --reason "<text>"');
+// #889: waiveWalkthrough drops only the changed-journey walkthrough
+// requirement (validate() reads plan.waivedWalkthrough); every selected flow is
+// still required. Same opt-in/reason contract; never default-on.
+export function applyBillingPersonaSkip(plan, { skipBillingPersonas = false, skipBillingReason, excludeFlows = [], waiveWalkthrough = false } = {}) {
+  assert(!(skipBillingPersonas || excludeFlows.length || waiveWalkthrough) || (typeof skipBillingReason === 'string' && skipBillingReason.trim()),
+    '--skip-billing-personas/--exclude-flows/--waive-walkthrough requires --reason "<text>"');
   const personaFlows = skipBillingPersonas ? billingPersonaFlowNames(plan, SKIPPABLE_BILLING_PERSONAS) : [];
   const namedFlows = excludeFlows.filter(name => plan.flows.includes(name));
   const skippedFlows = [...new Set([...personaFlows, ...namedFlows])].sort();
-  if (!skippedFlows.length) return { plan, skippedFlows };
+  const waived = waiveWalkthrough ? { waivedWalkthrough: true } : {};
+  if (!skippedFlows.length) return { plan: waiveWalkthrough ? { ...plan, ...waived } : plan, skippedFlows };
   const remaining = plan.flows.filter(name => !skippedFlows.includes(name));
-  return { plan: { ...plan, flows: remaining, required: plan.required && remaining.length > 0 }, skippedFlows };
+  return { plan: { ...plan, ...waived, flows: remaining, required: plan.required && remaining.length > 0 }, skippedFlows };
+}
+// #883: the CLI-arg shape product-flow.mjs's `check`/`finish`/`run` commands
+// all parse via billingSkipSelection/finishSelection - kept here, next to
+// applyBillingPersonaSkip, as the inverse of that parsing, so a subprocess
+// call can forward the exact flags already applied to this process's plan.
+export function checkCliArgs({ skipBillingPersonas = false, skipBillingReason, excludeFlows = [], waiveWalkthrough = false } = {}) {
+  return [
+    ...(skipBillingPersonas ? ['--skip-billing-personas'] : []),
+    ...(waiveWalkthrough ? ['--waive-walkthrough'] : []),
+    ...(excludeFlows.length ? [`--exclude-flows=${excludeFlows.join(',')}`] : []),
+    ...((skipBillingPersonas || excludeFlows.length || waiveWalkthrough) ? ['--reason', skipBillingReason] : []),
+  ];
 }
 export function requiredBillingFixtures(plan) {
   const fixtures = new Map();
@@ -118,8 +134,8 @@ export function publicationPlan(evidenceDirectory, buildReceiptFile, paths = cha
   return previous.error ? { ...plan,
     historyWarning: 'Preserve unreadable historical evidence in the existing archive before fresh conservative collection' } : plan;
 }
-export async function createPublicationArchive(report, categories, dir, archive, execute = run) {
-  const artifacts = publicationArtifacts(report, categories);
+export async function createPublicationArchive(report, categories, dir, archive, execute = run, waivedWalkthrough = false) {
+  const artifacts = publicationArtifacts(report, categories, waivedWalkthrough);
   // Only verified relative artifact paths; no build, environment or debug logs.
   assert(lstatSync(dir).isDirectory(), 'Evidence directory must be a real directory');
   for (const f of artifacts) {
@@ -165,6 +181,7 @@ export async function publishProductFlow(prNumber, {
   skipBillingPersonas = false,
   skipBillingReason,
   excludeFlows = [],
+  waiveWalkthrough = false,
 } = {}) {
   if (preflight) {
     const invoke = execute;
@@ -216,7 +233,7 @@ export async function publishProductFlow(prNumber, {
   const resolved = resolvePlan({ labels: (pr.labels || []).map(label => label.name), recoverHistoricalReport: preflight }),
     includeBaseline = process.argv.includes('--include-baseline');
   const unfiltered = includeBaseline ? { ...resolved, flows: [...new Set([...(resolved.flows || []), ...baseline])].sort(), baseline } : resolved;
-  const { plan, skippedFlows } = applyBillingPersonaSkip(unfiltered, { skipBillingPersonas, skipBillingReason, excludeFlows });
+  const { plan, skippedFlows } = applyBillingPersonaSkip(unfiltered, { skipBillingPersonas, skipBillingReason, excludeFlows, waiveWalkthrough });
   const evidenceRequired = plan.required || includeBaseline;
   if (preflight && evidenceRequired) {
     const fixtures = requiredBillingFixtures(plan);
@@ -256,7 +273,7 @@ console.log(JSON.stringify(out));`],
     catch (e) { try { configDrift = JSON.parse(e.stdout); } catch { configDrift = { status: 'fail', summary: e.message, fix: '' }; } }
     if (configDrift.status === 'fail') console.error(`config-drift (advisory, does not block preflight): ${configDrift.summary}`);
     return { status: 'ready', head, plan, mediaIntegration: media?.required ? 'required' : 'not_applicable',
-      evidenceRequired, excludedFlows: skippedFlows, ...(skippedFlows.length ? { skipBillingReason } : {}),
+      evidenceRequired, excludedFlows: skippedFlows, ...(skippedFlows.length || waiveWalkthrough ? { skipBillingReason } : {}), ...(waiveWalkthrough ? { waivedWalkthrough: true } : {}),
       configDrift,
       report: '.evidence/product-flow/report.json',
       requiredProof: evidenceRequired ? ['final-candidate report with source/app/native/JS/config/backend/store/runtime identities',
@@ -272,18 +289,23 @@ console.log(JSON.stringify(out));`],
     assert(report.evidenceMode === 'final-candidate',
       'Final candidate proof is required; rerun with --mode=final-candidate');
     await validateEvidence(report, plan, sourceHash(), dir);
-    execute(process.execPath, ['--env-file=apps/mobile/.env.development.local', 'scripts/sim/product-flow.mjs', 'check']);
+    // #883: forward the same exclusion flags used above, or this subprocess
+    // re-validates against an unfiltered plan and fails even though the
+    // narrowed validateEvidence call just above it passed.
+    execute(process.execPath, ['--env-file=apps/mobile/.env.development.local', 'scripts/sim/product-flow.mjs', 'check',
+      ...checkCliArgs({ skipBillingPersonas, skipBillingReason, excludeFlows, waiveWalkthrough })]);
     const tag = `product-flow-${head}`;
     mkdirSync(publicationDirectory, { recursive: true });
     const archive = resolve(publicationDirectory, 'local-evidence.tar.gz');
-    await createPublicationArchive(report, plan.categories, dir, archive, execute);
+    await createPublicationArchive(report, plan.categories, dir, archive, execute, plan.waivedWalkthrough);
     const archiveSize = statSync(archive).size;
     assert(archiveSize > 0 && archiveSize < 2 * 1024 ** 3, 'Evidence archive exceeds the GitHub release asset limit of under 2 GiB');
     const archiveDigest = `sha256:${await fileDigest(archive)}`;
     const notes = resolve(publicationDirectory, 'notes.md');
     const recorded = report.videoRequested ?? report.flows.every(flow => Boolean(flow.video && flow.videoHash));
-    const exceptions = (report.exceptions || []).map(item =>
-      `${item.flow}: ${item.status}, never passed; ${item.reason}; source ${item.source}; owner ${item.approval}.`).join('\n');
+    const exceptions = [...(report.exceptions || []).map(item =>
+      `${item.flow}: ${item.status}, never passed; ${item.reason}; source ${item.source}; owner ${item.approval}.`),
+    ...(waiveWalkthrough ? [`Changed-journey walkthrough waived, not performed: ${skipBillingReason}`] : [])].join('\n');
     writeFileSync(notes, `**TL;DR:** Verified local simulator evidence is preserved for ${pr.url}.\n\nCandidate: ${head}\nSource/test hash: ${report.inputHash}\nFinished: ${report.finishedAt}\nStore: ${report.storeMode}\n${exceptions ? `\n${exceptions}\n` : ''}\nPrivate draft for repository reviewers; do not publish.\nIncludes Maestro commands, screenshots and changed-journey observations${recorded ? ', plus complete untrimmed flow videos' : ''}.\n`);
     let release;
     try { release = JSON.parse(gh(['release', 'view', tag, '--repo', repo, '--json', 'isDraft,url'])); } catch { /* create below */ }
@@ -300,7 +322,8 @@ console.log(JSON.stringify(out));`],
   }
   const latest = JSON.parse(gh(['pr', 'view', prNumber, '--repo', repo, '--json', 'headRefOid']));
   assert(latest.headRefOid === head, 'PR head changed during publication');
-  const skipNote = skippedFlows.length ? ` (skipped ${skippedFlows.join(', ')}: ${skipBillingReason})` : '';
+  const skipNote = (waiveWalkthrough ? ` (walkthrough waived: ${skipBillingReason})` : '') +
+    (skippedFlows.length ? ` (skipped ${skippedFlows.join(', ')}: ${skipBillingReason})` : '');
   status('success', evidenceRequired ? requiredStatusDescription(plan, skipNote) :
     (media?.required ? 'Local media integration verified; product flow not applicable' :
       'Not applicable: no mobile-facing product changes') + skipNote, target);
@@ -322,12 +345,13 @@ if (isMain(import.meta.url)) {
     const excludeFlows = excludeFlowsArgs.length ? excludeFlowsArgs[0].slice('--exclude-flows='.length).split(',').filter(Boolean) : [];
     const flags = withoutReason.filter(arg => !arg.startsWith('--exclude-flows='));
     const skipBillingPersonas = flags.includes('--skip-billing-personas');
+    const waiveWalkthrough = flags.includes('--waive-walkthrough');
     assert(process.argv[2] && new Set(flags).size === flags.length &&
-      flags.every(flag => ['--preflight', '--include-baseline', '--skip-billing-personas'].includes(flag)) &&
-      (skipBillingPersonas || excludeFlows.length > 0) === (reasonIndex !== -1),
-    'Usage: node scripts/sim/publish-product-flow.mjs PR_NUMBER [--preflight] [--include-baseline] [--skip-billing-personas|--exclude-flows=<name1,name2>] [--reason "<text>"]');
+      flags.every(flag => ['--preflight', '--include-baseline', '--skip-billing-personas', '--waive-walkthrough'].includes(flag)) &&
+      (skipBillingPersonas || waiveWalkthrough || excludeFlows.length > 0) === (reasonIndex !== -1),
+    'Usage: node scripts/sim/publish-product-flow.mjs PR_NUMBER [--preflight] [--include-baseline] [--skip-billing-personas|--exclude-flows=<name1,name2>|--waive-walkthrough] [--reason "<text>"]');
     console.log(JSON.stringify(await publishProductFlow(process.argv[2],
-      { preflight: flags.includes('--preflight'), skipBillingPersonas, skipBillingReason: reason, excludeFlows })));
+      { preflight: flags.includes('--preflight'), skipBillingPersonas, skipBillingReason: reason, excludeFlows, waiveWalkthrough })));
   } catch (e) {
     console.error(e.message); process.exitCode = 1;
   }
