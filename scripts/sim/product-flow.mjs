@@ -384,13 +384,26 @@ export async function startMetro(r, { maxWorkers } = {}) {
     throw error;
   }
 }
+// Probe both the IPv4 loopback and the dual-stack wildcard: on macOS a bind to one does not conflict with a holder of the other,
+// so checking only 127.0.0.1 let a listener on *:port through and the owned Metro then exited at once (opaque `ps -p` failure).
+export async function assertPortFree(port) {
+  for (const host of ['127.0.0.1', '::']) {
+    await new Promise((resolvePort, reject) => {
+      const server = createServer();
+      server.once('error', error => {
+        if (error.code === 'EADDRINUSE')
+          reject(Object.assign(new Error(`Metro port ${port} is already in use by another process; wait for its owner to run stop-metro (the Test Store build hard-codes this port)`), { code: error.code }));
+        else if (host === '::' && ['EAFNOSUPPORT', 'EADDRNOTAVAIL'].includes(error.code)) resolvePort(); // no IPv6 on this host
+        else reject(error);
+      });
+      server.listen(port, host, () => server.close(resolvePort));
+    });
+  }
+}
 async function startMetroProcess(r, maxWorkers) {
   await stopMetro();
   // Refuse a busy port; never attach to or terminate another task's server.
-  await new Promise((resolvePort, reject) => {
-    const server = createServer(); server.once('error', reject);
-    server.listen(r.metroPort, '127.0.0.1', () => server.close(resolvePort));
-  });
+  await assertPortFree(r.metroPort);
   const fd = openSync(join(buildDir, 'metro.log'), 'w');
   const child = spawn(process.execPath, [join(root, 'node_modules/expo/bin/cli'), 'start', '--dev-client', '--localhost', '--port', String(r.metroPort),
     ...(maxWorkers ? ['--max-workers', String(maxWorkers)] : [])], {
@@ -571,7 +584,8 @@ export function compileNative(profile, udid, env, jobs = 4) {
     run('xcodebuild', ['-workspace', 'ios/Fitsy.xcworkspace', '-scheme', 'Fitsy', '-configuration', profile.configuration,
       '-sdk', 'iphonesimulator', '-destination', `id=${udid}`, '-derivedDataPath', buildDir, '-jobs', String(jobs),
       'ONLY_ACTIVE_ARCH=YES', 'CODE_SIGNING_ALLOWED=YES', 'CODE_SIGN_IDENTITY=-', 'build'],
-    { cwd: mobile, env, stdio: ['ignore', fd, fd] });
+    // A local simulator build has no Sentry org/project/token: the Xcode source-map upload phase would fail the whole build.
+    { cwd: mobile, env: { ...env, SENTRY_DISABLE_AUTO_UPLOAD: 'true' }, stdio: ['ignore', fd, fd] });
   } finally { closeSync(fd); }
   const app = join(buildDir, `Build/Products/${profile.configuration}-iphonesimulator/Fitsy.app`);
   const entitlementsFile = join(buildDir,
