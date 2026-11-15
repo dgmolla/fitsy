@@ -134,7 +134,19 @@ function baselineFor(build, fingerprint, artifact, apple, now = new Date()) {
     verification_note: 'IPA identity and SHA-256 match the source fingerprint and exact EAS build; Apple processing and Internal membership confirmed. Real-device billing acceptance remains separate.' };
 }
 
-function openBaselinePR(baseline, gh = github) {
+// A local-only buildNumber bump (main's number is stale) is not on GitHub, so compare its parent instead.
+function integrationSource(sha, git = (...args) => command('git', args, { cwd: root })) {
+  try {
+    const parents = git('rev-list', '--parents', '-n1', sha).trim().split(' ').slice(1);
+    if (parents.length !== 1) return sha;
+    const files = git('diff', '--name-only', parents[0], sha).trim().split('\n');
+    const lines = git('diff', '-U0', parents[0], sha, '--', configPath).split('\n')
+      .filter(line => /^[+-]/.test(line) && !/^(\+\+\+|---)/.test(line));
+    return files.length === 1 && files[0] === configPath && lines.length === 2 && lines.every(line => /^[+-]\s*buildNumber:\s*["']\d+["'],?$/.test(line)) ? parents[0] : sha;
+  } catch { return sha; }
+}
+
+function openBaselinePR(baseline, gh = github, git) {
   const branch = `chore/testflight-${baseline.build_number}-${baseline.eas_build_id}`;
   const pulls = gh(`pulls?state=all&head=dgmolla:${branch}&base=main`);
   assert(Array.isArray(pulls) && pulls.length <= 1, 'Ambiguous baseline PR');
@@ -149,7 +161,7 @@ function openBaselinePR(baseline, gh = github) {
     return pulls[0].html_url;
   }
   const main = gh('git/ref/heads/main').object.sha;
-  const comparison = gh(`compare/${baseline.source_sha}...${main}`);
+  const comparison = gh(`compare/${integrationSource(baseline.source_sha, git)}...${main}`);
   assert(['ahead', 'identical'].includes(comparison.status), 'Build source is not integrated on main');
   const content = path => Buffer.from(gh(`contents/${path}?ref=${main}`).content, 'base64').toString();
   const old = JSON.parse(content(baselinePath));
@@ -221,7 +233,7 @@ async function main(args = process.argv.slice(2)) {
   }
   return postSubmit({ buildId: options.build, fingerprintFile: options.fingerprint, timeoutSeconds }, { apple: appleClient(config) });
 }
-module.exports = { appleClient, preflight, waitForBuild, inspectArtifact, baselineFor, openBaselinePR, postSubmit, main };
+module.exports = { integrationSource, appleClient, preflight, waitForBuild, inspectArtifact, baselineFor, openBaselinePR, postSubmit, main };
 if (require.main === module) main().then(result => console.log(JSON.stringify(result))).catch(error => {
   console.error(`TestFlight post-submit stopped: ${error.message}`); process.exitCode = 1;
 });
