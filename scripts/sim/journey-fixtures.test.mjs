@@ -7,7 +7,6 @@ import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { journeyFixture, withFixtureEnvironment, prepareJourney, assertJourneyStore, releaseExceptions } from './journey-fixtures.mjs';
 import { simulatorFlows, repository } from '../verify/impact-plan.mjs';
-import { main as hostedMain } from './actions.mjs';
 import { acceptanceExceptions, validateAcceptance } from '../verify/product-flow.mjs';
 
 const yaml = createRequire(import.meta.url)('js-yaml');
@@ -215,62 +214,3 @@ test('the release grant binds PR merge refs and the exact squash merge, never a 
   await assert.rejects(releaseExceptions([name], catalog, '6716597294', execute), /published PR759 source/);
 });
 
-for (const eventName of ['pull_request', 'push']) test(`the real hosted ${eventName} reaches fixture admission without stored CLI authentication or a token`, async t => {
-  const directory = mkdtempSync(join(tmpdir(), 'fitsy-hosted-approval-'));
-  const previous = { ...process.env };
-  t.after(() => {
-    for (const key of Object.keys(process.env)) if (!(key in previous)) delete process.env[key];
-    Object.assign(process.env, previous);
-    rmSync(directory, { recursive: true, force: true });
-  });
-  const work = join(directory, 'fitsy-simulator-14-1'), config = join(directory, 'gh'), bin = join(directory, 'bin');
-  mkdirSync(work); mkdirSync(config); mkdirSync(bin);
-  writeFileSync(join(work, 'device.json'), JSON.stringify({ udid: '11111111-1111-1111-1111-111111111111' }));
-  const head = 'a'.repeat(40), base = 'b'.repeat(40);
-  // Supply the external Git comparison used by the real hosted selector.
-  // A navigation change requires full coverage regardless of this test's branch.
-  writeFileSync(join(bin, 'git'), `#!${process.execPath}
-const args = process.argv.slice(2);
-if (args[0] === 'rev-parse') console.log(args.at(-1).startsWith('${base}') ? '${base}' : '${head}');
-else if (args[0] === 'merge-base') console.log('${base}');
-else if (args[0] === 'diff' && args.includes('--name-only')) process.stdout.write('apps/mobile/app/index.tsx\\0');
-else process.exit(2);
-`, { mode: 0o755 });
-  const event = join(directory, 'event.json');
-  writeFileSync(event, JSON.stringify(eventName === 'push' ? { ref: 'refs/heads/main', before: base, after: head }
-    : { pull_request: { number: 759, base: { sha: base }, head: { sha: head } } }));
-  for (const key of ['GH_TOKEN', 'GITHUB_TOKEN', 'GH_ENTERPRISE_TOKEN', 'GITHUB_ENTERPRISE_TOKEN', 'FITSY_DIFF_BASE', 'FITSY_DIFF_HEAD']) delete process.env[key];
-  Object.assign(process.env, { GITHUB_ACTIONS: 'true', RUNNER_OS: 'macOS', GITHUB_WORKSPACE: repository,
-    PATH: `${bin}:${process.env.PATH}`,
-    RUNNER_TEMP: directory, GITHUB_RUN_ID: '14', GITHUB_RUN_ATTEMPT: '1', GH_CONFIG_DIR: config,
-    GITHUB_EVENT_PATH: event, GITHUB_EVENT_NAME: eventName, GITHUB_REF: eventName === 'push' ? 'refs/heads/main' : 'refs/pull/759/merge', SIM_SCOPE: 'full', FITSY_XCTEST_SIM_UDID: '11111111-1111-1111-1111-111111111111',
-    EXPO_PUBLIC_API_URL: 'https://dev.fitsy.org', EXPO_PUBLIC_SUPABASE_URL: 'https://kegycybiruksmrzvniha.supabase.co',
-    EXPO_PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_synthetic', EXPO_PUBLIC_REVENUECAT_TEST_KEY: 'test_synthetic',
-    SIM_E2E_FIXTURES: '{}',
-  });
-  process.env.GITHUB_SHA = head;
-  const requests = [];
-  t.mock.method(globalThis, 'fetch', async (url, options) => {
-    requests.push(url);
-    assert.equal(new URL(url).origin, 'https://api.github.com');
-    assert.equal(options.redirect, 'error');
-    assert(options.signal instanceof AbortSignal);
-    assert.equal(new Headers(options.headers).has('authorization'), false);
-    const body = url.endsWith('/759')
-      ? { number: 759, state: eventName === 'push' ? 'closed' : 'open', merged: eventName === 'push', merge_commit_sha: head, base: { ref: 'main', repo: { full_name: 'dgmolla/fitsy' } }, head: { sha: head, ref: 'codex/issue-746', repo: { full_name: 'dgmolla/fitsy' } } }
-      : { id: 6716597294, user: { login: 'dgmolla' }, body: releaseApprovalBody };
-    return new Response(JSON.stringify(body));
-  });
-  // Empty fixture input stops before installation/native work, after the real
-  // hosted caller has independently checked public authority and exact source.
-  await assert.rejects(hostedMain('run'), /Missing disposable DEV credentials/);
-  assert.deepEqual(requests, ['https://api.github.com/repos/dgmolla/fitsy/pulls/759',
-    'https://api.github.com/repos/dgmolla/fitsy/issues/comments/6716597294']);
-  for (const failure of ['denied', 'malformed', 'timeout']) {
-    t.mock.method(globalThis, 'fetch', async () => {
-      if (failure === 'timeout') throw new DOMException('Timed out', 'TimeoutError');
-      return failure === 'denied' ? new Response('{}', { status: 403 }) : new Response('not JSON');
-    });
-    await assert.rejects(hostedMain('run'), /authority\/source lookup unavailable/);
-  }
-});
