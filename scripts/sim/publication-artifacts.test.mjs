@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import yaml from 'js-yaml';
 import { createPublicationArchive, publicationPlan, publishProductFlow as publishWithMediaEvidence } from './publish-product-flow.mjs';
-import { redactSecrets } from './publication-artifacts.mjs';
+import { publicationArtifacts, redactSecrets } from './publication-artifacts.mjs';
 import { artifactPath, baseline, inputHash, root, publicConfigIdentity, impact, requiredPublicConfigKeys, validate } from '../verify/product-flow.mjs';
 import { validateMediaReceipt, writeMediaReceipt } from '../verify/media-integration.mjs';
 import { simulatorFlows } from '../verify/impact-plan.mjs';
@@ -657,4 +657,17 @@ test('complete final proof covers a smaller request without rewriting provenance
     await assert.rejects(publishProductFlow('9', options), /unexpected XCTest recording/);
     assert.equal(uploads, 1, 'unexpected incidental recording must stop before upload');
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('#896: a waived walkthrough archives without observations (even with no exploration), an unwaived one still requires them', () => {
+  const report = { flows: [{ commands: 'c.json', screenshot: 's.png', captureReceipt: 'r.jsonl' }], walkthroughSessions: [] };
+  const base = ['report.json', 'c.json', 's.png', 'r.jsonl'];
+  assert.deepEqual(publicationArtifacts(report, ['billing', 'changed-journey'], true), base);
+  assert.deepEqual(publicationArtifacts({ ...report, exploration: [] }, ['billing'], true), base);
+  const observed = { ...report, exploration: [{ category: 'billing', trace: 't.jsonl' }] };
+  assert.deepEqual(publicationArtifacts(observed, ['billing'], true), [...base, 't.jsonl'], 'an existing observation is still archived under a waiver');
+  assert.deepEqual(publicationArtifacts(observed, ['billing']), [...base, 't.jsonl']);
+  assert.throws(() => publicationArtifacts(report, ['billing']), /Missing walkthrough observation for billing/);
+  assert.throws(() => publicationArtifacts({ ...report, exploration: [] }, ['billing']), /Missing walkthrough observation for billing/);
+  assert.throws(() => publicationArtifacts(observed, ['billing', 'auth']), /Missing walkthrough observation for auth/);
 });
