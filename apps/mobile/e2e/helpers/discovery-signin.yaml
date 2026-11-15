@@ -1,5 +1,16 @@
+# Anonymous sessions (#801/#820) skip the sign-in gate after welcome-start, so
+# open the sign-in route explicitly to use the fixture account.
 appId: com.fitsy.mobile
 ---
+- runFlow:
+    when:
+      notVisible:
+        id: signup-dev
+    commands:
+      - openLink: com.fitsy.mobile://welcome/signin
+      - tapOn:
+          text: "^Open$"
+          optional: true
 - extendedWaitUntil:
     visible:
       id: signup-dev
