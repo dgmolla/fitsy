@@ -12,6 +12,14 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO_ROOT"
 
+# `vercel link --yes` run from a worktree creates a NEW project named after the directory, and the env pull below
+# then yields the wrong (empty) environment. Require the real project before pulling anything.
+LINKED_PROJECT="$(node -e 'try{console.log(JSON.parse(require("fs").readFileSync(".vercel/project.json","utf8")).projectName||"")}catch{console.log("")}')"
+if [[ "$LINKED_PROJECT" != "fitsy-api" ]]; then
+  echo "[write-local-env] This checkout is linked to Vercel project '${LINKED_PROJECT:-none}', not fitsy-api. From the repo root run: vercel link --yes --project fitsy-api" >&2
+  exit 1
+fi
+
 DEV_API_URL="${DEV_API_URL:-https://dev.fitsy.org}"
 
 vercel env pull --environment=development apps/api/.env.local --yes >/dev/null

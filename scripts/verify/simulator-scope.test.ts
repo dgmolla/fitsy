@@ -94,13 +94,23 @@ test.each([
   'apps/api/lib/auth.ts', 'apps/api/app/api/revenuecat/webhook/route.ts',
   'apps/api/next.config.ts',
   'prisma/schema.prisma', 'package-lock.json',
-  'scripts/deploy/mobile.sh', '.github/workflows/deploy.yml',
+  '.github/workflows/deploy.yml',
   'apps/mobile/components/NewUnmappedScreen.tsx',
   'apps/mobile/assets/icon.png', 'apps/mobile/lib/colors.ts',
   'apps/web/public/logo.png', 'apps/web/src/components/Logo.styles.ts',
   'apps/web/app/page.mdx', 'apps/web/app/page.jsx',
 ])('high change %s selects every flow', path => {
   expect(select([path])).toMatchObject({ risk: 'high', scope: 'full', required: true, flows: allFlows });
+});
+
+test.each(['scripts/deploy/mobile.sh', 'scripts/deploy/testflight-post-submit'])(
+  'release tooling only (%s) needs no simulator run (#906)', path => {
+  expect(select([path])).toMatchObject({ scope: 'none', required: false, flows: [] });
+});
+
+test('release tooling mixed with any other source keeps the full high-path rule (#906)', () => {
+  expect(select(['scripts/deploy/mobile.sh', 'apps/mobile/lib/menuFilters.ts'])).toMatchObject({ risk: 'high', scope: 'full', flows: allFlows });
+  expect(select(['scripts/deploy/mobile.sh', 'scripts/sim/product-flow.mjs'])).toMatchObject({ scope: 'full' });
 });
 
 test('multiple affected areas union and deduplicate flows independently of path order', () => {

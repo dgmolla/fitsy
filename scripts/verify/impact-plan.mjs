@@ -545,7 +545,10 @@ export function simulatorSelection(files, { cwd = repository, env = process.env,
   if (unknownContext) return full('Event context unavailable; simulator overrides cannot be ruled out');
   if (release) return full('Release candidate requires the full simulator flow set');
   const source = files.filter(path => simulatorSource(path) && !verificationScriptsOnly(path, range, cwd, env));
-  const highPath = source.find(highSimulatorPath);
+  // #906: a PR whose only simulator-relevant source is release tooling under scripts/deploy/ cannot change app behavior,
+  // so it needs unit/focused tests, not a native run. Any other source file in the PR keeps the full high-path rule.
+  const releaseToolingOnly = source.length > 0 && source.every(path => path.startsWith('scripts/deploy/'));
+  const highPath = releaseToolingOnly ? undefined : source.find(highSimulatorPath);
   if (highPath) return full(`Navigation, auth, billing, native configuration or release path: ${highPath}`);
   const entry = discoveryPreviewImpact(source, configKeys, range, cwd, env) || discoveryEntryImpact(source, configKeys, range, cwd, env);
   if (entry && entry.flows.every(flow => all.includes(flow)) && (entry.flows.length || !labels.includes('needs-sim'))) {
