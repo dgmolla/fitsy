@@ -18,7 +18,7 @@ import { admitDisk, appendRecordedFlowFailure, applyCapturePolicy, archiveFailur
 import { classifySimulatorFailure, maestroFailure, withEnvironmentRetry } from './failure-policy.mjs';
 import { prepareActiveEntitlement, verifyInactiveEntitlement } from './active-entitlement.mjs';
 import { inspectScreenshot, inspectScreenshotDirectory, inspectWalkthrough, requireScreenRecognition } from './screen-guard.mjs';
-import { matchesFinalCandidate, readPreviousReportForReuse, runSelection, finishSelection } from './evidence-mode.mjs';
+import { billingSkipSelection, matchesFinalCandidate, readPreviousReportForReuse, runSelection, finishSelection } from './evidence-mode.mjs';
 export { readPreviousReportForReuse } from './evidence-mode.mjs';
 import { closeoutXCTestAttachments, snapshotXCTestAttachments } from './xctest-attachments.mjs';
 const yaml = createRequire(import.meta.url)('js-yaml');
@@ -959,7 +959,7 @@ async function finish(walkthrough, { skipBillingPersonas = false, skipBillingRea
     report.publicConfigAcceptance.verifiedConfigHash = report.configHash;
   save(join(out, 'report.json'), report); console.log(JSON.stringify(result));
 }
-async function check() {
+async function check({ skipBillingPersonas = false, skipBillingReason, excludeFlows = [] } = {}) {
   const report = read(join(out, 'report.json'));
   const r = receipt(report.simulator);
   assert(report.appHash === r.appHash && report.configHash === environment().configHash,
@@ -970,7 +970,14 @@ async function check() {
   assert(report.backendDeployment === backend().backendDeployment, 'Dev deployment changed after tests');
   installedApp(report.simulator, r.appHash);
   await checkBundle(report);
-  await validateAcceptance(report, candidatePlan(requiredPublicConfigKeys(report, r, environment())), inputHash(), out,
+  // #883: same shape as finish()'s #876 fix - narrow the plan with
+  // applyBillingPersonaSkip before validating, or this standalone
+  // confirmation re-requires every flow regardless of what the run (and
+  // publishProductFlow's own already-narrowed validateEvidence call) used.
+  const { applyBillingPersonaSkip } = await import('./publish-product-flow.mjs');
+  const { plan } = applyBillingPersonaSkip(candidatePlan(requiredPublicConfigKeys(report, r, environment())),
+    { skipBillingPersonas, skipBillingReason, excludeFlows });
+  await validateAcceptance(report, plan, inputHash(), out,
     Date.now(), root, r.nativeIdentity.hash, report.evidenceMode);
 }
 if (isMain(import.meta.url)) {
@@ -1004,7 +1011,11 @@ try {
     await finishWalkthrough(args[0]);
   }
   else if (command === 'finish') { const selected = finishSelection(args); await finish(selected.walkthrough, selected); }
-  else if (command === 'check') await check();
+  else if (command === 'check') {
+    const { rest, ...selected } = billingSkipSelection(args);
+    assert(!rest.length, 'Unknown check option');
+    await check(selected);
+  }
   else if (command === 'stop-metro') await stopMetro();
   else throw new Error('Usage: node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs build UDID | run UDID [flow names] [--mode=development|final-candidate|requested-video] [--record-video] [--release-exception=6716597294] [--no-environment-retry] | prepare-walkthrough UDID category [executed-flow] | finish-walkthrough relative-trace | finish [walkthrough.json]');
 } catch (e) {

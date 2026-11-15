@@ -73,6 +73,17 @@ export function applyBillingPersonaSkip(plan, { skipBillingPersonas = false, ski
   const remaining = plan.flows.filter(name => !skippedFlows.includes(name));
   return { plan: { ...plan, flows: remaining, required: plan.required && remaining.length > 0 }, skippedFlows };
 }
+// #883: the CLI-arg shape product-flow.mjs's `check`/`finish`/`run` commands
+// all parse via billingSkipSelection/finishSelection - kept here, next to
+// applyBillingPersonaSkip, as the inverse of that parsing, so a subprocess
+// call can forward the exact flags already applied to this process's plan.
+export function checkCliArgs({ skipBillingPersonas = false, skipBillingReason, excludeFlows = [] } = {}) {
+  return [
+    ...(skipBillingPersonas ? ['--skip-billing-personas'] : []),
+    ...(excludeFlows.length ? [`--exclude-flows=${excludeFlows.join(',')}`] : []),
+    ...((skipBillingPersonas || excludeFlows.length) ? ['--reason', skipBillingReason] : []),
+  ];
+}
 export function requiredBillingFixtures(plan) {
   const fixtures = new Map();
   if (plan.categories?.includes('billing'))
@@ -272,7 +283,11 @@ console.log(JSON.stringify(out));`],
     assert(report.evidenceMode === 'final-candidate',
       'Final candidate proof is required; rerun with --mode=final-candidate');
     await validateEvidence(report, plan, sourceHash(), dir);
-    execute(process.execPath, ['--env-file=apps/mobile/.env.development.local', 'scripts/sim/product-flow.mjs', 'check']);
+    // #883: forward the same exclusion flags used above, or this subprocess
+    // re-validates against an unfiltered plan and fails even though the
+    // narrowed validateEvidence call just above it passed.
+    execute(process.execPath, ['--env-file=apps/mobile/.env.development.local', 'scripts/sim/product-flow.mjs', 'check',
+      ...checkCliArgs({ skipBillingPersonas, skipBillingReason, excludeFlows })]);
     const tag = `product-flow-${head}`;
     mkdirSync(publicationDirectory, { recursive: true });
     const archive = resolve(publicationDirectory, 'local-evidence.tar.gz');
