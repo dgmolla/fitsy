@@ -35,6 +35,10 @@ The [historical production receipt](../../../scripts/deploy/ios-production-binar
 Its [provenance](ios-ota-baseline.md) establishes historical EAS/Apple processing and actual IPA identity, not the last submission.
 Use [app.config.ts](../../../apps/mobile/app.config.ts) and [eas.json](../../../apps/mobile/eas.json) for current repository identity; preserve the established bundle instead of matching obsolete `app.fitsy.mobile` drafts.
 Read ASC and EAS allocations before proposing an increasing unused build number.
+Before each local TestFlight build, compare `buildNumber` in `app.config.ts` with the newest EAS and App Store Connect builds, because main can lag when a baseline PR was never merged.
+If main is stale, set the next unused number in a local-only commit, regenerate the fingerprint from that commit, and build from it; EAS reports `appBuildVersion` for the build, so check it before `eas submit`.
+Never submit a build whose number already exists in App Store Connect.
+`testflight-post-submit` accepts that local commit when its only change from main is the `buildNumber` line, then opens the baseline PR that records the number on main.
 
 ### Agreement or access failure
 
