@@ -61,6 +61,14 @@ struct MealWidgetView: View {
                 Spacer(minLength: 0)
                 Text(dish.name).font(.system(size: small ? 16 : 20, weight: .semibold, design: .serif))
                     .lineLimit(2).minimumScaleFactor(0.85)
+                // The restaurant name truncates first so distance/price stay visible.
+                HStack(spacing: 0) {
+                    Text(dish.restaurantName).lineLimit(1).truncationMode(.tail).layoutPriority(0)
+                    if let suffix = dish.subtitleSuffix {
+                        Text(" · " + suffix).lineLimit(1).fixedSize().layoutPriority(1)
+                    }
+                }
+                .font(.system(size: 10)).foregroundStyle(secondary)
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: small ? 2 : 4), spacing: 4) {
                     macro(dish.proteinG, "P", "Protein", "g")
                     macro(dish.carbsG, "C", "Carbs", "g")

@@ -221,6 +221,8 @@ node --env-file=apps/mobile/.env.development.local scripts/sim/product-flow.mjs 
 
 The final runner automatically includes every affected journey, including cold-start and sign-in only when selected.
 Explicit names add diagnostic journeys; they cannot replace mandatory flows.
+A run no longer stops at the first failing flow: it runs every selected flow and writes `.evidence/product-flow/failures-summary.json` listing each failure with a category - `fixture` (setup before Maestro), `flow` (a Maestro command failed: app regression or stale test, a person decides), `harness` (the runner's own checks after the flow) or `environment` (simulator/infrastructure; later flows are then not run and are named as not run).
+A single failure still throws its original error.
 Final acceptance executes the complete selected YAML even when local development used render smoke.
 Maintain flow tags for every category in `--plan`, with at least two non-optional outcome assertions per changed journey.
 Every selected flow and its mandatory source assertions must be present in the receipt; another tagged journey cannot substitute for an omitted flow.

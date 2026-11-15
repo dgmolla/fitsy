@@ -16,7 +16,7 @@ import { buildProfile, bundleDelegate, embeddedBundleCompatibility, embeddedArti
 import { nativeIdentity, buildInputDrift, profileIdentity, nativeBuildDecision, reusableNativeReceipt, sealReceipt, identityHash } from './native-identity.mjs';
 import { appTreeHash as treeHash, sharedNativeCacheDirectory, importNativeArtifact, importedArtifactIntact, publishNativeArtifact } from './shared-native-cache.mjs';
 import { admitDisk, appendRecordedFlowFailure, applyCapturePolicy, archiveFailureEvidence, clock, completeMaestroRun, event, latestMaestroLog, nearestFailure, needsDiagnosis, recordFlowOutcome, recordRunFailure, requireMetro, runRecordedFlow, runOwnedMaestro } from './runner-controls.mjs';
-import { classifySimulatorFailure, maestroFailure, withEnvironmentRetry } from './failure-policy.mjs';
+import { classifySimulatorFailure, collectFlowFailures, flowFailuresError, flowFailuresSummary, maestroFailure, withEnvironmentRetry } from './failure-policy.mjs';
 import { prepareActiveEntitlement, verifyInactiveEntitlement } from './active-entitlement.mjs';
 import { inspectScreenshot, inspectScreenshotDirectory, inspectWalkthrough, requireScreenRecognition } from './screen-guard.mjs';
 import { billingSkipSelection, matchesFinalCandidate, readPreviousReportForReuse, runSelection, finishSelection } from './evidence-mode.mjs';
@@ -834,9 +834,11 @@ async function execute(udid, names, mode, { approvalId, environmentRetryAllowed 
       run('xcrun', ['simctl', 'install', udid, app]);
       installedApp(udid, r.appHash);
     }
-    for (const flow of flowSources) {
+    const collected = await collectFlowFailures(flowSources, async flow => {
       const journey = fixtures.get(flow.name);
-      await withEnvironmentRetry(dir => withFixtureEnvironment(journey, async () => {
+      let stage = 'preparation';
+      try { await withEnvironmentRetry(dir => withFixtureEnvironment(journey, async () => {
+        stage = 'preparation';
         environment();
         releaseDevice();
         prepareJourney(journey, flow.name, udid);
@@ -871,6 +873,7 @@ async function execute(udid, names, mode, { approvalId, environmentRetryAllowed 
           const captureReceipt = join(dir, 'xctest-capture-policy.jsonl');
           writeFileSync(captureReceipt, '');
           const attachmentBefore = snapshotXCTestAttachments(udid);
+          stage = 'flow';
           let recorded, attachment;
           try { recorded = await runFlow({
             maestroCommand: process.env.MAESTRO_BIN || 'maestro',
@@ -929,6 +932,7 @@ async function execute(udid, names, mode, { approvalId, environmentRetryAllowed 
             save(failuresFile, history);
             throw maestroFailure(`Native flow ${flow.name} failed; inspect ${relative(root, join(dir, 'failure.json'))} and raw Maestro receipt before retry`, result, failure);
           }
+          stage = 'post-flow';
           assert(commands.length === 1, `Expected exactly one command report: ${flow.name}`);
           const screenshot = join(dir, 'outcome.png');
           run('xcrun', ['simctl', 'io', udid, 'screenshot', screenshot]);
@@ -960,6 +964,15 @@ async function execute(udid, names, mode, { approvalId, environmentRetryAllowed 
         }
       }), { dir: join(out, flow.name), canRetry: () => environmentRetryAllowed && hash === inputHash() &&
         r.appHash === treeHash(app) && report.configHash === environment().configHash });
+      } catch (error) {
+        // Stamp where the flow failed (also covers errors thrown before the inner try).
+        error.stage ??= stage;
+        throw error;
+      }
+    });
+    if (collected.failures.length) {
+      save(join(out, 'failures-summary.json'), flowFailuresSummary(collected));
+      throw flowFailuresError(collected);
     }
     claimDevice();
     if (r.buildMode === 'owned-metro-test-store') {

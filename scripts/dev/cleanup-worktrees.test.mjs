@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { activeCwds, cleanupMergedWorktrees, listWorktrees } from './cleanup-worktrees.mjs';
@@ -134,18 +134,38 @@ test('a merged parent is kept while it contains another worktree, even a dirty o
   assert.match(again.skipped.find(item => item.path === lone.path).reason, /nested worktrees/);
 });
 
-test('ignored evidence that may be the only copy keeps the checkout; known-disposable evidence does not', t => {
-  const { repo, add } = fixture(t);
+test('evidence that may be the only copy is archived outside the checkout before removal; a failed archive keeps the checkout', t => {
+  const { base, repo, add } = fixture(t);
   appendFileSync(join(repo, '.git/info/exclude'), '.evidence/\n');
-  const kept = add('kept', { extraCommit: true });
-  mkdirSync(join(kept.path, '.evidence'), { recursive: true });
-  writeFileSync(join(kept.path, '.evidence/run.log'), 'sole copy of a failed archive');
+  const kept = add('archived', { extraCommit: true });
+  mkdirSync(join(kept.path, '.evidence/chain-x'), { recursive: true });
+  writeFileSync(join(kept.path, '.evidence/chain-x/run.log'), 'sole copy');
+  mkdirSync(join(kept.path, '.evidence/verify/logs'), { recursive: true });
+  writeFileSync(join(kept.path, '.evidence/verify/logs/a.log'), 'regenerated each run');
+  const blocked = add('blocked', { extraCommit: true });
+  mkdirSync(join(blocked.path, '.evidence'), { recursive: true });
+  writeFileSync(join(blocked.path, '.evidence/run.log'), 'must survive a failed archive');
   const disposable = add('disposable', { extraCommit: true });
-  mkdirSync(join(disposable.path, '.evidence/verify/logs'), { recursive: true });
-  writeFileSync(join(disposable.path, '.evidence/verify/logs/a.log'), 'regenerated each run');
-  const heads = { 'codex/kept': [kept.head], 'codex/disposable': [disposable.head] };
-  const result = cleanupMergedWorktrees({ repo, apply: true, cwds: ['/nowhere'], caller: repo, mergedHeads: branch => heads[branch] });
-  assert.deepEqual(result.removed, [disposable.path]);
-  assert.equal(existsSync(join(kept.path, '.evidence/run.log')), true);
-  assert.match(result.skipped.find(item => item.path === kept.path).reason, /retained evidence \(\.evidence\/run\.log\)/);
+  mkdirSync(join(disposable.path, '.evidence/verify'), { recursive: true });
+  writeFileSync(join(disposable.path, '.evidence/verify/b.log'), 'x');
+  const heads = { 'codex/archived': [kept.head], 'codex/blocked': [blocked.head], 'codex/disposable': [disposable.head] };
+  const archiveRoot = join(base, 'archive');
+  const options = { repo, cwds: ['/nowhere'], caller: repo, mergedHeads: branch => heads[branch] };
+
+  // A file where the archive directory must go makes archiving fail for the blocked checkout only.
+  const blockedRoot = join(base, 'not-a-dir'); writeFileSync(blockedRoot, 'file');
+  const failed = cleanupMergedWorktrees({ ...options, apply: true, archiveRoot: blockedRoot });
+  assert.deepEqual(failed.removed, [disposable.path], 'only the checkout with nothing to archive is removed');
+  assert.deepEqual(failed.refused.map(item => item.path).sort(), [blocked.path, kept.path].sort());
+  assert.match(failed.refused[0].reason, /evidence archive failed, checkout kept/);
+  assert.equal(existsSync(join(blocked.path, '.evidence/run.log')), true);
+  assert.equal(existsSync(join(kept.path, '.evidence/chain-x/run.log')), true);
+
+  const ok = cleanupMergedWorktrees({ ...options, apply: true, archiveRoot });
+  assert.deepEqual(ok.removed.sort(), [blocked.path, kept.path].sort());
+  assert.equal(existsSync(kept.path), false);
+  const archive = ok.archived.find(item => item.path === kept.path).archive;
+  assert.equal(readFileSync(join(archive, 'chain-x/run.log'), 'utf8'), 'sole copy');
+  assert.equal(existsSync(join(archive, 'verify')), false, 'known-disposable evidence is not archived');
+  assert.equal(readFileSync(join(ok.archived.find(item => item.path === blocked.path).archive, 'run.log'), 'utf8'), 'must survive a failed archive');
 });
