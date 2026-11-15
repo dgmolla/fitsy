@@ -53,7 +53,7 @@ struct WidgetDataTests {
         try expect(WidgetData.nextRefresh(configuration: config, now: now.addingTimeInterval(86300)) == now.addingTimeInterval(86400), "refresh at credential expiry when it comes first")
 
         let restaurant = """
-        {"id":"restaurant-first","name":"First restaurant","photoUrl":"https://images.example.test/first.jpg","bestMatch":{"menuItemId":"first-dish","name":"Chicken bowl","calories":617.5,"proteinG":40.25,"carbsG":62.125,"fatG":18.75,"confidence":"HIGH"}}
+        {"id":"restaurant-first","name":"First restaurant","photoUrl":"https://images.example.test/first.jpg","distanceMiles":0.4,"priceLevel":"$$","bestMatch":{"menuItemId":"first-dish","name":"Chicken bowl","calories":617.5,"proteinG":40.25,"carbsG":62.125,"fatG":18.75,"confidence":"HIGH","price":14}}
         """
         let second = restaurant.replacingOccurrences(of: "first", with: "second")
         let payload = "{\"data\":[\(restaurant),\(second)],\"meta\":{\"locked\":false}}"
@@ -63,6 +63,26 @@ struct WidgetDataTests {
                    selected.dish?.carbsG == 62.125 && selected.dish?.fatG == 18.75 && selected.updatedAt == now,
                    "retain all four exact API nutrition values and freshness")
         try expect(selected.dish?.link.absoluteString == "fitsy:///restaurant/restaurant-first?selectedItemId=first-dish", "open the selected dish")
+        try expect(selected.dish?.distanceMi == 0.4 && selected.dish?.price == 14 && selected.dish?.priceLevel == "$$",
+                   "decode distance, dish price and restaurant price level from the API response")
+        try expect(selected.dish?.subtitleSuffix == "0.4 mi · $14", "dish price wins over the restaurant price level")
+        var priceLevelOnly = selected.dish!
+        priceLevelOnly.price = nil
+        try expect(priceLevelOnly.subtitleSuffix == "0.4 mi · $$", "fall back to the restaurant price level when the dish has no price")
+        var distanceOnly = selected.dish!
+        distanceOnly.price = nil; distanceOnly.priceLevel = nil
+        try expect(distanceOnly.subtitleSuffix == "0.4 mi", "omit the price segment without leaving a dangling separator")
+        var priceOnly = selected.dish!
+        priceOnly.distanceMi = nil
+        try expect(priceOnly.subtitleSuffix == "$14", "omit the distance segment without leaving a dangling separator")
+        var neither = selected.dish!
+        neither.distanceMi = nil; neither.price = nil; neither.priceLevel = nil
+        try expect(neither.subtitleSuffix == nil, "no segments at all means no suffix, not a bare separator")
+        let legacyNoDistanceOrPrice = payload.replacingOccurrences(of: "\"distanceMiles\":0.4,\"priceLevel\":\"$$\",", with: "")
+            .replacingOccurrences(of: ",\"price\":14", with: "")
+        let legacyDish = try WidgetData.select(Data(legacyNoDistanceOrPrice.utf8), configuration: config, now: now).dish
+        try expect(legacyDish?.distanceMi == nil && legacyDish?.price == nil && legacyDish?.priceLevel == nil && legacyDish?.subtitleSuffix == nil,
+                   "a response that omits the new fields entirely still decodes cleanly")
         for confidence in ["HIGH", "MEDIUM", "LOW", "UNKNOWN"] {
             let data = Data(payload.replacingOccurrences(of: "HIGH", with: confidence).utf8)
             let dish = try WidgetData.select(data, configuration: config, now: now).dish!

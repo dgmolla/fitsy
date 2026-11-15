@@ -24,6 +24,7 @@ export const bestMatchSummarySchema = z.object({
   confidence: z.enum(["HIGH", "MEDIUM", "LOW"]),
   matchScore: z.number().nullable(),
   nutritionBasis: z.enum(["published", "estimated"]).optional(),
+  price: z.number().optional(),
 });
 
 export const restaurantResultSchema = z.object({
