@@ -23,7 +23,7 @@ const REPO = 'dgmolla/fitsy';
 // archive outside the checkout before removal; if that fails the checkout is kept
 // (the same preserve-or-retain contract as scripts/delivery/loop/worktrees.py).
 const DISPOSABLE_EVIDENCE = new Set(['verify', 'product-flow', 'product-build', 'publication', 'sim-scope']);
-const defaultArchiveRoot = () => process.env.FITSY_CLEANUP_ARCHIVE || join(homedir(), '.fitsy-cleanup-archive');
+const defaultArchiveRoot = () => join(homedir(), '.fitsy-cleanup-archive');
 function archiveEvidence(worktreePath, names, archiveRoot) {
   const evidence = join(worktreePath, '.evidence');
   if (!lstatSync(evidence).isDirectory()) throw new Error('.evidence is not a plain directory');
