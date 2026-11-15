@@ -41,7 +41,6 @@ signed in without targets -> `/macro-setup`.
 | `/welcome/leave-review` | legacy links only | redirects to permission/out-of-area | no rating prompt in onboarding |
 | `/welcome/resubscribe` | cold start when lapsed | - | win-back screen with bundled sample search card |
 | out-of-area state | search preview returns 0 nearby | "Keep me posted" (inline on the search screen, not a separate route) | LA-only launch teaser; `/welcome/out-of-area` also exists in the onboarding flow |
-| `/notification-settings` | trial notification tap; existing deep links | `reminder-permission`, `reminders-device-settings` | Device notification settings and actual upcoming schedule; no per-reminder configuration |
 | `/widget` | WidgetKit empty/locked state deep links | `widget-step-1`, `widget-unlock` | Setup guidance and existing paywall routing; add and manage the widget from the Home Screen |
 | `/feedback-board` | profile | - | feedback list |
 

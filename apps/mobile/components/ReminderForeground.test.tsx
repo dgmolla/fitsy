@@ -4,7 +4,7 @@ import { AppState, Text } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { act, render, waitFor } from '@testing-library/react-native';
 import { ReminderProvider, useReminders } from '../lib/useReminders';
-import { readReminderPreferences, reconcileReminderOwnership, replaceReminders } from '../lib/notificationSchedule';
+import { hasStoredReminderPreferences, readReminderPreferences, reconcileReminderOwnership, replaceReminders, saveReminderPreferences } from '../lib/notificationSchedule';
 import { reconcileDevTrialReminderOwnership } from '../lib/devTrialReminderProbe';
 
 jest.mock('expo-router', () => ({ router: { push: jest.fn() }, usePathname: () => '/notification-settings' }));
@@ -31,6 +31,7 @@ jest.mock('../lib/usePurchases', () => ({ usePurchases: () => ({
 }) }));
 jest.mock('../lib/notificationSchedule', () => ({
   readReminderPreferences: jest.fn(),
+  hasStoredReminderPreferences: jest.fn(async () => true),
   readScheduledReminders: jest.fn(async () => []),
   replaceReminders: jest.fn(async () => {}),
   reconcileReminderOwnership: jest.fn(async () => {}),
@@ -47,6 +48,7 @@ beforeEach(() => {
   mockAuthListener = undefined;
   jest.clearAllMocks();
   jest.mocked(readReminderPreferences).mockReset();
+  jest.mocked(hasStoredReminderPreferences).mockResolvedValue(true);
   jest.mocked(Notifications.getPermissionsAsync).mockResolvedValue({ status: 'granted' } as Notifications.NotificationPermissionsStatus);
 });
 afterEach(() => { jest.restoreAllMocks(); });
@@ -186,3 +188,31 @@ test('foreground recovery retries failed account ownership cleanup', async () =>
   await waitFor(() => expect(reconcile.mock.calls.filter(([id]) => id === 'next-owner')).toHaveLength(2));
 });
 
+
+describe('no in-app toggle: iOS notification permission is the only control', () => {
+  const view = () => render(<ReminderProvider><SettingsView /></ReminderProvider>);
+  beforeEach(() => { jest.mocked(readReminderPreferences).mockResolvedValue({ meals: false, trial: false }); });
+
+  test('granted permission with no stored choice turns both reminders on once', async () => {
+    jest.mocked(hasStoredReminderPreferences).mockResolvedValue(false);
+    view();
+    await waitFor(() => expect(saveReminderPreferences).toHaveBeenCalledWith('reminder-owner', { meals: true, trial: true }));
+    expect(saveReminderPreferences).toHaveBeenCalledTimes(1);
+  });
+
+  test('denied permission never enables reminders', async () => {
+    jest.mocked(hasStoredReminderPreferences).mockResolvedValue(false);
+    jest.mocked(Notifications.getPermissionsAsync).mockResolvedValue({ status: 'denied' } as Notifications.NotificationPermissionsStatus);
+    view();
+    await waitFor(() => expect(Notifications.getPermissionsAsync).toHaveBeenCalled());
+    await act(async () => { await Promise.resolve(); });
+    expect(saveReminderPreferences).not.toHaveBeenCalled();
+  });
+
+  test('an existing stored choice is never overwritten', async () => {
+    view();
+    await waitFor(() => expect(hasStoredReminderPreferences).toHaveBeenCalledWith('reminder-owner'));
+    await act(async () => { await Promise.resolve(); });
+    expect(saveReminderPreferences).not.toHaveBeenCalled();
+  });
+});
