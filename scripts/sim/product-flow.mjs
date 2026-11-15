@@ -643,7 +643,7 @@ export function collectionPublicConfigKeys(previousFile, build, current, preflig
   ])].sort();
 }
 async function execute(udid, names, mode, { approvalId, environmentRetryAllowed = true,
-  skipBillingPersonas = false, skipBillingReason, excludeFlows = [] } = {}) {
+  skipBillingPersonas = false, skipBillingReason, excludeFlows = [], waiveWalkthrough = false } = {}) {
   const runFlow = options => runSelectedRecordedFlow(mode, options);
   if (process.env.NODE_ENV === 'test' && process.env.FITSY_PRODUCT_FLOW_TEST_FIXTURE) {
     const fixture = read(process.env.FITSY_PRODUCT_FLOW_TEST_FIXTURE);
@@ -682,7 +682,7 @@ async function execute(udid, names, mode, { approvalId, environmentRetryAllowed 
   // before any device, fixture, recording or evidence-directory mutation.
   const finalPreflight = mode.publishable
     ? await (await import('./publish-product-flow.mjs')).publishProductFlow(undefined,
-      { preflight: true, skipBillingPersonas, skipBillingReason, excludeFlows }) : null;
+      { preflight: true, skipBillingPersonas, skipBillingReason, excludeFlows, waiveWalkthrough }) : null;
   if (mode.recordVideo) {
     try { run('ffprobe', ['-version'], { timeout: 5000 }); run('ffmpeg', ['-version'], { timeout: 5000 }); }
     catch { throw new Error('ffprobe and ffmpeg are required to validate recorded product-flow video before running Maestro'); }
@@ -931,7 +931,7 @@ async function execute(udid, names, mode, { approvalId, environmentRetryAllowed 
     throw error;
   } finally { releaseDevice(); }
 }
-async function finish(walkthrough, { skipBillingPersonas = false, skipBillingReason, excludeFlows = [] } = {}) {
+async function finish(walkthrough, { skipBillingPersonas = false, skipBillingReason, excludeFlows = [], waiveWalkthrough = false } = {}) {
   const report = read(join(out, 'report.json'));
   const r = receipt(report.simulator);
   assert(report.result === 'awaiting-walkthrough', 'A completed deterministic run is required');
@@ -946,20 +946,22 @@ async function finish(walkthrough, { skipBillingPersonas = false, skipBillingRea
     o.sha256 = digest(readFileSync(join(out, o.trace)));
   }
   report.result = 'pass'; report.finishedAt = new Date().toISOString();
+  // #889: recorded verbatim, never fabricated into a walkthrough observation.
+  if (waiveWalkthrough) report.walkthroughWaiver = { reason: skipBillingReason, at: report.finishedAt };
   // #876: execute()/publishProductFlow() both narrow the plan through
   // applyBillingPersonaSkip before validating; finish() must match, or a run
   // that legitimately used --skip-billing-personas/--exclude-flows can never
   // pass its own completeness check.
   const { applyBillingPersonaSkip } = await import('./publish-product-flow.mjs');
   const { plan } = applyBillingPersonaSkip(candidatePlan(requiredPublicConfigKeys(report, r, environment())),
-    { skipBillingPersonas, skipBillingReason, excludeFlows });
+    { skipBillingPersonas, skipBillingReason, excludeFlows, waiveWalkthrough });
   const result = await validateAcceptance(report, plan, inputHash(), out,
     Date.now(), root, r.nativeIdentity.hash, report.evidenceMode);
   if (report.evidenceMode === 'final-candidate')
     report.publicConfigAcceptance.verifiedConfigHash = report.configHash;
   save(join(out, 'report.json'), report); console.log(JSON.stringify(result));
 }
-async function check({ skipBillingPersonas = false, skipBillingReason, excludeFlows = [] } = {}) {
+async function check({ skipBillingPersonas = false, skipBillingReason, excludeFlows = [], waiveWalkthrough = false } = {}) {
   const report = read(join(out, 'report.json'));
   const r = receipt(report.simulator);
   assert(report.appHash === r.appHash && report.configHash === environment().configHash,
@@ -976,7 +978,7 @@ async function check({ skipBillingPersonas = false, skipBillingReason, excludeFl
   // publishProductFlow's own already-narrowed validateEvidence call) used.
   const { applyBillingPersonaSkip } = await import('./publish-product-flow.mjs');
   const { plan } = applyBillingPersonaSkip(candidatePlan(requiredPublicConfigKeys(report, r, environment())),
-    { skipBillingPersonas, skipBillingReason, excludeFlows });
+    { skipBillingPersonas, skipBillingReason, excludeFlows, waiveWalkthrough });
   await validateAcceptance(report, plan, inputHash(), out,
     Date.now(), root, r.nativeIdentity.hash, report.evidenceMode);
 }

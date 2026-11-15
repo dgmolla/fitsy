@@ -155,6 +155,22 @@ deterministicTest('an affected journey passes without unrelated baselines but ca
   expect(missing.stderr).toContain('missing affected flow: billing-recovery');
 });
 
+deterministicTest('#889: only an explicit waiver drops the walkthrough requirement; every selected flow is still required', () => {
+  const report = { ...fixture(), exploration: [] as ReturnType<typeof fixture>['exploration'] };
+  writeFileSync(join(dir, 'report.json'), JSON.stringify(report));
+  const check = (plan: string) => evaluate(`gate.validate(JSON.parse((await import('node:fs')).readFileSync(${JSON.stringify(join(dir, 'report.json'))}, 'utf8')), ${plan}, 'current-inputs', ${JSON.stringify(dir)}, Date.now(), ${JSON.stringify(dir)}, 'current-inputs')`);
+  const flows = "['cold-start-welcome','signin-options','billing-cancel']";
+  const unwaived = check(`{required:true, categories:['billing'], flows:${flows}}`);
+  expect(unwaived.status).toBe(1);
+  expect(unwaived.stderr).toContain('missing walkthrough outcome: billing');
+  const waived = check(`{required:true, categories:['billing'], waivedWalkthrough:true, flows:${flows}}`);
+  expect(waived.stderr).toBe('');
+  expect(waived.stdout).toContain('0 changed-journey walkthroughs verified (walkthrough waived)');
+  const missingFlow = check(`{required:true, categories:['billing'], waivedWalkthrough:true, flows:['billing-cancel','billing-recovery']}`);
+  expect(missingFlow.status).toBe(1);
+  expect(missingFlow.stderr).toContain('missing affected flow: billing-recovery');
+});
+
 deterministicTest('retained exception metadata cannot omit a journey without fresh authority', () => {
   const report = { ...fixture(), releaseExceptionId: '6716597294',
     exceptions: [{ flow: 'billing-cancel', status: 'EXCEPTED' }] };

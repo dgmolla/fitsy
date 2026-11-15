@@ -226,6 +226,20 @@ test('#867: --exclude-flows names an arbitrary flow to omit, independent of --sk
   assert.throws(() => runSelection(['device', '--exclude-flows=a', '--exclude-flows=b', '--reason', 'x']), /at most once/);
 });
 
+test('#889: --waive-walkthrough parses with --reason, never alone, and composes with the other exclusions', () => {
+  const run = runSelection(['device', '--mode=final-candidate', '--waive-walkthrough', '--reason', 'Dawit #887']);
+  assert.equal(run.waiveWalkthrough, true);
+  assert.equal(run.skipBillingReason, 'Dawit #887');
+  assert.deepEqual(run.names, []);
+  assert.equal(runSelection(['device']).waiveWalkthrough, false);
+  const fin = finishSelection(['--waive-walkthrough', '--exclude-flows=cold-start-welcome', '--reason', 'x']);
+  assert.equal(fin.waiveWalkthrough, true);
+  assert.deepEqual(fin.excludeFlows, ['cold-start-welcome']);
+  assert.throws(() => runSelection(['device', '--waive-walkthrough']), /requires --reason/);
+  assert.throws(() => finishSelection(['--reason', 'orphan reason']), /requires --reason/);
+  assert.throws(() => runSelection(['device', '--waive-walkthrough', '--waive-walkthrough', '--reason', 'x']), /at most once/);
+});
+
 test('#876: finishSelection parses an optional walkthrough path alongside the same skip-billing/exclude-flows flags as run', () => {
   const withWalkthrough = finishSelection(['walkthrough.json', '--skip-billing-personas', '--reason', 'Dawit #866']);
   assert.equal(withWalkthrough.walkthrough, 'walkthrough.json');
