@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { activeCwds, cleanupMergedWorktrees, listWorktrees } from './cleanup-worktrees.mjs';
@@ -110,4 +110,42 @@ test('an unavailable process inventory aborts cleanup instead of reading as "not
   assert.throws(() => activeCwds(), /process inventory unavailable/);
   assert.throws(() => cleanupMergedWorktrees({ repo, apply: true, caller: repo, mergedHeads: () => [one.head] }), /process inventory unavailable/);
   assert.equal(existsSync(one.path), true);
+});
+
+test('a merged parent is kept while it contains another worktree, even a dirty one hidden by an ignore rule', t => {
+  const { repo, add } = fixture(t);
+  appendFileSync(join(repo, '.git/info/exclude'), '.claude/\n.evidence/\n');
+  const parent = add('parent', { extraCommit: true });
+  mkdirSync(join(parent.path, '.claude/worktrees'), { recursive: true });
+  const childPath = join(parent.path, '.claude/worktrees/child');
+  git(repo, 'worktree', 'add', '-q', '-b', 'codex/child', childPath);
+  writeFileSync(join(childPath, 'unfinished.ts'), 'export const precious = true;\n');
+  assert.equal(git(parent.path, 'status', '--porcelain'), '', 'precondition: the parent looks clean');
+  const result = cleanupMergedWorktrees({ repo, apply: true, cwds: ['/nowhere'], caller: repo, mergedHeads: branch => branch === 'codex/parent' ? [parent.head] : [] });
+  assert.deepEqual(result.removed, []);
+  assert.equal(existsSync(join(childPath, 'unfinished.ts')), true);
+  assert.match(result.skipped.find(item => item.path === parent.path).reason, /contains another registered worktree/);
+  // An unregistered nested checkout under .claude/worktrees is kept too.
+  const lone = add('lone', { extraCommit: true });
+  mkdirSync(join(lone.path, '.claude/worktrees/stray'), { recursive: true });
+  writeFileSync(join(lone.path, '.claude/worktrees/stray/file.txt'), 'x');
+  const again = cleanupMergedWorktrees({ repo, apply: true, cwds: ['/nowhere'], caller: repo, mergedHeads: branch => branch === 'codex/lone' ? [lone.head] : [] });
+  assert.deepEqual(again.removed, []);
+  assert.match(again.skipped.find(item => item.path === lone.path).reason, /nested worktrees/);
+});
+
+test('ignored evidence that may be the only copy keeps the checkout; known-disposable evidence does not', t => {
+  const { repo, add } = fixture(t);
+  appendFileSync(join(repo, '.git/info/exclude'), '.evidence/\n');
+  const kept = add('kept', { extraCommit: true });
+  mkdirSync(join(kept.path, '.evidence'), { recursive: true });
+  writeFileSync(join(kept.path, '.evidence/run.log'), 'sole copy of a failed archive');
+  const disposable = add('disposable', { extraCommit: true });
+  mkdirSync(join(disposable.path, '.evidence/verify/logs'), { recursive: true });
+  writeFileSync(join(disposable.path, '.evidence/verify/logs/a.log'), 'regenerated each run');
+  const heads = { 'codex/kept': [kept.head], 'codex/disposable': [disposable.head] };
+  const result = cleanupMergedWorktrees({ repo, apply: true, cwds: ['/nowhere'], caller: repo, mergedHeads: branch => heads[branch] });
+  assert.deepEqual(result.removed, [disposable.path]);
+  assert.equal(existsSync(join(kept.path, '.evidence/run.log')), true);
+  assert.match(result.skipped.find(item => item.path === kept.path).reason, /retained evidence \(\.evidence\/run\.log\)/);
 });

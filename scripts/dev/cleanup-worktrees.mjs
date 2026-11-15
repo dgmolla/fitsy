@@ -12,10 +12,14 @@
 // Both the cleanliness check and the removal run with status.showUntrackedFiles=all
 // so a user's `showUntrackedFiles=no` can never hide an untracked source file.
 import { execFileSync } from 'node:child_process';
-import { realpathSync } from 'node:fs';
+import { existsSync, readdirSync, realpathSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO = 'dgmolla/fitsy';
+// Ignored evidence dirs whose content is regenerated or already published; any
+// other entry under .evidence/ may be the only copy, so that checkout is kept.
+const DISPOSABLE_EVIDENCE = new Set(['verify', 'product-flow', 'product-build', 'publication', 'sim-scope']);
 const GIT_STRICT = ['-c', 'status.showUntrackedFiles=all'];
 const run = (cmd, args, cwd) => execFileSync(cmd, args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 });
 
@@ -64,6 +68,14 @@ export function cleanupMergedWorktrees({ repo = process.cwd(), apply = false, cw
     if (inside(callerReal, path)) { skip('caller is inside it'); continue; }
     if (cwdReals.some(cwd => inside(cwd, path))) { skip('active process'); continue; }
     if (!worktree.branch) { skip('no branch (detached)'); continue; }
+    // `git worktree remove` deletes nested checkouts recursively without their own
+    // dirty/locked/unmerged protections, and an ignored .claude/worktrees hides them.
+    if ([main, ...others].some(other => other !== worktree && inside(real(other.path), path))) { skip('contains another registered worktree'); continue; }
+    const nested = join(worktree.path, '.claude/worktrees');
+    if (existsSync(nested) && readdirSync(nested).length) { skip('contains nested worktrees (.claude/worktrees)'); continue; }
+    const evidence = join(worktree.path, '.evidence');
+    const retained = existsSync(evidence) ? readdirSync(evidence).filter(name => !DISPOSABLE_EVIDENCE.has(name)) : [];
+    if (retained.length) { skip(`retained evidence (.evidence/${retained[0]})`); continue; }
     let dirty;
     try { dirty = run('git', [...GIT_STRICT, 'status', '--porcelain=v1', '--untracked-files=all'], worktree.path).trim(); } catch { skip('status unreadable'); continue; }
     if (dirty) { skip('uncommitted changes'); continue; }
