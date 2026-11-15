@@ -134,8 +134,8 @@ export function publicationPlan(evidenceDirectory, buildReceiptFile, paths = cha
   return previous.error ? { ...plan,
     historyWarning: 'Preserve unreadable historical evidence in the existing archive before fresh conservative collection' } : plan;
 }
-export async function createPublicationArchive(report, categories, dir, archive, execute = run) {
-  const artifacts = publicationArtifacts(report, categories);
+export async function createPublicationArchive(report, categories, dir, archive, execute = run, waivedWalkthrough = false) {
+  const artifacts = publicationArtifacts(report, categories, waivedWalkthrough);
   // Only verified relative artifact paths; no build, environment or debug logs.
   assert(lstatSync(dir).isDirectory(), 'Evidence directory must be a real directory');
   for (const f of artifacts) {
@@ -297,7 +297,7 @@ console.log(JSON.stringify(out));`],
     const tag = `product-flow-${head}`;
     mkdirSync(publicationDirectory, { recursive: true });
     const archive = resolve(publicationDirectory, 'local-evidence.tar.gz');
-    await createPublicationArchive(report, plan.categories, dir, archive, execute);
+    await createPublicationArchive(report, plan.categories, dir, archive, execute, plan.waivedWalkthrough);
     const archiveSize = statSync(archive).size;
     assert(archiveSize > 0 && archiveSize < 2 * 1024 ** 3, 'Evidence archive exceeds the GitHub release asset limit of under 2 GiB');
     const archiveDigest = `sha256:${await fileDigest(archive)}`;
