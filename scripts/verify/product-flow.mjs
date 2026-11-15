@@ -461,7 +461,13 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
     'walkthrough fixture session has no verified observation');
   // Reusing a larger completed report retains its observations too. Validate
   // every retained charter even when the current plan requires fewer flows.
-  for (const category of new Set([...plan.categories, ...acceptedCategories,
+  // #889: an explicit, reasoned waiver (plan.waivedWalkthrough, set by
+  // applyBillingPersonaSkip) drops the walkthrough *requirement* (current
+  // plan and retained config acceptance); any observation actually present in
+  // the report is still fully validated, and the billing-store check above
+  // keeps using the real plan.categories.
+  const walkthroughCategories = plan.waivedWalkthrough ? [] : plan.categories;
+  for (const category of new Set([...walkthroughCategories, ...(plan.waivedWalkthrough ? [] : acceptedCategories),
     ...observations.map(observation => observation?.category)])) {
     insist(covered.has(category), `no deterministic coverage for ${category}`);
     const observation = report.exploration?.find(o => o.category === category);
@@ -486,7 +492,7 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
       events.some(e => e.command?.name === 'mobile_list_elements_on_screen');
     insist(maestro || legacy, `walkthrough needs actual interactions and screen observations: ${category}`);
   }
-  return { status: 'pass', summary: `${report.flows.length} flows and ${plan.categories.length} changed-journey walkthroughs verified` +
+  return { status: 'pass', summary: `${report.flows.length} flows and ${walkthroughCategories.length} changed-journey walkthroughs verified${plan.waivedWalkthrough ? ' (walkthrough waived)' : ''}` +
     (excepted.size ? `; ${excepted.size} explicitly excepted, not passed` : '') };
 }
 
