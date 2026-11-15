@@ -12,14 +12,27 @@
 // Both the cleanliness check and the removal run with status.showUntrackedFiles=all
 // so a user's `showUntrackedFiles=no` can never hide an untracked source file.
 import { execFileSync } from 'node:child_process';
-import { existsSync, readdirSync, realpathSync } from 'node:fs';
-import { join } from 'node:path';
+import { cpSync, existsSync, lstatSync, mkdirSync, readdirSync, realpathSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO = 'dgmolla/fitsy';
-// Ignored evidence dirs whose content is regenerated or already published; any
-// other entry under .evidence/ may be the only copy, so that checkout is kept.
+// Ignored evidence dirs whose content is regenerated or already published. Any
+// other entry under .evidence/ may be the only copy, so it is copied to a private
+// archive outside the checkout before removal; if that fails the checkout is kept
+// (the same preserve-or-retain contract as scripts/delivery/loop/worktrees.py).
 const DISPOSABLE_EVIDENCE = new Set(['verify', 'product-flow', 'product-build', 'publication', 'sim-scope']);
+const defaultArchiveRoot = () => process.env.FITSY_CLEANUP_ARCHIVE || join(homedir(), '.fitsy-cleanup-archive');
+function archiveEvidence(worktreePath, names, archiveRoot) {
+  const evidence = join(worktreePath, '.evidence');
+  if (!lstatSync(evidence).isDirectory()) throw new Error('.evidence is not a plain directory');
+  const destination = join(archiveRoot, `${basename(worktreePath)}-${Date.now()}`, '.evidence');
+  mkdirSync(destination, { recursive: true, mode: 0o700 });
+  for (const name of names)
+    cpSync(join(evidence, name), join(destination, name), { recursive: true, verbatimSymlinks: true, errorOnExist: true, force: false });
+  return destination;
+}
 const GIT_STRICT = ['-c', 'status.showUntrackedFiles=all'];
 const run = (cmd, args, cwd) => execFileSync(cmd, args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 });
 
@@ -56,7 +69,7 @@ const inside = (path, base) => path === base || path.startsWith(`${base}/`);
 const real = path => { try { return realpathSync(path); } catch { return path; } };
 
 export function cleanupMergedWorktrees({ repo = process.cwd(), apply = false, cwds = activeCwds(), mergedHeads = mergedPrHeads,
-  caller = process.cwd() } = {}) {
+  caller = process.cwd(), archiveRoot = defaultArchiveRoot() } = {}) {
   const [main, ...others] = listWorktrees(repo);
   const result = { applied: apply, removed: [], candidates: [], refused: [], skipped: [] };
   const callerReal = real(caller), cwdReals = cwds.map(real);
@@ -75,7 +88,6 @@ export function cleanupMergedWorktrees({ repo = process.cwd(), apply = false, cw
     if (existsSync(nested) && readdirSync(nested).length) { skip('contains nested worktrees (.claude/worktrees)'); continue; }
     const evidence = join(worktree.path, '.evidence');
     const retained = existsSync(evidence) ? readdirSync(evidence).filter(name => !DISPOSABLE_EVIDENCE.has(name)) : [];
-    if (retained.length) { skip(`retained evidence (.evidence/${retained[0]})`); continue; }
     let dirty;
     try { dirty = run('git', [...GIT_STRICT, 'status', '--porcelain=v1', '--untracked-files=all'], worktree.path).trim(); } catch { skip('status unreadable'); continue; }
     if (dirty) { skip('uncommitted changes'); continue; }
@@ -84,6 +96,10 @@ export function cleanupMergedWorktrees({ repo = process.cwd(), apply = false, cw
     if (!heads.includes(worktree.head)) { skip('no merged PR with this exact head'); continue; }
     result.candidates.push(worktree.path);
     if (!apply) continue;
+    if (retained.length) {
+      try { (result.archived ??= []).push({ path: worktree.path, archive: archiveEvidence(worktree.path, retained, archiveRoot) }); }
+      catch (error) { result.refused.push({ path: worktree.path, reason: `evidence archive failed, checkout kept: ${String(error.message).slice(0, 160)}` }); continue; }
+    }
     try { run('git', [...GIT_STRICT, 'worktree', 'remove', worktree.path], main.path); result.removed.push(worktree.path); }
     catch (error) { result.refused.push({ path: worktree.path, reason: String(error.stderr || error.message).trim().slice(0, 200) }); }
   }
