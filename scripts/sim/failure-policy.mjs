@@ -38,3 +38,40 @@ export async function withEnvironmentRetry(action, { dir, signal, canRetry = () 
     }
   }
 }
+
+// #888: collect every flow's failure in one pass instead of stopping at the
+// first, so one run surfaces everything. Categories (by where the flow failed,
+// since an app regression and a stale test cannot be told apart automatically):
+//   environment - simulator/infrastructure; later flows would only cascade, so they are not run
+//   fixture     - setup before Maestro started (journey, billing/entitlement, Metro, store)
+//   flow        - a Maestro command failed: app regression or stale test, a human/agent decides
+//   harness     - the runner's own checks after the flow finished
+const STAGE_CATEGORY = { preparation: 'fixture', flow: 'flow', 'post-flow': 'harness' };
+export function classifyFlowFailure(error) {
+  if (classifySimulatorFailure(error) === 'environment') return 'environment';
+  return STAGE_CATEGORY[error?.stage] || 'flow';
+}
+export async function collectFlowFailures(flows, runFlow) {
+  const failures = [], notRun = [];
+  for (const [index, flow] of flows.entries()) {
+    try { await runFlow(flow); }
+    catch (error) {
+      const classification = classifyFlowFailure(error);
+      failures.push({ flow: flow.name, classification, stage: error?.stage || null,
+        summary: String(error?.message || error).split('\n')[0].slice(0, 300), error });
+      if (classification === 'environment') { notRun.push(...flows.slice(index + 1).map(item => item.name)); break; }
+    }
+  }
+  return { failures, notRun };
+}
+export const flowFailuresSummary = ({ failures, notRun }) =>
+  ({ version: 1, failures: failures.map(({ error, ...row }) => row), notRun });
+// One failure keeps its original error (cleanup/diagnostic fields intact); several
+// become a single error listing each flow and its category.
+export function flowFailuresError(collected) {
+  if (collected.failures.length === 1 && !collected.notRun.length) return collected.failures[0].error;
+  const lines = collected.failures.map(item => `- ${item.flow} [${item.classification}]: ${item.summary}`);
+  if (collected.notRun.length) lines.push(`Not run after an environment failure: ${collected.notRun.join(', ')}`);
+  return Object.assign(new Error(`${collected.failures.length} flows failed:\n${lines.join('\n')}`),
+    { flowFailures: flowFailuresSummary(collected) });
+}

@@ -63,6 +63,7 @@ interface ScoredRowFixture {
   dietaryOptions: string[];
   menuItemId: string;
   itemName: string;
+  price: number | null;
   calories: number;
   proteinG: number;
   carbsG: number;
@@ -88,6 +89,7 @@ function makeScoredRow(overrides: Partial<ScoredRowFixture> = {}): ScoredRowFixt
     dietaryOptions: [],
     menuItemId: "item-1",
     itemName: "Grilled Chicken",
+    price: null,
     calories: 600,
     proteinG: 40,
     carbsG: 60,
@@ -229,13 +231,14 @@ describe("findNearbyRestaurants", () => {
     expect(best?.confidence).toBe("MEDIUM");
   });
 
-  it("includes optional fields (photoUrl, rating, priceLevel, dietaryOptions) when present", async () => {
+  it("includes optional fields (photoUrl, rating, priceLevel, dietaryOptions, bestMatch.price) when present", async () => {
     mockQueryRaw.mockResolvedValue([
       makeScoredRow({
         photoUrl: "https://example.com/photo.jpg",
         rating: 4.5,
         priceLevel: "$$",
         dietaryOptions: ["has_vegan"],
+        price: 14,
       }),
     ]);
 
@@ -246,6 +249,7 @@ describe("findNearbyRestaurants", () => {
     expect(r.rating).toBe(4.5);
     expect(r.priceLevel).toBe("$$");
     expect(r.dietaryOptions).toEqual(["has_vegan"]);
+    expect(r.bestMatch?.price).toBe(14);
   });
 
   it("omits optional fields when null/empty", async () => {
@@ -255,6 +259,7 @@ describe("findNearbyRestaurants", () => {
         rating: null,
         priceLevel: null,
         dietaryOptions: [],
+        price: null,
       }),
     ]);
 
@@ -265,6 +270,7 @@ describe("findNearbyRestaurants", () => {
     expect(r).not.toHaveProperty("rating");
     expect(r).not.toHaveProperty("priceLevel");
     expect(r).not.toHaveProperty("dietaryOptions");
+    expect(r.bestMatch).not.toHaveProperty("price");
   });
 
   it("invokes $queryRaw exactly once per call", async () => {

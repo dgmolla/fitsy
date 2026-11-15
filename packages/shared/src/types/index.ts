@@ -129,6 +129,8 @@ export interface BestMatchSummary {
   fatG: number;
   confidence: ConfidenceLevel;
   nutritionBasis?: "published" | "estimated";
+  /** Menu item price in dollars, when the restaurant publishes one. */
+  price?: number;
   /**
    * Macro-fit score (lower = better fit). `null` when the caller set no macro
    * targets - there is nothing to score against. (Historically the server put
