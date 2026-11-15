@@ -102,7 +102,7 @@ const config: ExpoConfig = {
   ios: {
     // Must match App Store Connect (and the RevenueCat App Store app) exactly.
     bundleIdentifier: "com.fitsy.mobile",
-    buildNumber: "8",
+    buildNumber: "10",
     supportsTablet: false,
     splash: {
       backgroundColor: "#FDFBF7",
