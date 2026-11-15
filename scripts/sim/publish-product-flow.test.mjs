@@ -181,3 +181,24 @@ test('#883: checkCliArgs round-trips through billingSkipSelection exactly like r
     assert.equal(parsed.skipBillingReason, options.skipBillingReason);
   }
 });
+
+test('#889: applyBillingPersonaSkip waives only the walkthrough and still requires every flow', () => {
+  const plan = { flows: ['map-search', 'chain-menu-serving'], required: true, categories: ['billing', 'changed-journey'] };
+  assert.throws(() => applyBillingPersonaSkip(plan, { waiveWalkthrough: true }), /requires --reason/);
+  const { plan: waived, skippedFlows } = applyBillingPersonaSkip(plan, { waiveWalkthrough: true, skipBillingReason: 'Dawit #887' });
+  assert.deepEqual(waived, { ...plan, waivedWalkthrough: true });
+  assert.deepEqual(skippedFlows, []);
+  assert.equal(applyBillingPersonaSkip(plan, {}).plan.waivedWalkthrough, undefined, 'never default-on');
+  const both = applyBillingPersonaSkip(plan, { waiveWalkthrough: true, excludeFlows: ['map-search'], skipBillingReason: 'x' });
+  assert.deepEqual(both.plan.flows, ['chain-menu-serving']);
+  assert.equal(both.plan.waivedWalkthrough, true);
+});
+
+test('#889: checkCliArgs forwards --waive-walkthrough and round-trips through billingSkipSelection', () => {
+  const args = checkCliArgs({ waiveWalkthrough: true, skipBillingReason: 'Dawit #887' });
+  assert.deepEqual(args, ['--waive-walkthrough', '--reason', 'Dawit #887']);
+  const parsed = billingSkipSelection(args);
+  assert.equal(parsed.waiveWalkthrough, true);
+  assert.equal(parsed.skipBillingReason, 'Dawit #887');
+  assert.deepEqual(parsed.rest, []);
+});
