@@ -156,7 +156,8 @@ deterministicTest('an affected journey passes without unrelated baselines but ca
 });
 
 deterministicTest('#889: only an explicit waiver drops the walkthrough requirement; every selected flow is still required', () => {
-  const report = { ...fixture(), exploration: [] as ReturnType<typeof fixture>['exploration'] };
+  const report = { ...fixture(), exploration: [] as ReturnType<typeof fixture>['exploration'], videoRequested: false };
+  for (const flow of report.flows) { delete (flow as { video?: string }).video; delete (flow as { videoHash?: string }).videoHash; }
   writeFileSync(join(dir, 'report.json'), JSON.stringify(report));
   const check = (plan: string) => evaluate(`gate.validate(JSON.parse((await import('node:fs')).readFileSync(${JSON.stringify(join(dir, 'report.json'))}, 'utf8')), ${plan}, 'current-inputs', ${JSON.stringify(dir)}, Date.now(), ${JSON.stringify(dir)}, 'current-inputs')`);
   const flows = "['cold-start-welcome','signin-options','billing-cancel']";
