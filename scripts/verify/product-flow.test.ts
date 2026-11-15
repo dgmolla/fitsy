@@ -784,13 +784,22 @@ describe('baseUpdateDeltaIsSafe (#773/#794): reuse a report across an unrelated 
     expect(check(baseReport({ headAtCollection, configHash }))).toBe(false);
   });
 
-  test('a high-sensitivity path (e.g. scripts/deploy, a release path) forces the conservative default (not reusable)', () => {
+  test('a high-sensitivity path (a release workflow) forces the conservative default (not reusable)', () => {
+    const { headAtCollection, configHash } = gitRepo();
+    mkdirSync(join(dir, '.github/workflows'), { recursive: true });
+    writeFileSync(join(dir, '.github/workflows/deploy.yml'), 'name: deploy\n');
+    fixtureGit(['-C', dir, 'add', '-A']);
+    fixtureGit(['-C', dir, 'commit', '-qm', 'release workflow changed on main']);
+    expect(check(baseReport({ headAtCollection, configHash }))).toBe(false);
+  });
+
+  test('release tooling under scripts/deploy alone cannot change app behavior, so the report is reused (#906)', () => {
     const { headAtCollection, configHash } = gitRepo();
     mkdirSync(join(dir, 'scripts/deploy'), { recursive: true });
     writeFileSync(join(dir, 'scripts/deploy/release-helper.mjs'), 'export const x = 1;\n');
     fixtureGit(['-C', dir, 'add', '-A']);
     fixtureGit(['-C', dir, 'commit', '-qm', 'release-path script changed on main']);
-    expect(check(baseReport({ headAtCollection, configHash }))).toBe(false);
+    expect(check(baseReport({ headAtCollection, configHash }))).toBe(true);
   });
 
   test('no delta at all (identical HEAD) is never reused: a real mismatch, not a base update', () => {
