@@ -1,28 +1,22 @@
-# Anonymous sessions (#801/#820) skip the sign-in gate after welcome-start, so
-# open the sign-in route explicitly to use the fixture account.
+# Anonymous sessions (#801/#820) go straight from welcome-start to the location
+# step, so the sign-in screen only appears when no session can be created.
+# Sign in with the fixture account when it appears; either way, wait for the
+# caller's destination.
 appId: com.fitsy.mobile
 ---
 - runFlow:
     when:
-      notVisible:
+      visible:
         id: signup-dev
     commands:
-      - openLink: com.fitsy.mobile://welcome/signin
+      - assertVisible:
+          id: signup-apple
+      - assertVisible:
+          id: signup-google
+      - assertNotVisible:
+          id: paywall-plan-yearly
       - tapOn:
-          text: "^Open$"
-          optional: true
-- extendedWaitUntil:
-    visible:
-      id: signup-dev
-    timeout: 30000
-- assertVisible:
-    id: signup-apple
-- assertVisible:
-    id: signup-google
-- assertNotVisible:
-    id: paywall-plan-yearly
-- tapOn:
-    id: signup-dev
+          id: signup-dev
 - extendedWaitUntil:
     visible:
       id: ${DESTINATION}
