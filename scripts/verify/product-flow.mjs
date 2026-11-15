@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Local candidate evidence stays mandatory alongside the local simulator scope gate.
 import { createHash } from 'node:crypto';
+import { hasInteractionAndObservation, parseCapture, projectTrace } from './mcp-capture.mjs';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, existsSync, realpathSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
@@ -274,8 +275,17 @@ export function walkthroughState(report, directory, now = Date.now()) {
     insist(events.length && events.every(event => Date.parse(event.at) >= times[1] && Date.parse(event.at) <= times[2]),
       'walkthrough events fall outside their fixture session');
     insist(JSON.stringify(entry.artifacts) === JSON.stringify([
-      session.attachmentBefore, session.attachmentAfter, session.captureReceipt, session.attachmentCloseout]),
+      session.attachmentBefore, session.attachmentAfter, session.captureReceipt, session.attachmentCloseout,
+      ...(report.walkthroughProtocol === 2 ? [session.mcpCapture] : [])]),
     'walkthrough publication omits fixture evidence');
+    if (report.walkthroughProtocol === 2) {
+      // #888: the trace must be exactly the projection of a hash-chained,
+      // nonce-bound capture written by the capture tooling, never hand-written.
+      const capture = artifact(session.mcpCapture, directory);
+      insist(digest(capture) === session.mcpCaptureHash, 'changed walkthrough MCP capture');
+      insist(projectTrace(parseCapture(capture, { nonce: session.captureNonce })) === trace.toString(),
+        'walkthrough trace is not the projection of its captured MCP session');
+    }
     for (const field of ['attachmentBefore', 'attachmentAfter']) {
       const bytes = artifact(session[field], directory);
       insist(digest(bytes) === session[`${field}Hash`] && JSON.parse(bytes).udid === report.simulator,
@@ -456,7 +466,7 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
   insist(Array.isArray(observations) && new Set(observations.map(item => item?.category)).size === observations.length,
     'duplicate or invalid walkthrough categories');
   const walkthroughs = walkthroughState(report, directory, time).sessions;
-  insist(!report.walkthroughProtocol || report.walkthroughProtocol === 1, 'unknown walkthrough fixture protocol');
+  insist(!report.walkthroughProtocol || report.walkthroughProtocol === 2, 'unknown or superseded walkthrough fixture protocol (hand-captured protocol 1 is no longer accepted)');
   insist([...walkthroughs.keys()].every(category => observations.some(item => item.category === category)),
     'walkthrough fixture session has no verified observation');
   // Reusing a larger completed report retains its observations too. Validate
@@ -475,7 +485,7 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
     insist(observation.branches?.includes('primary') && observation.branches?.includes('recovery'), `walkthrough needs primary and recovery: ${category}`);
     const trace = artifact(observation.trace, directory);
     insist(digest(trace) === observation.sha256, `changed walkthrough trace: ${category}`);
-    if (report.walkthroughProtocol === 1) {
+    if (report.walkthroughProtocol === 2) {
       const session = walkthroughs.get(category);
       insist(session?.trace === observation.trace && session.traceHash === observation.sha256 &&
         (!observation.flow || session.flow === observation.flow), `missing or mismatched walkthrough fixture session: ${category}`);
@@ -485,7 +495,8 @@ export function validate(report, plan, hash, directory, now = Date.now(), cwd = 
     insist(!observation.flow || observationSource, 'walkthrough expired-screen exception requires an executed maintained flow');
     inspectWalkthrough(events, observationSource ? readFileSync(resolve(cwd, observationSource)) : '');
     insist(events.every(e => Date.parse(e.at) >= Date.parse(report.startedAt) && Date.parse(e.at) <= time && !e.result?.isError && e.result?.content?.length), `invalid/failed/stale walkthrough events: ${category}`);
-    const maestro = events.some(e => ['tap_on', 'input_text', 'back', 'launch_app'].includes(e.command?.name)) &&
+    const maestro = report.walkthroughProtocol === 2 ? hasInteractionAndObservation(events) :
+      events.some(e => ['tap_on', 'input_text', 'back', 'launch_app'].includes(e.command?.name)) &&
       events.some(e => e.command?.name === 'inspect_view_hierarchy');
     // Preserve existing source-bound traces while new walkthroughs use Maestro MCP.
     const legacy = events.some(e => /mobile_(click|swipe|type|press|launch|open)/.test(e.command?.name)) &&
