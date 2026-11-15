@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { classifySimulatorFailure, maestroFailure, withEnvironmentRetry } from './failure-policy.mjs';
+import { classifyFlowFailure, classifySimulatorFailure, collectFlowFailures, flowFailuresError, flowFailuresSummary, maestroFailure, withEnvironmentRetry } from './failure-policy.mjs';
 
 test('only positive infrastructure evidence is classified as environment', () => {
   for (const message of ['kAXErrorInvalidUIElement', 'CoreSimulator service unavailable', 'ENOSPC', 'ECONNREFUSED', 'XCTest app hierarchy unavailable'])
@@ -53,4 +53,54 @@ for (const guard of ['changed-source', 'aborted', 'cleanup']) test(`no replay af
     }, { dir, signal: { aborted: guard === 'aborted' }, canRetry: () => guard !== 'changed-source' }));
     assert.equal(calls, 1);
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+const failAt = (stage, message) => Object.assign(new Error(message), { stage });
+
+test('#888: flow failures are categorised by where they happened; infrastructure evidence wins', () => {
+  assert.equal(classifyFlowFailure(failAt('preparation', 'Evidence login returned no account identity')), 'fixture');
+  assert.equal(classifyFlowFailure(failAt('flow', 'Native flow log-meal failed')), 'flow');
+  assert.equal(classifyFlowFailure(failAt('post-flow', 'Metro served a different bundle')), 'harness');
+  assert.equal(classifyFlowFailure(new Error('unstamped failure')), 'flow');
+  assert.equal(classifyFlowFailure(failAt('preparation', 'CoreSimulator service unavailable')), 'environment');
+});
+
+test('#888: one pass runs every flow and reports every failure with its category', async () => {
+  const ran = [];
+  const flows = ['a', 'b', 'c', 'd'].map(name => ({ name }));
+  const collected = await collectFlowFailures(flows, async flow => {
+    ran.push(flow.name);
+    if (flow.name === 'b') throw failAt('preparation', 'fixture is stale');
+    if (flow.name === 'd') throw failAt('flow', 'Assertion failed: Annual plan\nsecond line is dropped');
+  });
+  assert.deepEqual(ran, ['a', 'b', 'c', 'd'], 'a failing flow does not stop the rest');
+  assert.deepEqual(collected.failures.map(item => [item.flow, item.classification]), [['b', 'fixture'], ['d', 'flow']]);
+  assert.equal(collected.failures[1].summary, 'Assertion failed: Annual plan');
+  assert.deepEqual(collected.notRun, []);
+  const error = flowFailuresError(collected);
+  assert.match(error.message, /2 flows failed:\n- b \[fixture\]: fixture is stale\n- d \[flow\]: Assertion failed: Annual plan/);
+  assert.deepEqual(error.flowFailures, flowFailuresSummary(collected));
+  assert.equal(JSON.stringify(error.flowFailures).includes('"error"'), false, 'the summary carries no Error objects');
+});
+
+test('#888: an environment failure stops the run and names the flows that did not run', async () => {
+  const ran = [];
+  const flows = ['a', 'b', 'c'].map(name => ({ name }));
+  const collected = await collectFlowFailures(flows, async flow => {
+    ran.push(flow.name);
+    if (flow.name === 'a') throw failAt('flow', 'wrong text');
+    if (flow.name === 'b') throw failAt('flow', 'CoreSimulator connection lost');
+  });
+  assert.deepEqual(ran, ['a', 'b']);
+  assert.deepEqual(collected.failures.map(item => item.classification), ['flow', 'environment']);
+  assert.deepEqual(collected.notRun, ['c']);
+  assert.match(flowFailuresError(collected).message, /Not run after an environment failure: c/);
+});
+
+test('#888: a single failure keeps its original error so diagnostics and retry classification survive', async () => {
+  const original = Object.assign(maestroFailure('flow failed', { code: 1, reason: 'wall-deadline' }, { error: 'Element not found' }), { stage: 'flow' });
+  const collected = await collectFlowFailures([{ name: 'only' }], async () => { throw original; });
+  assert.equal(flowFailuresError(collected), original);
+  const clean = await collectFlowFailures([{ name: 'a' }, { name: 'b' }], async () => {});
+  assert.deepEqual(clean, { failures: [], notRun: [] });
 });
