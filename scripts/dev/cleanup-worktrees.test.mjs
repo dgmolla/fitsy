@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { cleanupMergedWorktrees, listWorktrees } from './cleanup-worktrees.mjs';
+import { activeCwds, cleanupMergedWorktrees, listWorktrees } from './cleanup-worktrees.mjs';
 import { admitDisk } from '../sim/runner-controls.mjs';
 
 const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' } }).trim();
@@ -87,4 +87,27 @@ test('admitDisk removes merged worktrees once on a shortage, keeps the real erro
   assert.deepEqual(calls, [path]);
   assert.throws(() => admitDisk(path, 'Native run', 1e9, () => { throw new Error('cleanup exploded'); }), /needs 1000000000 GiB free/);
   assert.doesNotThrow(() => admitDisk(path, 'Native run', 0.001, () => assert.fail('no cleanup when space is sufficient')));
+});
+
+test('an untracked file is never hidden by status.showUntrackedFiles=no', t => {
+  const { repo, add } = fixture(t);
+  const one = add('untracked', { extraCommit: true });
+  git(repo, 'config', 'status.showUntrackedFiles', 'no');
+  writeFileSync(join(one.path, 'new-source.ts'), 'export const precious = true;\n');
+  assert.equal(git(one.path, 'status', '--porcelain'), '', 'precondition: the user config really hides it');
+  const result = cleanupMergedWorktrees({ repo, apply: true, cwds: ['/nowhere'], caller: repo, mergedHeads: () => [one.head] });
+  assert.deepEqual(result.removed, []);
+  assert.equal(existsSync(join(one.path, 'new-source.ts')), true);
+  assert.match(result.skipped[0].reason, /uncommitted/);
+});
+
+test('an unavailable process inventory aborts cleanup instead of reading as "nothing is active"', t => {
+  const { repo, add } = fixture(t);
+  const one = add('inventory', { extraCommit: true });
+  const previous = process.env.PATH;
+  t.after(() => { process.env.PATH = previous; });
+  process.env.PATH = '/nonexistent-bin';
+  assert.throws(() => activeCwds(), /process inventory unavailable/);
+  assert.throws(() => cleanupMergedWorktrees({ repo, apply: true, caller: repo, mergedHeads: () => [one.head] }), /process inventory unavailable/);
+  assert.equal(existsSync(one.path), true);
 });

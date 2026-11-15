@@ -9,11 +9,14 @@
 // `git rev-list HEAD --not --remotes`, so the PR head is the proof of what
 // reached GitHub). Branchless, no-PR, open-PR and head-differs worktrees are kept.
 // Removal is plain `git worktree remove` (never --force); git refuses if unclean.
+// Both the cleanliness check and the removal run with status.showUntrackedFiles=all
+// so a user's `showUntrackedFiles=no` can never hide an untracked source file.
 import { execFileSync } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const REPO = 'dgmolla/fitsy';
+const GIT_STRICT = ['-c', 'status.showUntrackedFiles=all'];
 const run = (cmd, args, cwd) => execFileSync(cmd, args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 });
 
 export function listWorktrees(repo) {
@@ -27,13 +30,17 @@ export function listWorktrees(repo) {
   });
 }
 
+// Fails closed: if the process inventory cannot be established (lsof missing or
+// no output at all) nothing may be removed, because an empty list would read as
+// "no active process". lsof exits 1 when it can read only some processes; its
+// partial listing is kept.
 export function activeCwds() {
-  try {
-    return run('lsof', ['-d', 'cwd', '-Fn']).split('\n').filter(line => line.startsWith('n/')).map(line => line.slice(1));
-  } catch (error) {
-    // lsof exits non-zero when it can read only some processes; keep what it printed.
-    return String(error.stdout || '').split('\n').filter(line => line.startsWith('n/')).map(line => line.slice(1));
-  }
+  let stdout;
+  try { stdout = run('lsof', ['-d', 'cwd', '-Fn']); }
+  catch (error) { stdout = error.code === 'ENOENT' ? '' : String(error.stdout || ''); }
+  const cwds = stdout.split('\n').filter(line => line.startsWith('n/')).map(line => line.slice(1));
+  if (!cwds.length) throw new Error('process inventory unavailable; keeping every worktree');
+  return cwds;
 }
 
 export function mergedPrHeads(branch) {
@@ -58,14 +65,14 @@ export function cleanupMergedWorktrees({ repo = process.cwd(), apply = false, cw
     if (cwdReals.some(cwd => inside(cwd, path))) { skip('active process'); continue; }
     if (!worktree.branch) { skip('no branch (detached)'); continue; }
     let dirty;
-    try { dirty = run('git', ['status', '--porcelain'], worktree.path).trim(); } catch { skip('status unreadable'); continue; }
+    try { dirty = run('git', [...GIT_STRICT, 'status', '--porcelain=v1', '--untracked-files=all'], worktree.path).trim(); } catch { skip('status unreadable'); continue; }
     if (dirty) { skip('uncommitted changes'); continue; }
     let heads;
     try { heads = mergedHeads(worktree.branch); } catch { skip('merged-PR lookup failed'); continue; }
     if (!heads.includes(worktree.head)) { skip('no merged PR with this exact head'); continue; }
     result.candidates.push(worktree.path);
     if (!apply) continue;
-    try { run('git', ['worktree', 'remove', worktree.path], main.path); result.removed.push(worktree.path); }
+    try { run('git', [...GIT_STRICT, 'worktree', 'remove', worktree.path], main.path); result.removed.push(worktree.path); }
     catch (error) { result.refused.push({ path: worktree.path, reason: String(error.stderr || error.message).trim().slice(0, 200) }); }
   }
   if (apply && result.removed.length) run('git', ['worktree', 'prune'], main.path);
