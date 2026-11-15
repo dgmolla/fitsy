@@ -29,6 +29,7 @@ jest.mock('../lib/usePurchases', () => ({ usePurchases: () => ({
 }) }));
 jest.mock('../lib/notificationSchedule', () => ({
   readReminderPreferences: jest.fn(),
+  hasStoredReminderPreferences: jest.fn(async () => true),
   readScheduledReminders: jest.fn(async () => []),
   replaceReminders: jest.fn(async () => {}),
   reconcileReminderOwnership: jest.fn(async () => {}),
