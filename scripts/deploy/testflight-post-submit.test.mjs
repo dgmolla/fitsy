@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { appleClient, preflight, waitForBuild, inspectArtifact, baselineFor, openBaselinePR, postSubmit } = require('./testflight-post-submit');
+const { integrationSource, appleClient, preflight, waitForBuild, inspectArtifact, baselineFor, openBaselinePR, postSubmit } = require('./testflight-post-submit');
 const id = n => `${String(n).repeat(8)}-${String(n).repeat(4)}-${String(n).repeat(4)}-${String(n).repeat(4)}-${String(n).repeat(12)}`;
 const build = { id: id(1), status: 'FINISHED', platform: 'IOS', distribution: 'STORE', buildProfile: 'testflight',
   appBuildVersion: '7', appVersion: '1.0.0', gitCommitHash: 'a'.repeat(40), runtimeVersion: 'b'.repeat(40),
@@ -142,6 +142,16 @@ for (const refusal of ['unmerged-source', 'downgrade', 'closed-pr', 'changed-bra
   }
   assert.throws(() => openBaselinePR(baseline(), gh));
   assert.equal(calls.some(call => call.body), false);
+});
+
+test('a buildNumber-only local commit is integrated through its parent; other deltas are not', () => {
+  const git = (diff, names = 'apps/mobile/app.config.ts') => (...args) => ({
+    'rev-list': `${'c'.repeat(40)} ${'a'.repeat(40)}\n`, 'diff': args.includes('--name-only') ? `${names}\n` : diff })[args[0]];
+  const bump = '--- a/x\n+++ b/x\n@@ -1 +1 @@\n-    buildNumber: "8",\n+    buildNumber: "10",\n';
+  assert.equal(integrationSource('c'.repeat(40), git(bump)), 'a'.repeat(40));
+  assert.equal(integrationSource('c'.repeat(40), git(bump + '+  extra: 1,\n')), 'c'.repeat(40));
+  assert.equal(integrationSource('c'.repeat(40), git(bump, 'apps/mobile/app.config.ts\nother.ts')), 'c'.repeat(40));
+  assert.equal(integrationSource('c'.repeat(40), () => { throw new Error('unknown'); }), 'c'.repeat(40));
 });
 
 test('actual post-submit caller waits, confirms Internal membership, opens PR and is idempotent', async () => {
