@@ -301,8 +301,11 @@ env:
     id: map-card-0
 - assertVisible:
     id: map-pin-2
-- assertNotVisible:
+# Pin 3 is the locked teaser, matching the fourth card in the 1/4 counter (#802).
+- assertVisible:
     id: map-pin-3
+- assertNotVisible:
+    id: map-pin-4
 - assertNotVisible:
     id: map-load-more
 - assertNotVisible:
