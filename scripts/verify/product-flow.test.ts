@@ -53,6 +53,24 @@ function fixture() {
     exploration: [{ category: 'billing', result: 'pass', expected: 'cancel returns to paywall', observed: 'paywall remains usable', branches: ['primary', 'recovery'], trace: 'trace.json', sha256: sha(trace) }],
   };
 }
+// #888: a hash-chained, nonce-bound MCP capture plus its exact trace projection,
+// written the way the capture proxy writes them (independent re-implementation).
+function captured(nonce: string, events: { at: string; name: string; result: unknown }[]) {
+  let prev = '0'.repeat(64), seq = 0;
+  const seal = (dir: string, raw: string, at: string) => {
+    const hash = sha(`${prev}\n${seq}\n${at}\n${dir}\n${raw}`);
+    const line = JSON.stringify({ seq, at, dir, raw, prev, hash });
+    seq++; prev = hash;
+    return line;
+  };
+  const lines = [seal('meta', JSON.stringify({ nonce }), events[0]?.at ?? new Date().toISOString())];
+  events.forEach((event, id) => {
+    lines.push(seal('in', JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/call', params: { name: event.name, arguments: {} } }), event.at));
+    lines.push(seal('out', JSON.stringify({ jsonrpc: '2.0', id, result: event.result }), event.at));
+  });
+  const trace = events.map(event => `${JSON.stringify({ at: event.at, command: { name: event.name, arguments: {} }, result: event.result })}\n`).join('');
+  return { capture: `${lines.join('\n')}\n`, trace };
+}
 function validate(report: ReturnType<typeof fixture>, mode = 'final-candidate', fixtureConfigurations: Record<string, string> = {}, env = fixtureEnv()) {
   writeFileSync(join(dir, 'report.json'), JSON.stringify(report));
   return evaluate(`gate.validate(JSON.parse((await import('node:fs')).readFileSync(${JSON.stringify(join(dir, 'report.json'))}, 'utf8')), {required:true, categories:['billing'], flows:['cold-start-welcome','signin-options','billing-cancel']}, 'current-inputs', ${JSON.stringify(dir)}, Date.now(), ${JSON.stringify(dir)}, 'current-inputs', ${JSON.stringify(mode)}, [], ${JSON.stringify(fixtureConfigurations)})`, env);
@@ -65,13 +83,13 @@ deterministicTest('walkthrough fixture transitions retain original proof and rej
   const start = Date.parse(original.startedAt);
   const at = (offset: number) => new Date(start + offset).toISOString();
   const report = { ...original, configHash: sha('free'), jsHash: sha('js'), backendDeployment: 'dev-deployment',
-    bundleHash: sha('free-bundle'), walkthroughProtocol: 1,
+    bundleHash: sha('free-bundle'), walkthroughProtocol: 2,
     metro: { pid: 101, processIdentity: 'original-process', root: dir, port: 8099, route: '/bundle',
       jsHash: sha('js'), configHash: sha('free'), bundleHash: sha('free-bundle') },
     walkthroughSessions: [] as { category: string; receipt: string; sha256: string; artifacts: string[] }[] };
-  const trace = ['tap_on', 'inspect_view_hierarchy'].map(name => JSON.stringify({ at: at(4000),
-    command: { name }, result: { content: [{ type: 'text', text: 'Paywall visible' }] } })).join('\n');
-  writeFileSync(join(dir, 'trace.json'), trace);
+  const { capture, trace } = captured('nonce-1', ['run', 'inspect_screen'].map(name => ({ at: at(4000), name,
+    result: { content: [{ type: 'text', text: 'Paywall visible' }] } })));
+  writeFileSync(join(dir, 'trace.json'), trace); writeFileSync(join(dir, 'mcp-capture.jsonl'), capture);
   report.exploration[0]!.sha256 = sha(trace);
   const snapshot = JSON.stringify({ udid: report.simulator, files: 0, bytes: 0, videos: 0 });
   writeFileSync(join(dir, 'before.json'), snapshot); writeFileSync(join(dir, 'after.json'), snapshot);
@@ -83,11 +101,11 @@ deterministicTest('walkthrough fixture transitions retain original proof and rej
     restoredMetro: { ...report.metro, pid: 202, processIdentity: 'restored-process' },
     startedAt: at(1000), readyAt: at(2000), completedAt: at(5000), restoredAt: at(6000),
     entitlement: { fixture: 'empty-store', sandbox: true, storeMode: 'test-store', accountHash: sha('free-account'), verifiedAt: at(1500) },
-    trace: 'trace.json', traceHash: sha(trace),
+    trace: 'trace.json', traceHash: sha(trace), mcpCapture: 'mcp-capture.jsonl', mcpCaptureHash: sha(capture), captureNonce: 'nonce-1',
     attachmentBefore: 'before.json', attachmentBeforeHash: sha(snapshot), attachmentAfter: 'after.json', attachmentAfterHash: sha(snapshot),
     captureReceipt: original.flows[0]!.captureReceipt, captureReceiptHash: original.flows[0]!.captureReceiptHash,
     attachmentCloseout: original.flows[0]!.attachmentCloseout, attachmentCloseoutHash: original.flows[0]!.attachmentCloseoutHash };
-  const artifacts = [session.attachmentBefore, session.attachmentAfter, session.captureReceipt, session.attachmentCloseout];
+  const artifacts = [session.attachmentBefore, session.attachmentAfter, session.captureReceipt, session.attachmentCloseout, session.mcpCapture];
   const saveSession = (value: unknown = session) => {
     const bytes = JSON.stringify(value); writeFileSync(join(dir, 'session.json'), bytes);
     report.walkthroughSessions = [{ category: 'billing', receipt: 'session.json', sha256: sha(bytes), artifacts }];
@@ -118,7 +136,21 @@ deterministicTest('walkthrough fixture transitions retain original proof and rej
     saveSession({ ...session, ...change });
     const result = validate(report); expect(result.status).toBe(1); expect(result.stderr).toMatch(failure);
   }
+  // #888: evidence not produced by the capture tooling is rejected.
+  const handTrace = `${JSON.stringify({ at: at(4000), command: { name: 'run', arguments: {} }, result: { content: [{ type: 'text', text: 'invented' }] } })}\n${JSON.stringify({ at: at(4000), command: { name: 'inspect_screen', arguments: {} }, result: { content: [{ type: 'text', text: 'invented' }] } })}\n`;
+  writeFileSync(join(dir, 'trace.json'), handTrace); report.exploration[0]!.sha256 = sha(handTrace);
+  saveSession({ ...session, traceHash: sha(handTrace) });
+  expect(validate(report).stderr).toContain('not the projection of its captured MCP session');
+  writeFileSync(join(dir, 'trace.json'), trace); report.exploration[0]!.sha256 = sha(trace);
+  const forged = capture.replace('Paywall visible', 'Paywall invisible');
+  writeFileSync(join(dir, 'mcp-capture.jsonl'), forged);
+  saveSession({ ...session, mcpCaptureHash: sha(forged) });
+  expect(validate(report).stderr).toContain('not produced by the capture tooling');
+  writeFileSync(join(dir, 'mcp-capture.jsonl'), capture);
+  saveSession({ ...session, captureNonce: 'another-session' });
+  expect(validate(report).stderr).toContain('not bound to this walkthrough session');
   saveSession();
+  expect(validate(report).status).toBe(0);
   report.walkthroughSessions[0]!.artifacts = [];
   expect(validate(report).stderr).toContain('publication omits fixture evidence');
   saveSession();
@@ -153,6 +185,23 @@ deterministicTest('an affected journey passes without unrelated baselines but ca
   const missing = check(['billing-cancel', 'billing-recovery']);
   expect(missing.status).toBe(1);
   expect(missing.stderr).toContain('missing affected flow: billing-recovery');
+});
+
+deterministicTest('#889: only an explicit waiver drops the walkthrough requirement; every selected flow is still required', () => {
+  const report = { ...fixture(), exploration: [] as ReturnType<typeof fixture>['exploration'], videoRequested: false };
+  for (const flow of report.flows) { delete (flow as { video?: string }).video; delete (flow as { videoHash?: string }).videoHash; }
+  writeFileSync(join(dir, 'report.json'), JSON.stringify(report));
+  const check = (plan: string) => evaluate(`gate.validate(JSON.parse((await import('node:fs')).readFileSync(${JSON.stringify(join(dir, 'report.json'))}, 'utf8')), ${plan}, 'current-inputs', ${JSON.stringify(dir)}, Date.now(), ${JSON.stringify(dir)}, 'current-inputs')`);
+  const flows = "['cold-start-welcome','signin-options','billing-cancel']";
+  const unwaived = check(`{required:true, categories:['billing'], flows:${flows}}`);
+  expect(unwaived.status).toBe(1);
+  expect(unwaived.stderr).toContain('missing walkthrough outcome: billing');
+  const waived = check(`{required:true, categories:['billing'], waivedWalkthrough:true, flows:${flows}}`);
+  expect(waived.stderr).toBe('');
+  expect(waived.stdout).toContain('0 changed-journey walkthroughs verified (walkthrough waived)');
+  const missingFlow = check(`{required:true, categories:['billing'], waivedWalkthrough:true, flows:['billing-cancel','billing-recovery']}`);
+  expect(missingFlow.status).toBe(1);
+  expect(missingFlow.stderr).toContain('missing affected flow: billing-recovery');
 });
 
 deterministicTest('retained exception metadata cannot omit a journey without fresh authority', () => {
@@ -303,13 +352,14 @@ mediaTest('accepts identified baseline and billing outcomes with matching artifa
 });
 mediaTest('final walkthrough validation decodes genuine JPEG and PNG while rejecting corrupt or expired pixels', () => {
   const report = { ...fixture(), configHash: sha('free'), jsHash: sha('js'), backendDeployment: 'dev-deployment',
-    bundleHash: sha('free-bundle'), walkthroughProtocol: 1,
+    bundleHash: sha('free-bundle'), walkthroughProtocol: 2,
     metro: { pid: 101, processIdentity: 'original-process', root: dir, port: 8099, route: '/bundle',
       jsHash: sha('js'), configHash: sha('free'), bundleHash: sha('free-bundle') },
     walkthroughSessions: [] as { category: string; receipt: string; sha256: string; artifacts: string[] }[],
     walkthroughPending: undefined as unknown };
   const observation = report.exploration[0]!;
-  const events = readFileSync(join(dir, observation.trace), 'utf8').split('\n').map(line => JSON.parse(line));
+  const events = ['run', 'inspect_screen'].map(name => ({ at: new Date().toISOString(), name,
+    result: { content: [{ type: 'text', text: 'Paywall visible' }] } }));
   const snapshot = JSON.stringify({ udid: report.simulator, entries: [] });
   writeFileSync(join(dir, 'before.json'), snapshot); writeFileSync(join(dir, 'after.json'), snapshot);
   const session = { version: 1, state: 'complete', category: 'billing', flow: null, fixture: 'default',
@@ -320,14 +370,15 @@ mediaTest('final walkthrough validation decodes genuine JPEG and PNG while rejec
     restoredMetro: { ...report.metro, pid: 202, processIdentity: 'restored-process' },
     startedAt: report.startedAt, readyAt: report.startedAt, completedAt: '', restoredAt: '',
     entitlement: { fixture: 'empty-store', sandbox: true, storeMode: 'test-store', accountHash: sha('free-account'), verifiedAt: report.startedAt },
-    trace: observation.trace, traceHash: '', attachmentBefore: 'before.json', attachmentBeforeHash: sha(snapshot),
+    trace: observation.trace, traceHash: '', mcpCapture: 'mcp-capture.jsonl', mcpCaptureHash: '', captureNonce: 'nonce-media',
+    attachmentBefore: 'before.json', attachmentBeforeHash: sha(snapshot),
     attachmentAfter: 'after.json', attachmentAfterHash: sha(snapshot),
     captureReceipt: report.flows[0]!.captureReceipt, captureReceiptHash: report.flows[0]!.captureReceiptHash,
     attachmentCloseout: report.flows[0]!.attachmentCloseout, attachmentCloseoutHash: report.flows[0]!.attachmentCloseoutHash };
   const saveSession = () => {
     const bytes = JSON.stringify(session); writeFileSync(join(dir, 'session.json'), bytes);
     report.walkthroughSessions = [{ category: 'billing', receipt: 'session.json', sha256: sha(bytes),
-      artifacts: [session.attachmentBefore, session.attachmentAfter, session.captureReceipt, session.attachmentCloseout] }];
+      artifacts: [session.attachmentBefore, session.attachmentAfter, session.captureReceipt, session.attachmentCloseout, session.mcpCapture] }];
   };
   const pngBytes = readFileSync(resolve(__dirname, '../sim/fixtures/active-saved-meal.png'));
   const jpeg = (name: string) => {
@@ -338,10 +389,10 @@ mediaTest('final walkthrough validation decodes genuine JPEG and PNG while rejec
   };
   const activeJpeg = jpeg('active-saved-meal'), expiredJpeg = jpeg('subscription-expired');
   const check = (mimeType: string, pixels: Buffer) => {
-    const trace = [...events, { at: new Date().toISOString(), command: { name: 'take_screenshot' },
-      result: { content: [{ type: 'image', mimeType, data: pixels.toString('base64') }] } }]
-      .map(event => JSON.stringify(event)).join('\n');
+    const { capture, trace } = captured('nonce-media', [...events, { at: new Date().toISOString(), name: 'take_screenshot',
+      result: { content: [{ type: 'image', mimeType, data: pixels.toString('base64') }] } }]);
     writeFileSync(join(dir, observation.trace), trace); observation.sha256 = sha(trace);
+    writeFileSync(join(dir, 'mcp-capture.jsonl'), capture); session.mcpCaptureHash = sha(capture);
     report.finishedAt = new Date().toISOString();
     session.traceHash = observation.sha256; session.completedAt = report.finishedAt; session.restoredAt = report.finishedAt;
     saveSession();

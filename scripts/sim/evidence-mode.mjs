@@ -27,15 +27,19 @@ export function billingSkipSelection(args) {
   const excludeFlows = excludeFlowsArgs.length ? excludeFlowsArgs[0].slice('--exclude-flows='.length).split(',').filter(Boolean) : [];
   const skipPersonas = withoutReason.filter(arg => arg === '--skip-billing-personas');
   if (skipPersonas.length > 1) throw new Error('Pass --skip-billing-personas at most once');
-  if ((skipPersonas.length === 1 || excludeFlows.length > 0) !== (reasonIndex !== -1))
-    throw new Error('--skip-billing-personas/--exclude-flows requires --reason "<text>"');
-  const rest = withoutReason.filter(arg => arg !== '--skip-billing-personas' && !arg.startsWith('--exclude-flows='));
-  return { rest, skipBillingPersonas: skipPersonas.length === 1, skipBillingReason, excludeFlows };
+  const waivers = withoutReason.filter(arg => arg === '--waive-walkthrough');
+  if (waivers.length > 1) throw new Error('Pass --waive-walkthrough at most once');
+  if ((skipPersonas.length === 1 || waivers.length === 1 || excludeFlows.length > 0) !== (reasonIndex !== -1))
+    throw new Error('--skip-billing-personas/--exclude-flows/--waive-walkthrough requires --reason "<text>"');
+  const rest = withoutReason.filter(arg => arg !== '--skip-billing-personas' && arg !== '--waive-walkthrough' &&
+    !arg.startsWith('--exclude-flows='));
+  return { rest, skipBillingPersonas: skipPersonas.length === 1, waiveWalkthrough: waivers.length === 1,
+    skipBillingReason, excludeFlows };
 }
 
 export function runSelection(args) {
   const [udid, ...rawRest] = args;
-  const { rest, skipBillingPersonas, skipBillingReason, excludeFlows } = billingSkipSelection(rawRest);
+  const { rest, skipBillingPersonas, waiveWalkthrough, skipBillingReason, excludeFlows } = billingSkipSelection(rawRest);
   const modes = rest.filter(arg => arg.startsWith('--mode='));
   const recording = rest.filter(arg => arg === '--record-video');
   const exceptions = rest.filter(arg => arg.startsWith('--release-exception='));
@@ -51,7 +55,7 @@ export function runSelection(args) {
   const mode = evidenceMode(modes[0]?.slice('--mode='.length), recording.length === 1);
   return { udid, names: rest.filter(arg => !arg.startsWith('--')), mode,
     approvalId: exceptions[0]?.slice('--release-exception='.length), environmentRetryAllowed: !noRetry.length,
-    skipBillingPersonas, skipBillingReason, excludeFlows };
+    skipBillingPersonas, waiveWalkthrough, skipBillingReason, excludeFlows };
 }
 
 // #876: finish never had a CLI arg parser at all, unlike run/publish - this
@@ -59,9 +63,9 @@ export function runSelection(args) {
 export function finishSelection(args) {
   const hasWalkthrough = args.length > 0 && !args[0].startsWith('--');
   const walkthrough = hasWalkthrough ? args[0] : undefined;
-  const { rest, skipBillingPersonas, skipBillingReason, excludeFlows } = billingSkipSelection(hasWalkthrough ? args.slice(1) : args);
+  const { rest, skipBillingPersonas, waiveWalkthrough, skipBillingReason, excludeFlows } = billingSkipSelection(hasWalkthrough ? args.slice(1) : args);
   if (rest.length) throw new Error('Unknown finish option');
-  return { walkthrough, skipBillingPersonas, skipBillingReason, excludeFlows };
+  return { walkthrough, skipBillingPersonas, waiveWalkthrough, skipBillingReason, excludeFlows };
 }
 
 export function matchesFinalCandidate(report, { udid, appHash, configHash, backendDeployment, fixture, flows, recordVideo = false }) {
