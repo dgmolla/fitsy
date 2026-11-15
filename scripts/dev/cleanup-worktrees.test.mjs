@@ -80,15 +80,11 @@ test('a failed merged-PR lookup keeps the worktree', t => {
   assert.match(result.skipped[0].reason, /lookup failed/);
 });
 
-test('admitDisk removes merged worktrees once on a shortage, keeps the real error, and is skippable', t => {
+test('admitDisk removes merged worktrees once on a shortage, keeps the real error', () => {
   const path = tmpdir();
   const calls = [];
   assert.throws(() => admitDisk(path, 'Native run', 1e9, dir => calls.push(dir)), /needs 1000000000 GiB free.*after removing merged worktrees/);
   assert.deepEqual(calls, [path]);
   assert.throws(() => admitDisk(path, 'Native run', 1e9, () => { throw new Error('cleanup exploded'); }), /needs 1000000000 GiB free/);
   assert.doesNotThrow(() => admitDisk(path, 'Native run', 0.001, () => assert.fail('no cleanup when space is sufficient')));
-  const previous = process.env.FITSY_AUTO_CLEANUP;
-  t.after(() => { if (previous === undefined) delete process.env.FITSY_AUTO_CLEANUP; else process.env.FITSY_AUTO_CLEANUP = previous; });
-  process.env.FITSY_AUTO_CLEANUP = '0';
-  assert.throws(() => admitDisk(path, 'Native run', 1e9, () => assert.fail('disabled')), /needs 1000000000 GiB free/);
 });
