@@ -1,10 +1,13 @@
-const { getDefaultConfig } = require("expo/metro-config");
+const { getSentryExpoConfig } = require("@sentry/react-native/metro");
 const path = require("path");
 
 const projectRoot = __dirname;
 const monorepoRoot = path.resolve(projectRoot, "../..");
 
-const config = getDefaultConfig(projectRoot);
+const config = getSentryExpoConfig(projectRoot, {
+  includeWebReplay: false,
+  enableSourceContextInDevelopment: false,
+});
 
 // Watch all files in the monorepo
 config.watchFolders = [monorepoRoot];
@@ -33,6 +36,7 @@ config.resolver.extraNodeModules = new Proxy(
 const PINNED_MODULES = {
   "react-native-screens": path.resolve(projectRoot, "node_modules/react-native-screens"),
 };
+const sentryResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   const pinned = Object.keys(PINNED_MODULES).find(
     (pkg) => moduleName === pkg || moduleName.startsWith(pkg + "/")
@@ -42,7 +46,7 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
     const redirected = PINNED_MODULES[pinned] + suffix;
     return context.resolveRequest(context, redirected, platform);
   }
-  return context.resolveRequest(context, moduleName, platform);
+  return sentryResolveRequest(context, moduleName, platform);
 };
 
 module.exports = config;

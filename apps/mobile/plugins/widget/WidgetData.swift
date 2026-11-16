@@ -41,6 +41,11 @@ struct WidgetDish: Codable, Equatable {
     let fatG: Double
     let confidence: String
     var photoUrl: String? = nil
+    // Added after the first widget release; old cached payloads without these
+    // keys must still decode (they simply omit the distance/price segments).
+    var distanceMi: Double? = nil
+    var price: Double? = nil
+    var priceLevel: String? = nil
 
     var link: URL {
         var url = URLComponents()
@@ -49,6 +54,21 @@ struct WidgetDish: Codable, Equatable {
         url.path = "/restaurant/\(restaurantID)"
         url.queryItems = [URLQueryItem(name: "selectedItemId", value: menuItemID)]
         return url.url!
+    }
+
+    // "Sweetgreen · 0.4 mi · $14"; the dish price wins over the restaurant's
+    // price level, and either missing part is dropped without a dangling "·".
+    var subtitleSuffix: String? {
+        var parts: [String] = []
+        if let distanceMi, distanceMi.isFinite, distanceMi >= 0 {
+            parts.append(String(format: "%.1f mi", distanceMi))
+        }
+        if let price, price.isFinite, price >= 0 {
+            parts.append("$\(Int(price.rounded()))")
+        } else if let priceLevel, !priceLevel.isEmpty {
+            parts.append(priceLevel)
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     static func number(_ value: Double) -> String {
@@ -86,10 +106,13 @@ private struct SearchEnvelope: Decodable {
             let carbsG: Double
             let fatG: Double
             let confidence: String
+            let price: Double?
         }
         let id: String
         let name: String
         let photoUrl: String?
+        let distanceMiles: Double?
+        let priceLevel: String?
         let bestMatch: Match?
     }
     let data: [Restaurant]
@@ -122,7 +145,8 @@ enum WidgetData {
         let dish = WidgetDish(restaurantID: restaurant.id, restaurantName: restaurant.name, menuItemID: match.menuItemId,
                               name: match.name, calories: match.calories, proteinG: match.proteinG,
                               carbsG: match.carbsG, fatG: match.fatG, confidence: match.confidence,
-                              photoUrl: restaurant.photoUrl)
+                              photoUrl: restaurant.photoUrl, distanceMi: restaurant.distanceMiles,
+                              price: match.price, priceLevel: restaurant.priceLevel)
         return WidgetSnapshot(state: .dish, dish: dish, updatedAt: now, context: configuration.context)
     }
 

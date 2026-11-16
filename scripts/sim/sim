@@ -180,12 +180,37 @@ case "$CMD" in
     require_claim_or_free
     DEVICE="iPhone 16"
     [ "${1:-}" = "--device" ] && DEVICE="$2"
+    # #888: a booted-looking or freshly booted device is not ready until
+    # `simctl bootstatus` returns; wait a bounded time and retry a stuck boot.
+    BOOT_WAIT="${FITSY_SIM_BOOT_WAIT_SECONDS:-180}"; BOOT_ATTEMPTS="${FITSY_SIM_BOOT_ATTEMPTS:-3}"
+    wait_booted() {
+      xcrun simctl bootstatus "$1" -b >/dev/null 2>&1 &
+      local pid=$! waited=0
+      while kill -0 "$pid" 2>/dev/null; do
+        if [ "$waited" -ge "$BOOT_WAIT" ]; then kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; return 1; fi
+        sleep 1; waited=$((waited + 1))
+      done
+      wait "$pid"
+    }
+    boot_failed() {
+      printf '{"name":"sim-boot","status":"fail","summary":"%s","fix":"check Simulator/CoreSimulator health (xcrun simctl list devices), shut the device down, then retry"}\n' "$1"
+      exit 1
+    }
     UDID="$(booted_udid)"
     if [ -z "$UDID" ]; then
       UDID="$(xcrun simctl list devices available | grep -F "$DEVICE (" | grep -oE '[0-9A-F-]{36}' | head -1)"
       [ -n "$UDID" ] || { echo "no available simulator named '$DEVICE'" >&2; exit 1; }
-      xcrun simctl boot "$UDID"
-      open -a Simulator --background || true
+      attempt=1
+      while :; do
+        xcrun simctl boot "$UDID" || true
+        open -a Simulator --background || true
+        wait_booted "$UDID" && break
+        [ "$attempt" -lt "$BOOT_ATTEMPTS" ] || boot_failed "simulator $UDID did not finish booting after $BOOT_ATTEMPTS attempts"
+        xcrun simctl shutdown "$UDID" >/dev/null 2>&1 || true
+        attempt=$((attempt + 1))
+      done
+    else
+      wait_booted "$UDID" || boot_failed "booted simulator $UDID did not become ready within ${BOOT_WAIT}s"
     fi
     # iOS's one-time "slide to type" sheet steals the first keystrokes typed
     # into any text field; pre-dismiss it so Maestro inputText is never lost.

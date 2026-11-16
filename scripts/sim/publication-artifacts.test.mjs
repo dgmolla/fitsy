@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import yaml from 'js-yaml';
 import { createPublicationArchive, publicationPlan, publishProductFlow as publishWithMediaEvidence } from './publish-product-flow.mjs';
-import { redactSecrets } from './publication-artifacts.mjs';
+import { publicationArtifacts, redactSecrets } from './publication-artifacts.mjs';
 import { artifactPath, baseline, inputHash, root, publicConfigIdentity, impact, requiredPublicConfigKeys, validate } from '../verify/product-flow.mjs';
 import { validateMediaReceipt, writeMediaReceipt } from '../verify/media-integration.mjs';
 import { simulatorFlows } from '../verify/impact-plan.mjs';
@@ -70,6 +70,12 @@ test('final collection preflights the actual child environment and publisher inp
           return JSON.stringify({ 'empty-store': { ok: true }, 'expired-subscription': { ok: true }, 'entitled-dev': { ok: true } });
         return JSON.stringify({ configHash: staleConfig ? 'stale' : publicConfigIdentity().configHash });
       }
+      // #874: config-drift is advisory-only and never throws from preflight;
+      // this is the real script's exact "unavailable locally" shape.
+      if (command === 'bash') {
+        assert.deepEqual(args, ['scripts/verify/config-drift.sh']);
+        return JSON.stringify({ name: 'config-drift', status: 'skipped', summary: 'SUPABASE_URL/SUPABASE_ANON_KEY not set', fix: 'npm run dev:env' });
+      }
       if (command === 'git') {
         if (args[0] === 'branch') {
           assert.deepEqual(args, ['branch', '--show-current']);
@@ -110,7 +116,7 @@ test('final collection preflights the actual child environment and publisher inp
       await assert.rejects(publishWithMediaEvidence(undefined, options), message);
       set(false);
     }
-    assert.ok(calls.every(([command]) => ['gh', 'git', process.execPath].includes(command)));
+    assert.ok(calls.every(([command]) => ['gh', 'git', 'bash', process.execPath].includes(command)));
     const interrupted = join(dir, 'report.json');
     writeFileSync(interrupted, '{');
     const recovered = await publishWithMediaEvidence(undefined, options);
@@ -651,4 +657,17 @@ test('complete final proof covers a smaller request without rewriting provenance
     await assert.rejects(publishProductFlow('9', options), /unexpected XCTest recording/);
     assert.equal(uploads, 1, 'unexpected incidental recording must stop before upload');
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('#896: a waived walkthrough archives without observations (even with no exploration), an unwaived one still requires them', () => {
+  const report = { flows: [{ commands: 'c.json', screenshot: 's.png', captureReceipt: 'r.jsonl' }], walkthroughSessions: [] };
+  const base = ['report.json', 'c.json', 's.png', 'r.jsonl'];
+  assert.deepEqual(publicationArtifacts(report, ['billing', 'changed-journey'], true), base);
+  assert.deepEqual(publicationArtifacts({ ...report, exploration: [] }, ['billing'], true), base);
+  const observed = { ...report, exploration: [{ category: 'billing', trace: 't.jsonl' }] };
+  assert.deepEqual(publicationArtifacts(observed, ['billing'], true), [...base, 't.jsonl'], 'an existing observation is still archived under a waiver');
+  assert.deepEqual(publicationArtifacts(observed, ['billing']), [...base, 't.jsonl']);
+  assert.throws(() => publicationArtifacts(report, ['billing']), /Missing walkthrough observation for billing/);
+  assert.throws(() => publicationArtifacts({ ...report, exploration: [] }, ['billing']), /Missing walkthrough observation for billing/);
+  assert.throws(() => publicationArtifacts(observed, ['billing', 'auth']), /Missing walkthrough observation for auth/);
 });

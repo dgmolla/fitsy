@@ -299,13 +299,6 @@ The flow records a real decline, clears only the disposable keychain, and retain
 `components/OnboardingReturningPreview.test.tsx` exercises the real sign-in, paywall and decline with a rejected fixture login followed by a corrected retry, plus the saved cancellation-to-preview sequence through real screens.
 Run `node scripts/sim/ci.mjs --scope=flow --flows=onboarding-returning-preview --udid=<UDID>` with `unsubscribed-dev`, then remove `onboarding-returning-preview.yaml` (#527) from the Mac's `KNOWN_FAILING` list after a passing native run.
 
-`reminders` uses `unsubscribed-dev` to check guest access, leaving without opt-in, native denial, grant and permission persistence after relaunch without purchasing.
-After Dev Login completes, it opens notification settings and uses `reminders-enable`; it does not assume a paywall destination or an eligible trial offer.
-The `/welcome/notification-permission` screen requires an active purchase and cannot supply this inactive account's permission coverage.
-Keep the fixture's credentials in owned Metro as well as the runner environment; a `Dev Login Failed` alert indicates an authentication/setup failure, not a missing paywall plan.
-Both permission resets reconnect a cleared Debug client to local Metro before checking the welcome screen.
-`components/RemindersJourney.test.tsx` checks those startup steps and exercises the saved flow's sign-in continuation and opt-in control against real settings, preferences and scheduling for a never-subscribed account.
-Run `node scripts/sim/ci.mjs --scope=flow --flows=reminders --udid=<UDID>` with the local fixture configuration, then remove `reminders.yaml` (#528) from the Mac's `KNOWN_FAILING` list after the repaired flow passes natively.
 
 The assisted-targets journey also opens `/macro-setup`, asserts its daily editor and exercises Save and Skip; macro-setup render smoke stops at `macro-setup-save` on that screen.
 Run the native accessibility helper regression tests from the repository root with `node --test apps/mobile/e2e/helpers/native-ax.test.mjs` when changing these helpers.

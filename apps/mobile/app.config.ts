@@ -31,7 +31,7 @@ export type PublishEnv = Record<string, string | undefined>;
 export function assertPublicEnvSafety(env: PublishEnv): void {
   for (const [name, value] of Object.entries(env)) {
     if (!name.startsWith('EXPO_PUBLIC_') || !value) continue;
-    const forbiddenName = /SERVICE_ROLE|SECRET|PRIVATE_KEY|ACCESS_TOKEN|REFRESH_TOKEN/.test(name) ||
+    const forbiddenName = /SERVICE_ROLE|SECRET|PRIVATE_KEY|ACCESS_TOKEN|REFRESH_TOKEN|AUTH_TOKEN/.test(name) ||
       (env.NODE_ENV === 'production' && /PASSWORD/.test(name));
     let serviceRole = false;
     if (value.startsWith('eyJ')) {
@@ -39,7 +39,7 @@ export function assertPublicEnvSafety(env: PublishEnv): void {
         serviceRole = JSON.parse(Buffer.from(value.split('.')[1] ?? '', 'base64url').toString()).role === 'service_role';
       } catch { /* Not a JWT; other key formats are checked below. */ }
     }
-    if (forbiddenName || serviceRole || /^(sb_secret_|sk_(?:live|test)_|sk-ant-|ghp_|github_pat_|-----BEGIN)/.test(value)) {
+    if (forbiddenName || serviceRole || /^(sntrys_|sntryu_|sb_secret_|sk_(?:live|test)_|sk-ant-|ghp_|github_pat_|-----BEGIN)/.test(value)) {
       throw new Error(`[fitsy] Refusing to bundle secret public configuration: ${name}`);
     }
   }
@@ -128,6 +128,11 @@ const config: ExpoConfig = {
     "expo-web-browser",
     "expo-notifications",
     "./plugins/withMealWidget.cjs",
+    ["@sentry/react-native/expo", {
+      url: "https://sentry.io/",
+      organization: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+    }],
   ],
   updates: {
     url: "https://u.expo.dev/a204190c-0b71-4c31-b126-f3bc62d1c4ee",

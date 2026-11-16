@@ -40,6 +40,7 @@ PUBLIC_PATTERNS = {
     "EXPO_PUBLIC_REVENUECAT_TEST_KEY": r"test_[A-Za-z0-9]+",
     "EXPO_PUBLIC_POSTHOG_API_KEY": r"phc_[A-Za-z0-9]+",
     "EXPO_PUBLIC_POSTHOG_HOST": r"https://(?:us|eu)\.i\.posthog\.com/?",
+    "EXPO_PUBLIC_SENTRY_DSN": r"https://[a-f0-9]{32}@o[0-9]+\.ingest\.(?:us|de)\.sentry\.io/[0-9]+",
     "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": r"[0-9]+-[A-Za-z0-9_-]+\.apps\.googleusercontent\.com",
     "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": r"[0-9]+-[A-Za-z0-9_-]+\.apps\.googleusercontent\.com",
 }

@@ -54,6 +54,33 @@ jobs:
           gh issue create --label incident \
             --title "incident: dev maintenance failed $(date -u +%F)" \
             --body-file "$incident_body"
+      # #874: advisory (shadow) - a flipped external setting is a product/config
+      # problem, not a harness incident, so this never fails the job and is
+      # filed as its own distinct issue rather than folded into the above.
+      - name: External config drift check
+        id: config_drift
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.DEV_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.DEV_SUPABASE_ANON_KEY }}
+          FITSY_RUNS: scheduled
+        run: |
+          command -v jq >/dev/null || sudo apt-get install -y -q jq
+          bash scripts/verify/config-drift.sh | tee /tmp/config-drift.json
+      - name: File config drift issue on mismatch
+        if: steps.config_drift.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          summary=$(jq -r '.summary' /tmp/config-drift.json)
+          fix=$(jq -r '.fix' /tmp/config-drift.json)
+          drift_body=$(mktemp)
+          trap 'rm -f "$drift_body"' EXIT
+          { echo "Nightly config-drift check: $summary"; echo; echo "Fix: $fix"; echo; echo "See scripts/verify/config-drift.sh and scripts/verify/expected-external-config.json."; } > "$drift_body"
+          gh issue list --label infra --state open --search "config drift" --json number --jq length | grep -qv '^0$' || \
+          gh issue create --label infra \
+            --title "config drift: $summary" \
+            --body-file "$drift_body"
 
   monthly-snapshot:
     if: github.ref == 'refs/heads/main' && (github.event.schedule == '0 10 1 * *' || github.event_name == 'workflow_dispatch')

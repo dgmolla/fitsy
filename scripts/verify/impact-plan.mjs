@@ -15,6 +15,17 @@ export function isMain(url) {
 // This service-only observability endpoint has no mobile caller or journey.
 // Any other API, shared, or mobile path still requires native proof.
 export const serviceHealthPath = path => /^apps\/api\/app\/api\/health\/route(?:\.test)?\.ts$/.test(path);
+// Operator-triggered routes (cron/ops/diagnostics, CRON_SECRET-gated); the
+// mobile client never calls apps/api/app/api/internal/** so they carry no
+// simulator-mapped journey and shouldn't force full coverage on every edit.
+export const internalOpsPath = path => /^apps\/api\/app\/api\/internal\//.test(path);
+// Dependency-free so classify's media step can import it directly; the real
+// home for this predicate is media-integration.mjs, which re-exports it -
+// importing that module instead would pull in product-flow.mjs's chain down
+// to screen-guard.mjs's js-yaml require, which classify never npm-installs.
+export function mediaIntegrationRequired(paths) {
+  return paths.some(path => /^scripts\/sim\/|^scripts\/delivery\/loop\/(?:host|context|driver|install|loop\.test|worktrees(?:\.test)?)\.py$|^scripts\/verify\/(?:product-flow|media-integration|test\.sh|registry\.yml)/.test(path));
+}
 // The loop sandbox points these at a scratch, credential-free config.
 const TRUSTED_GIT_SELECTORS = new Set(['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM']);
 export const gitEnv = (env = process.env) => Object.fromEntries(Object.entries(env).filter(([key]) => !key.startsWith('GIT_') || TRUSTED_GIT_SELECTORS.has(key)));
@@ -73,6 +84,17 @@ export const allTestGroups = ['api', 'scripts', 'mobile'];
 const documentationPath = path => /^[^/]+\.md$/.test(path) ||
   /^(docs|proj-mgmt)\/.*\.(md|mdx|rst|txt|png|jpe?g|svg|webp)$/.test(path);
 
+// #821: these specific auth paths affect only sign-in/onboarding/paywall-access
+// journeys (mapped narrowly below in screenFlows), not the full simulator set.
+// Billing/payment/subscription/navigation paths that happen to share the word
+// "auth"/"session" (e.g. purchaseSession.ts, authInput.ts, widgetAuth.ts) are
+// deliberately left out, so they keep requiring full coverage unchanged. A
+// mobile component under apps/mobile/components/ (e.g. AuthForm.tsx) would
+// never narrow anyway - the separate shared-UI rule below already requires
+// full coverage for any apps/mobile/components/ change - so it's not listed
+// here even though it's reasonably "sign-in code".
+const narrowAuthPath = /^apps\/api\/(?:lib\/auth\.ts|services\/authService\.ts)$|^apps\/mobile\/app\/auth\/|^apps\/mobile\/app\/welcome\/signin\.tsx$|^apps\/mobile\/lib\/(?:authClient|useAuthLifecycle|discoverySignIn)\.ts$/;
+
 // Flow names are the existing Maestro sources, not another scenario registry.
 const screenFlows = [
   [/^apps\/mobile\/(app\/widget\.|components\/WidgetSync\.|lib\/widget)/,
@@ -88,8 +110,8 @@ const screenFlows = [
   [/^apps\/mobile\/(app\/\(tabs\)\/saved\.|lib\/menuBookmarks\.)/, /^log-meal$/, ['discovery']],
   [/^apps\/mobile\/(app\/restaurant\/|components\/MenuItemCard\.|lib\/(menuFilters|menuLoadState)\.)/,
     /^(chain-menu-serving|log-meal|map-search|menu-load-recovery|menu-macro-serving|shuffle)$/, ['billing', 'discovery', 'changed-journey']],
-  [/^apps\/mobile\/(app\/notification-settings\.|lib\/(notification|pushToken|useNotifications|useReminders))/,
-    /^reminders$/, ['notifications']],
+  [/^apps\/mobile\/(lib\/(notification|pushToken|useNotifications|useReminders))/,
+    /^onboarding-guided-preview$/, ['notifications']],
   [/^apps\/mobile\/app\/macro-setup\./, /^onboarding-assisted-targets$/, ['onboarding']],
   [/^apps\/mobile\/(components\/ScrollPicker\.|lib\/(macroCalculator|macroPresets|macroSuggestions)\.)/,
     /^(meal-target-energy-sync|onboarding-(assisted-targets|target-ranked-search))$/, ['onboarding', 'discovery']],
@@ -104,6 +126,13 @@ const screenFlows = [
   [/^apps\/api\/app\/api\/restaurants\//,
     /^(chain-menu-serving|log-meal|map-search(-location-denied)?|menu-load-recovery|menu-macro-serving|paywall-access|shuffle)$/, ['billing', 'discovery']],
 ];
+// #821: narrows simulatorSelection's flow set for the same paths, without
+// changing mappedCategories()/review-category routing, which already has its
+// own deliberate, different categorization for these exact files (e.g.
+// app/auth/reviewer.tsx and lib/authClient.ts are tagged auth+billing by the
+// product-flow.mjs `rules` table, not auth+onboarding) - a separate concern
+// screenFlows must not shadow.
+const narrowAuthFlows = [[narrowAuthPath, /^(signin-options|paywall-access|onboarding-.*)$/]];
 // Product acceptance consumes the same path map as local and hosted selection.
 export function mappedCategories(path) {
   const matches = screenFlows.filter(([pattern]) => pattern.test(path));
@@ -121,7 +150,8 @@ const highSimulatorPath = path =>
   /^apps\/mobile\/(?:ios\/|android\/|plugins\/|(?:app\.config\.[^/]+|app\.json|eas\.json|package\.json|(?:metro|babel)\.config\.[^/]+)$|app\/(?:.*\/)?(?:_layout|index|\+native-intent)\.)/.test(path) ||
   /^apps\/mobile\/(?:lib\/(?:onboardingEntry|onboardingResume|onboardingPreviewEntry|onboardingCompletion|requireWelcomeGoal|pendingMealClaim|macroStorage)|components\/(?:OnboardingAccountSummary|PreviewRestaurantCard))\./.test(path) ||
   /^(?:scripts\/deploy\/|\.eas\/|\.github\/workflows\/(?:deploy|release|eas-build)[^/]*\.ya?ml$)/.test(path) ||
-  (mobileContract(path) && !path.startsWith('apps/mobile/e2e/') && /auth|signin|session|supabase|jwt|payment|paywall|purchase|entitlement|subscription|revenuecat|resubscribe|trial|teaserGate|LockedUnlock|reviewAccess|navigation|nativeIntent|hardwareBack|OwnedHardwareBack|RouteContinuation/i.test(path));
+  (mobileContract(path) && !path.startsWith('apps/mobile/e2e/') && !narrowAuthPath.test(path) &&
+    /auth|signin|session|supabase|jwt|payment|paywall|purchase|entitlement|subscription|revenuecat|resubscribe|trial|teaserGate|LockedUnlock|reviewAccess|navigation|nativeIntent|hardwareBack|OwnedHardwareBack|RouteContinuation/i.test(path));
 
 export function simulatorFlows(cwd = repository) {
   try {
@@ -487,7 +517,6 @@ function renderOnly(path, range, cwd, env) {
 export const renderCheckpoints = [
   [/^apps\/mobile\/app\/\(tabs\)\/saved\./, 'log-meal', 'Grilled Chicken Bowl'],
   [/^apps\/mobile\/app\/macro-setup\./, 'onboarding-assisted-targets', { id: 'macro-setup-save' }],
-  [/^apps\/mobile\/app\/notification-settings\./, 'reminders', { id: 'reminder-permission' }],
   [/^apps\/mobile\/app\/restaurant\//, 'chain-menu-serving', 'Seed Bowl Co #01'],
   [/^apps\/mobile\/app\/welcome\/problem\./, 'cold-start-welcome', { id: 'welcome-start' }],
   [/^apps\/mobile\/app\/welcome\/location-permission\./, 'onboarding-guided-preview', { id: 'location-use-current' }],
@@ -501,7 +530,7 @@ export const renderCheckpoints = [
   [/^apps\/mobile\/app\/welcome\/sex\./, 'onboarding-assisted-targets', "What's your biological sex.*"],
   [/^apps\/mobile\/app\/welcome\/activity\./, 'onboarding-assisted-targets', 'How active are you.*'],
   [/^apps\/mobile\/app\/welcome\/tuning\./, 'onboarding-assisted-targets', 'Estimated from your answers.*'],
-  [/^apps\/mobile\/app\/welcome\/how-it-works\./, 'onboarding-assisted-targets', 'A little context.*A better choice.*'],
+  [/^apps\/mobile\/app\/welcome\/how-it-works\./, 'onboarding-assisted-targets', 'Where we get.*the numbers.*'],
   [/^apps\/mobile\/app\/welcome\/preview\./, 'onboarding-guided-preview', { id: 'discovery-hero' }],
 ];
 
@@ -515,7 +544,10 @@ export function simulatorSelection(files, { cwd = repository, env = process.env,
   if (unknownContext) return full('Event context unavailable; simulator overrides cannot be ruled out');
   if (release) return full('Release candidate requires the full simulator flow set');
   const source = files.filter(path => simulatorSource(path) && !verificationScriptsOnly(path, range, cwd, env));
-  const highPath = source.find(highSimulatorPath);
+  // #906: a PR whose only simulator-relevant source is release tooling under scripts/deploy/ cannot change app behavior,
+  // so it needs unit/focused tests, not a native run. Any other source file in the PR keeps the full high-path rule.
+  const releaseToolingOnly = source.length > 0 && source.every(path => path.startsWith('scripts/deploy/'));
+  const highPath = releaseToolingOnly ? undefined : source.find(highSimulatorPath);
   if (highPath) return full(`Navigation, auth, billing, native configuration or release path: ${highPath}`);
   const entry = discoveryPreviewImpact(source, configKeys, range, cwd, env) || discoveryEntryImpact(source, configKeys, range, cwd, env);
   if (entry && entry.flows.every(flow => all.includes(flow)) && (entry.flows.length || !labels.includes('needs-sim'))) {
@@ -530,10 +562,10 @@ export function simulatorSelection(files, { cwd = repository, env = process.env,
   if (configKeys.length) return full(`Public native configuration changed: ${configKeys.join(', ')}`);
   const sharedUI = source.find(sharedUIPath);
   if (sharedUI) return full(`Shared UI or app shell requires the full smoke suite: ${sharedUI}`);
-  const contracts = source.filter(path => mobileContract(path) && !serviceHealthPath(path));
+  const contracts = source.filter(path => mobileContract(path) && !serviceHealthPath(path) && !internalOpsPath(path));
   const mobile = contracts.filter(path => path.startsWith('apps/mobile/'));
   let selection = result('low', 'none', [], 'Verification tooling or non-mobile change; unit and focused tests only');
-  if (mobile.length || source.some(path => uiPath(path) || (mobileContract(path) && !serviceHealthPath(path)))) {
+  if (mobile.length || source.some(path => uiPath(path) || (mobileContract(path) && !serviceHealthPath(path) && !internalOpsPath(path)))) {
     let reviewTier;
     try {
       reviewTier = simulatorReviewTier(source, cwd, env);
@@ -545,7 +577,8 @@ export function simulatorSelection(files, { cwd = repository, env = process.env,
     for (const path of contracts) {
       const direct = /^apps\/mobile\/e2e\/flows\/([a-z0-9-]+)\.yaml$/.exec(path);
       const mapped = direct ? all.filter(name => name === direct[1])
-        : all.filter(name => screenFlows.some(([pattern, flow]) => pattern.test(path) && flow.test(name)));
+        : all.filter(name => screenFlows.some(([pattern, flow]) => pattern.test(path) && flow.test(name)) ||
+            narrowAuthFlows.some(([pattern, flow]) => pattern.test(path) && flow.test(name)));
       if (!mapped.length) return { ...full(`Unmapped mobile-facing path: ${path}; full coverage required`), reviewTier };
       for (const name of mapped) flows.add(name);
     }

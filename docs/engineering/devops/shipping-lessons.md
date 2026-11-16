@@ -1,5 +1,11 @@
 # Shipping lessons
 
+- 2026-11-05: Superseded Verify L2 jobs held #745 and #747 concurrency after ordinary cancellation; bind recovery to the obsolete run's SHA, branch and workflow, wait one five-minute checkpoint, then use GitHub force-cancel only for that stale run and verify current-head execution starts.
+
+- 2026-11-05: #747's EAS upload payload failed with configured and absent DSNs under Linux Dash; use POSIX shell options and exercise EAS's actual shell:true caller plus Dash instead of substituting Bash in regression tests.
+
+- 2026-11-05: #747 exceeded the iOS bundle budget twice after adding Sentry; compose its Metro resolver with existing native pins, exclude web Replay through the supported option, and measure the remaining SDK footprint before release without silently raising budgets.
+
 - 2026-11-04: A declined account's renewed onboarding preview left stale history behind its paid offer; gate payment Back on current preview access and replay the restored-account checkout through cancellation, then run the saved native swipe and Back assertions (#718).
 - 2026-11-08: #746 native command entry was truncated by the held interactive shell; send bounded short input chunks, verify the explicit owner/device binding, and confirm the caller started before waiting or classifying an invocation as a product failure.
 
@@ -167,3 +173,4 @@ Record the next eligible small PR's hosted L2 duration on issue #712 after this 
 - 2026-11-08: Before expensive native acceptance, inspect the required final publisher and verify its receipt and scoped exception admission; canonical CI coverage does not produce final-candidate attachment closeouts or MCP observations, so collect that proof through the existing final runner with the shared real-fixture preparation rather than converting a passing CI aggregate.
 - 2026-11-09: #761's production map default exposed stale list-first assumptions in CI and the real navigator reproduction; select the existing floating-navigation consumer tests, assert initial map clearance across flag/safe-area states, and reach the retained list assertions through the actual search control.
 - 2026-11-11: #802's `Maestro on Mac` check hung twice (identical, ~88 min of silence then a 90-min job-timeout cancel) inside the same step both times - `Claim and boot the reused iPhone 15` (`node scripts/sim/actions.mjs boot`), before any Maestro flow ran; not a flaky flow or product regression (every other required check, including a full mobile/API/DB test pass, was clean). Tracked as more evidence on #813 rather than retried a third time; the lasting fix belongs in `scripts/sim/actions.mjs`'s boot step, owned by the tooling lane.
+- 2026-11-12: On a fresh simulator, install the retained app with its original writable archive metadata through `sim install`, verify the installed hash, and let the final caller preserve that installation; directly installing the sealed cache repeated `NSPOSIXErrorDomain 13` on #746.
