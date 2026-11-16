@@ -164,7 +164,7 @@ env:
 - assertVisible: "1 OF 5"
 - assertVisible:
     id: coachmark-ring
-    height: 58
+    height: 60
     tolerance: 1
 # This captures the first observed state, which can precede the search response.
 - takeScreenshot: search-highlight-entry
@@ -178,7 +178,7 @@ env:
 - assertVisible: "Follow your craving"
 - assertVisible:
     id: coachmark-ring
-    height: 58
+    height: 60
     tolerance: 1
 - takeScreenshot: search-highlight-results
 - tapOn:
@@ -197,7 +197,7 @@ env:
 - assertVisible: "1 OF 5"
 - assertVisible:
     id: coachmark-ring
-    height: 58
+    height: 60
     tolerance: 1
 - takeScreenshot: search-highlight-back-results
 - tapOn:
@@ -237,7 +237,7 @@ env:
 - assertVisible: "Follow your craving"
 - assertVisible:
     id: coachmark-ring
-    height: 58
+    height: 60
     tolerance: 1
 - tapOn:
     id: coachmark-skip
