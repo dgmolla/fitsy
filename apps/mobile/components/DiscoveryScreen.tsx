@@ -302,7 +302,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
       <View style={{ flex: 1 }} collapsable={false}
         accessibilityElementsHidden={view === 'list'} importantForAccessibility={view === 'list' ? 'no-hide-descendants' : 'auto'}>
         <Suspense fallback={<ActivityIndicator accessibilityLabel="Loading map" />}>
-          <DiscoveryMap discovery={discovery} onShowList={() => { switchView('list'); searchInputRef.current?.focus(); }} active={showMap}
+          <DiscoveryMap discovery={discovery} onShowList={() => { switchView('list'); if (!isOnboardingPreview) searchInputRef.current?.focus(); }} active={showMap}
             previewHeader={isOnboardingPreview ? <>{previewNav}{previewIntro}</> : undefined}
             onTourLayoutChange={onTourLayoutChange} />
         </Suspense>

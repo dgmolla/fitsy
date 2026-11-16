@@ -316,9 +316,6 @@ env:
 # Search opens the existing list; the single Map control returns to the same map.
 - tapOn:
     id: map-search-entry
-# Tapping the search entry now focuses the field (#927); settle the keyboard so
-# the rest of the list stays reachable.
-- hideKeyboard
 - assertVisible:
     id: discovery-list
 - tapOn:
@@ -327,9 +324,6 @@ env:
     id: discovery-map
 - tapOn:
     id: map-search-entry
-# Tapping the search entry now focuses the field (#927); settle the keyboard so
-# the rest of the list stays reachable.
-- hideKeyboard
 - copyTextFrom:
     id: discovery-search
 - assertTrue: ${maestro.copiedText === 'pizza'}

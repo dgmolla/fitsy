@@ -698,6 +698,11 @@ it('shows a real, named fourth restaurant locked as a paid-tier teaser, with no 
   expect(screen.getByText('Fourth Spot')).toBeTruthy();
   expect(screen.getByTestId('map-card-3').props.accessibilityLabel).toBe('Fourth Spot. Unlock meal name and full menu with Pro.');
   expect(screen.queryByTestId('preview-hidden-dish-spot-3')).toBeNull();
+  // The guided preview keeps its keyboard-free tour: the search entry opens the list without focusing (#927).
+  const focus = jest.spyOn(TextInput.prototype as unknown as { focus: () => void }, 'focus');
+  focus.mockClear();
+  await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
+  expect(focus).not.toHaveBeenCalled();
 });
 
 it('shows only the three real picks when the area has no fourth nearby restaurant', async () => {

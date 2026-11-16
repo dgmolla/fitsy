@@ -200,9 +200,6 @@ env:
     timeout: 30000
 - tapOn:
     id: map-search-entry
-# Tapping the search entry now focuses the field (#927); settle the keyboard so
-# the rest of the list stays reachable.
-- hideKeyboard
 - extendedWaitUntil:
     visible:
       id: discovery-hero
