@@ -98,6 +98,9 @@ export function useLocation({ enabled = true }: { enabled?: boolean } = {}): Use
   const [manualOverride, setManualOverride] = useState<ManualLocation | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const cancelledRef = useRef(false);
+  // Bumped whenever the manual choice changes. A refresh that started before
+  // the change must not overwrite it with a late GPS fix (#836).
+  const manualGenRef = useRef(0);
 
   // Step 1: hydrate manual override from SecureStore on mount before any GPS
   // work runs. This is what makes the override survive cold restarts —
@@ -110,6 +113,7 @@ export function useLocation({ enabled = true }: { enabled?: boolean } = {}): Use
         if (cancelled) return;
         const parsed = parseStoredManualLocation(raw);
         if (parsed) {
+          manualGenRef.current += 1;
           setManualOverride(parsed);
           setState({
             lat: parsed.lat,
@@ -213,6 +217,7 @@ export function useLocation({ enabled = true }: { enabled?: boolean } = {}): Use
   }, [enabled, hydrated, manualOverride]);
 
   const setManualLocation = useCallback(async (loc: ManualLocation) => {
+    manualGenRef.current += 1;
     await SecureStore.setItemAsync(MANUAL_LOCATION_KEY, JSON.stringify(loc));
     setManualOverride(loc);
     setState({
@@ -225,6 +230,12 @@ export function useLocation({ enabled = true }: { enabled?: boolean } = {}): Use
   }, []);
 
   const clearManualLocation = useCallback(async () => {
+    // Without location permission there is no current location to switch to.
+    // Fail before touching the stored area so the caller's alert fires and the
+    // chosen area stays selected (matches the onboarding preview variant, #836).
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') throw new Error('Location permission not granted');
+    manualGenRef.current += 1;
     await SecureStore.deleteItemAsync(MANUAL_LOCATION_KEY);
     // Setting manualOverride to null re-triggers the GPS resolve effect.
     setManualOverride(null);
@@ -234,9 +245,11 @@ export function useLocation({ enabled = true }: { enabled?: boolean } = {}): Use
     // A manual override is an explicit user choice — pull-to-refresh must not
     // silently replace it with GPS.
     if (manualOverride) return null;
+    const generation = manualGenRef.current;
 
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
+      if (manualGenRef.current !== generation) return null;
       if (status !== 'granted') {
         trackLocationPermissionDenied({ had_last_known: false });
         const next: LocationState = {
@@ -256,6 +269,8 @@ export function useLocation({ enabled = true }: { enabled?: boolean } = {}): Use
         Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
       ]);
+      // The user may have picked an area while the fix was in flight.
+      if (manualGenRef.current !== generation) return null;
       if (!position) {
         trackLocationTimeout({ had_last_known: false });
         // Keep the coordinates we're already showing rather than bouncing to

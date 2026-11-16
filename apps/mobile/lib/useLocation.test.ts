@@ -470,4 +470,49 @@ describe('useLocation', () => {
     expect(result.current.source).toBe('fallback-denied');
     expect(trackLocationPermissionDenied).toHaveBeenCalledWith({ had_last_known: false });
   });
+
+  // ─── Generation guards (#836) ──────────────────────────────────────────────
+
+  it('a refresh in flight cannot overwrite an area picked while it was waiting', async () => {
+    mockRequestPermissions.mockResolvedValue({ status: 'granted' });
+    mockGetLastKnown.mockResolvedValue({ coords: { ...GPS_COORDS }, timestamp: Date.now() });
+    const { result } = renderHook(() => useLocation());
+    await waitFor(() => expect(result.current.source).toBe('gps'));
+
+    let resolveFix: (value: unknown) => void = () => undefined;
+    mockGetPosition.mockReturnValueOnce(new Promise(resolve => { resolveFix = resolve; }));
+    let refreshed: unknown = 'pending';
+    await act(async () => { void result.current.refreshLocation().then(value => { refreshed = value; }); });
+
+    await act(async () => {
+      await result.current.setManualLocation({ name: 'Hollywood', lat: 34.0928, lng: -118.3287 });
+    });
+    await act(async () => { resolveFix({ coords: { latitude: 40.0, longitude: -74.0 }, timestamp: Date.now() }); });
+
+    await waitFor(() => expect(refreshed).toBeNull());
+    expect(result.current.source).toBe('manual');
+    expect(result.current.name).toBe('Hollywood');
+    expect(result.current.lat).toBe(34.0928);
+    expect(SecureStore.setItemAsync).toHaveBeenCalledWith(
+      MANUAL_LOCATION_KEY,
+      JSON.stringify({ name: 'Hollywood', lat: 34.0928, lng: -118.3287 }),
+    );
+  });
+
+  it('Use current location with permission denied keeps the chosen area and rejects', async () => {
+    SecureStore.getItemAsync.mockResolvedValue(
+      JSON.stringify({ name: 'Hollywood', lat: 34.0928, lng: -118.3287 }),
+    );
+    mockRequestPermissions.mockResolvedValue({ status: 'denied' });
+    const { result } = renderHook(() => useLocation());
+    await waitFor(() => expect(result.current.source).toBe('manual'));
+
+    await act(async () => {
+      await expect(result.current.clearManualLocation()).rejects.toThrow('Location permission not granted');
+    });
+
+    expect(SecureStore.deleteItemAsync).not.toHaveBeenCalled();
+    expect(result.current.source).toBe('manual');
+    expect(result.current.name).toBe('Hollywood');
+  });
 });
