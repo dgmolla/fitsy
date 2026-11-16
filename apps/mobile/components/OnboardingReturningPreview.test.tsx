@@ -36,7 +36,6 @@ type Step = {
   assertVisible?: { id: string };
   assertNotVisible?: string | { id: string };
   runFlow?: { file?: string; env?: { DESTINATION?: string }; when?: { visible: { id: string } }; commands?: Step[] };
-  retry?: { maxRetries: number; commands: Step[] };
 };
 const [, commands] = loadAll(readFileSync(resolve(__dirname, '../e2e/flows/onboarding-returning-preview.yaml'), 'utf8')) as [unknown, Step[]];
 const [, signinCommands] = loadAll(readFileSync(resolve(__dirname, '../e2e/helpers/discovery-signin.yaml'), 'utf8')) as [unknown, Step[]];
@@ -107,7 +106,8 @@ test.each([
   await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
   await screen.findByTestId('welcome-start');
   const start = commands.findIndex(step => step.extendedWaitUntil?.visible.id === 'welcome-start');
-  const end = commands.findIndex((step, index) => index > start && typeof step.tapOn === 'object' && step.tapOn.id === 'coachmark-skip');
+  // The anonymous-first journey restarts at location and goal after the Tried screen, so replay up to it.
+  const end = commands.findIndex((step, index) => index > start && step.extendedWaitUntil?.visible.id === 'tried-meal_prep') + 1;
   expect(start).toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
   let goalTouches = 0;
@@ -115,11 +115,10 @@ test.each([
   // Replay the actual saved YAML segment through real screens and routing.
   async function replay(steps: Step[]): Promise<void> {
     for (const step of steps) {
-      if (step.retry) {
-        for (let attempt = 0; ; attempt++) {
-          try { await replay(step.retry.commands); break; }
-          catch (error) { if (attempt >= step.retry.maxRetries) throw error; }
-        }
+      // A native press can navigate only once the animation settles.
+      if ((step as unknown) === 'waitForAnimationToEnd' && pendingGoalTap) {
+        await pendingGoalTap();
+        pendingGoalTap = undefined;
       }
       if (step.runFlow?.when && screen.queryByTestId(step.runFlow.when.visible.id)) await replay(step.runFlow.commands!);
       const link = step.openLink;
@@ -139,20 +138,11 @@ test.each([
       }
       if (step.extendedWaitUntil?.visible.id) {
         const selector = step.extendedWaitUntil.visible;
-        try {
-          await waitFor(() => {
-            const control = screen.queryByTestId(selector.id);
-            if (!control) throw new Error(`Missing visible outcome: ${selector.id}`);
-            if (selector.enabled) expect(control.props.accessibilityState?.disabled).not.toBe(true);
-          });
-        } catch (error) {
-          // Navigation can commit at the timeout boundary, before the next retry.
-          if (selector.id === 'tried-meal_prep' && pendingGoalTap) {
-            await pendingGoalTap();
-            pendingGoalTap = undefined;
-          }
-          throw error;
-        }
+        await waitFor(() => {
+          const control = screen.queryByTestId(selector.id);
+          if (!control) throw new Error(`Missing visible outcome: ${selector.id}`);
+          if (selector.enabled) expect(control.props.accessibilityState?.disabled).not.toBe(true);
+        });
       }
     }
   }
@@ -166,31 +156,11 @@ test.each([
   }
   await journey;
   expect(goalTouches).toBe(lateNavigation ? 1 : cancelledTouches + 1);
-  await screen.findByTestId('preview-guide');
+  expect(screen.getPathname()).toBe('/welcome/tried');
   expect(mockState.session).toMatchObject({ user: { id: accountId } });
   expect((await getOnboardingData()).goal).toBe('lose_fat');
   expect(screen.queryByTestId('signup-apple')).toBeNull();
   expect(screen.queryByTestId('paywall-logo')).toBeNull();
-  if (scenario === 'first tap') {
-    const purchase = jest.spyOn(Purchases, 'purchasePackage');
-    if (screen.queryByTestId('coachmark-skip'))
-      await act(async () => { fireEvent.press(screen.getByTestId('coachmark-skip')); });
-    await screen.findByTestId('map-pin-0');
-    await act(async () => { fireEvent.press(screen.getByTestId('map-pin-0')); });
-    await screen.findByTestId('map-preview-open');
-    await act(async () => { fireEvent.press(screen.getByTestId('map-preview-open')); });
-    await screen.findByTestId('paywall-offer-paid');
-    // The saved native journey exercises the edge swipe here; UIKit is not
-    // simulated by this rendered regression. Preserve the real history for Back.
-    await act(async () => { fireEvent.press(screen.getByTestId('welcome-back')); });
-    await screen.findByTestId('paywall-back-to-plans');
-    expect(screen.queryByTestId('preview-back')).toBeNull();
-    expect(screen.queryByTestId('signup-apple')).toBeNull();
-    await act(async () => { fireEvent.press(screen.getByTestId('paywall-back-to-plans')); });
-    await screen.findByTestId('paywall-offer-paid');
-    expect(mockState.session).toMatchObject({ user: { id: accountId } });
-    expect(purchase).not.toHaveBeenCalled();
-  }
 });
 
 test('a corrected fixture login reaches the real paywall, records decline and gates anonymous return without purchasing', async () => {

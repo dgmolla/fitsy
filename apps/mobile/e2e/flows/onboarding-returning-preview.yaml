@@ -43,12 +43,19 @@ env:
     id: goal-lose_fat
 - tapOn:
     id: welcome-continue
-# The real account signed in before location lookup. A direct payment link
-# still enforces entitlement and opens the ordinary free-account paywall.
+# Anonymous-first onboarding (#801/#820) signs the fixture account in later: a
+# direct payment link asks for an account first. After that sign-in it still
+# enforces entitlement and opens the ordinary free-account paywall.
 - openLink: com.fitsy.mobile://welcome/payment
 - tapOn:
     text: "^Open$"
     optional: true
+- extendedWaitUntil:
+    visible:
+      id: signup-dev
+    timeout: 30000
+- tapOn:
+    id: signup-dev
 - extendedWaitUntil:
     visible:
       id: paywall-logo
@@ -191,28 +198,28 @@ env:
     timeout: 15000
 - tapOn:
     id: goal-lose_fat
-# Press feedback can finish without navigation after the resumed deep link.
-# Retry only on the goal screen so a late transition cannot advance Tried too.
-- retry:
-    maxRetries: 1
+# The resumed account loads its goals before Continue can navigate; allow it.
+- extendedWaitUntil:
+    visible:
+      id: welcome-continue
+      enabled: true
+    timeout: 30000
+- tapOn:
+    id: welcome-continue
+# The first press can finish without navigating after the resumed deep link;
+# press again only while the goal screen is still showing.
+- waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        id: goal-lose_fat
     commands:
-      - waitForAnimationToEnd
-      - runFlow:
-          when:
-            visible:
-              id: goal-lose_fat
-          commands:
-            - extendedWaitUntil:
-                visible:
-                  id: welcome-continue
-                  enabled: true
-                timeout: 15000
-            - tapOn:
-                id: welcome-continue
-      - extendedWaitUntil:
-          visible:
-            id: tried-meal_prep
-          timeout: 15000
+      - tapOn:
+          id: welcome-continue
+- extendedWaitUntil:
+    visible:
+      id: tried-meal_prep
+    timeout: 15000
 - openLink: com.fitsy.mobile://welcome/how-it-works
 - tapOn:
     text: "^Open$"
@@ -223,12 +230,28 @@ env:
     timeout: 15000
 - tapOn:
     id: welcome-continue
-# The widget screen moved to the end of onboarding (after payment); continue
-# now reaches the preview directly.
+# The widget screen moved to the end of onboarding (after payment). This
+# anonymous return has no saved area, so continue restarts at location and
+# goal; pick both, then open the map-first preview directly (the full
+# onboarding click-through is covered by onboarding-guided-preview).
 - extendedWaitUntil:
     visible:
-      id: preview-guide
+      id: "^location-(use-current|continue-area)$"
     timeout: 30000
+- runFlow: ../helpers/open-location-picker.yaml
+- tapOn: "Search near DTLA"
+- extendedWaitUntil:
+    visible:
+      id: goal-lose_fat
+    timeout: 30000
+- tapOn:
+    id: goal-lose_fat
+- tapOn:
+    id: welcome-continue
+- openLink: com.fitsy.mobile://welcome/preview
+- tapOn:
+    text: "^Open$"
+    optional: true
 - tapOn:
     id: coachmark-skip
     optional: true
@@ -251,6 +274,14 @@ env:
 - takeScreenshot: returning-map-preview
 - tapOn:
     id: map-preview-open
+# Anonymous-first: opening a locked preview asks for an account first.
+- runFlow:
+    when:
+      visible:
+        id: signup-dev
+    commands:
+      - tapOn:
+          id: signup-dev
 - extendedWaitUntil:
     visible:
       id: paywall-logo
