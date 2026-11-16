@@ -13,10 +13,10 @@ function run(args: string[], states: Record<string, string | undefined>, commits
     const table = JSON.stringify({ commits, states });
     writeFileSync(join(dir, 'gh'), `#!/usr/bin/env node
 const t = ${table}; const url = process.argv[3] || '';
-if (url.includes('/commits?sha=main')) { console.log(t.commits.join('\\n')); process.exit(0); }
+if (url.includes('/commits?sha=main')) { process.stdout.write(t.commits.join('\\n') + '\\n'); process.exit(0); }
 const m = /commits\\/([0-9a-f]{40})\\/status/.exec(url);
 const state = m && t.states[m[1]];
-console.log(JSON.stringify({ statuses: state ? [{ context: 'full-suite/green', state }, { context: 'other', state: 'success' }] : [{ context: 'other', state: 'success' }] }));
+process.stdout.write(JSON.stringify({ statuses: state ? [{ context: 'full-suite/green', state }, { context: 'other', state: 'success' }] : [{ context: 'other', state: 'success' }] }) + '\\n');
 `);
     chmodSync(join(dir, 'gh'), 0o755);
     return spawnSync(process.execPath, [script, ...args], { encoding: 'utf8',
