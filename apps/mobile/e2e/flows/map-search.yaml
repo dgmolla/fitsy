@@ -115,12 +115,12 @@ env:
 - assertNotVisible:
     id: discovery-map
 - assertVisible:
-    id: discovery-goals
+    id: discovery-macro-strip
 - assertVisible:
     id: discovery-search
     text: pizza
 - assertVisible:
-    id: discovery-shuffle-button
+    id: shuffle-button
 - tapOn:
     id: discovery-view-toggle
 - extendedWaitUntil:
@@ -146,7 +146,7 @@ env:
     id: discovery-search
     text: pizza
 - assertVisible:
-    id: discovery-goals
+    id: discovery-macro-strip
 - tapOn:
     id: discovery-view-toggle
 - runFlow: ../helpers/map-first-spot.yaml
@@ -229,7 +229,7 @@ env:
 - assertNotVisible:
     id: discovery-location
 - assertVisible:
-    id: discovery-goals
+    id: discovery-macro-strip
 - takeScreenshot: map-list-single
 - tapOn:
     id: discovery-view-toggle
