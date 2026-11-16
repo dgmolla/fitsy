@@ -126,7 +126,7 @@ env:
     enabled: true
 - tapOn:
     id: welcome-continue
-- assertVisible: "A little context.*A better choice.*"
+- assertVisible: "Where we get.*the numbers.*"
 - tapOn:
     id: welcome-back
 # Whole-gram rounding can change calories. Read the saved allocation for every
@@ -169,7 +169,7 @@ env:
 - assertTrue: ${output.assistedPizza.data.length > 0}
 - tapOn:
     id: welcome-continue
-- assertVisible: "A little context.*A better choice.*"
+- assertVisible: "Where we get.*the numbers.*"
 - tapOn:
     id: welcome-continue
 # The widget screen moved to the end of onboarding (after payment); continue
@@ -231,7 +231,7 @@ env:
 - assertTrue: ${maestro.copiedText.includes(output.assistedBase.data[0].name) && maestro.copiedText.includes(output.assistedBase.data[0].bestMatch.name)}
 - tapOn:
     id: preview-back
-- assertVisible: "A little context.*A better choice.*"
+- assertVisible: "Where we get.*the numbers.*"
 - tapOn:
     id: welcome-back
 - assertVisible: ${String(output.assistedCalories)}
@@ -244,7 +244,7 @@ env:
 - assertVisible: ${String(output.assistedCalories)}
 - tapOn:
     id: welcome-continue
-- assertVisible: "A little context.*A better choice.*"
+- assertVisible: "Where we get.*the numbers.*"
 - tapOn:
     id: welcome-continue
 # The widget screen moved to the end of onboarding (after payment); continue
@@ -279,7 +279,7 @@ env:
 - takeScreenshot: macro-setup-daily-targets
 - tapOn:
     id: macro-setup-save
-- assertVisible: "A little context.*A better choice.*"
+- assertVisible: "Where we get.*the numbers.*"
 - openLink: com.fitsy.mobile://macro-setup?fromOnboarding=1
 - tapOn:
     text: "^Open$"
@@ -290,4 +290,4 @@ env:
     timeout: 15000
 - tapOn:
     id: macro-setup-skip
-- assertVisible: "A little context.*A better choice.*"
+- assertVisible: "Where we get.*the numbers.*"

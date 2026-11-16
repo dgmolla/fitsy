@@ -149,7 +149,7 @@ env:
 - assertTrue: ${maestro.copiedText === '18'}
 - tapOn:
     id: welcome-continue
-- assertVisible: "A little context.*A better choice.*"
+- assertVisible: "Where we get.*the numbers.*"
 - assertVisible: "Published"
 - assertVisible: "Estimated"
 - tapOn:

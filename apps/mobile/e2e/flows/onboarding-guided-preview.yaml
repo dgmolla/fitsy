@@ -162,7 +162,7 @@ env:
 - tapOn:
     id: welcome-continue
 - assertVisible: "What works.*for one meal.*"
-- assertNotVisible: "A little context.*A better choice.*"
+- assertNotVisible: "Where we get.*the numbers.*"
 # Recover using calories, then explicitly retain zero protein with positive energy.
 # Settle the previous field before focusing the next input. Calorie rebalancing
 # changes generated text and can invalidate its initial native selection.
@@ -232,7 +232,7 @@ env:
     enabled: true
 - tapOn:
     id: welcome-continue
-- assertVisible: "A little context.*A better choice.*"
+- assertVisible: "Where we get.*the numbers.*"
 - assertVisible: "Published"
 - assertVisible: "Estimated"
 - tapOn:
@@ -301,8 +301,11 @@ env:
     id: map-card-0
 - assertVisible:
     id: map-pin-2
-- assertNotVisible:
+# Pin 3 is the locked teaser, matching the fourth card in the 1/4 counter (#802).
+- assertVisible:
     id: map-pin-3
+- assertNotVisible:
+    id: map-pin-4
 - assertNotVisible:
     id: map-load-more
 - assertNotVisible:
@@ -574,7 +577,7 @@ env:
     text: "radio button, checked"
 - tapOn:
     id: welcome-continue
-- assertVisible: "A little context.*A better choice.*"
+- assertVisible: "Where we get.*the numbers.*"
 # The widget screen moved to the end of onboarding (after payment); continue
 # now reaches the preview directly.
 - tapOn:
