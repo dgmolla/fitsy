@@ -54,10 +54,9 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
   const carousel = useRef<ScrollView>(null);
   const [mapRevision, setMapRevision] = useState(0);
   const [selectedId, setSelectedId] = useState<string>();
-  // MapKit keeps a tapped annotation selected while the map is hidden and re-delivers
-  // that selection when it reappears; remounting the markers on re-activation clears it.
-  const [markerEpoch, setMarkerEpoch] = useState(0);
-  const wasActive = useRef(active);
+  // iOS fires onMomentumScrollEnd when the carousel re-lays out after the map was
+  // hidden; only a real drag may select a card from scroll position (#921).
+  const userDragged = useRef(false);
   const [trayHeight, setTrayHeight] = useState(220);
   const [topHeight, setTopHeight] = useState(104);
   const [layoutHeight, setLayoutHeight] = useState(height);
@@ -85,10 +84,9 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
   // The map stays mounted behind the ordinary list. Coming back to it starts
   // the carousel at the first current result again, as before the dual mount.
   useEffect(() => {
-    if (!active) { wasActive.current = false; return; }
+    if (!active) return;
+    userDragged.current = false;
     setSelectedId(undefined);
-    if (!wasActive.current) setMarkerEpoch(epoch => epoch + 1);
-    wasActive.current = true;
     carousel.current?.scrollTo({ x: 0, animated: false });
   }, [firstId, lat, lng, d.tourVisible, active]);
   useEffect(() => {
@@ -171,7 +169,7 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
       legalLabelInsets={{ top: 0, right: 0, bottom: trayHeight + bottomClearance + 8, left: 12 }}
       showsUserLocation={d.location.source === 'gps'} showsMyLocationButton={false}
       showsCompass={false} showsPointsOfInterest={false} scrollEnabled rotateEnabled={false}>
-      {pins.map(result => <RestaurantMarker key={`${result.id}:${markerEpoch}`} result={result} position={cards.indexOf(result)}
+      {pins.map(result => <RestaurantMarker key={result.id} result={result} position={cards.indexOf(result)}
         selected={result.id === selectedId} onSelect={select} />)}
     </MapView>
     {pendingArea && <View pointerEvents="none" style={s.areaCenter} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
@@ -239,7 +237,10 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
           showsHorizontalScrollIndicator={false} snapToInterval={stride} decelerationRate="fast" disableIntervalMomentum
           contentContainerStyle={s.carousel} keyboardShouldPersistTaps="handled"
           onLayout={() => { restoreCarousel(); onTourLayoutChange?.(); }} onContentSizeChange={restoreCarousel}
+          onScrollBeginDrag={() => { userDragged.current = true; }}
           onMomentumScrollEnd={event => {
+            if (!userDragged.current) return;
+            userDragged.current = false;
             const result = cards[Math.min(cards.length - 1, Math.max(0, Math.round(event.nativeEvent.contentOffset.x / stride)))];
             if (result) select(result, false);
           }}>
