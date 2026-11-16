@@ -760,6 +760,7 @@ it('synchronizes the chosen carousel cards and settled pins without fetching', a
   await act(async () => fireEvent.press(screen.getByTestId('map-pin-1')));
   expect(screen.getByTestId('map-preview-open').props.accessibilityLabel).toContain('Green Kitchen');
   const width = StyleSheet.flatten(screen.getByTestId('map-card-0').props.style).width as number;
+  act(() => fireEvent(screen.getByTestId('map-carousel'), 'scrollBeginDrag'));
   act(() => fireEvent(screen.getByTestId('map-carousel'), 'momentumScrollEnd', {
     nativeEvent: { contentOffset: { x: 2 * (width + 12), y: 0 } },
   }));
@@ -788,6 +789,34 @@ it('returning from the ordinary list starts the carousel at the first result aga
   expect(scrollTo).toHaveBeenCalledWith({ x: 0, animated: false });
 });
 
+it('a momentum end the user did not start never selects a card, e.g. the carousel re-laying out on return from the list (#921)', async () => {
+  const screen = open('/search?query=meal&mapDebug=1');
+  await screen.findByTestId('map-pin-0');
+  await act(async () => fireEvent.press(screen.getByTestId('map-pin-0')));
+  expect(screen.getByTestId('map-preview-open')).toBeTruthy();
+
+  await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
+  await screen.findByTestId('discovery-hero');
+  await act(async () => fireEvent.press(screen.getByTestId('discovery-view-toggle')));
+  await screen.findByTestId('map-pin-0');
+  expect(screen.queryByTestId('map-preview-open')).toBeNull();
+  const width = StyleSheet.flatten(screen.getByTestId('map-card-0').props.style).width as number;
+
+  // iOS can deliver a momentum end for the re-laid-out carousel without any drag.
+  act(() => fireEvent(screen.getByTestId('map-carousel'), 'momentumScrollEnd', {
+    nativeEvent: { contentOffset: { x: 0, y: 0 } },
+  }));
+  expect(screen.queryByTestId('map-preview-open')).toBeNull();
+  expect(screen.getByTestId('map-card-0')).toBeTruthy();
+
+  // A real drag still selects the card it settles on.
+  act(() => fireEvent(screen.getByTestId('map-carousel'), 'scrollBeginDrag'));
+  act(() => fireEvent(screen.getByTestId('map-carousel'), 'momentumScrollEnd', {
+    nativeEvent: { contentOffset: { x: 1 * (width + 12), y: 0 } },
+  }));
+  expect(screen.getByTestId('map-preview-open')).toBeTruthy();
+});
+
 it.each(['pin', 'drag'])(
   'restores C after %s selection, failed Shuffle and unchanged retry rows', async selection => {
   const scrollTo = jest.spyOn(ScrollView.prototype, 'scrollTo');
@@ -799,7 +828,8 @@ it.each(['pin', 'drag'])(
     await act(async () => fireEvent.press(screen.getByTestId('map-pin-2')));
     expect(scrollTo).toHaveBeenLastCalledWith({ x: 2 * stride, animated: true });
   } else {
-    act(() => fireEvent(previousCarousel, 'momentumScrollEnd', { nativeEvent: { contentOffset: { x: 2 * stride, y: 0 } } }));
+    act(() => fireEvent(previousCarousel, 'scrollBeginDrag'));
+  act(() => fireEvent(previousCarousel, 'momentumScrollEnd', { nativeEvent: { contentOffset: { x: 2 * stride, y: 0 } } }));
     expect(screen.getByTestId('map-pin-2').props.accessibilityState.selected).toBe(true);
     expect(screen.getByTestId('map-preview-open').props.accessibilityLabel).toContain('Pizza House');
   }
@@ -823,6 +853,7 @@ it.each(['pin', 'drag'])(
   expect(screen.getByTestId('map-preview-open').props.accessibilityLabel).toContain('Pizza House');
   expect(screen.getByTestId('map-pin-2').props.accessibilityState.selected).toBe(true);
   expect(within(screen.getByTestId('map-preview')).getByText('3 / 4')).toBeTruthy();
+  act(() => fireEvent(restoredCarousel, 'scrollBeginDrag'));
   act(() => fireEvent(restoredCarousel, 'momentumScrollEnd', {
     nativeEvent: { contentOffset: { x: stride, y: 0 } },
   }));
@@ -838,6 +869,7 @@ it('keeps the final C card, pin and native literal name/count proof synchronized
   await screen.findByTestId('map-pin-3');
   const stride = (StyleSheet.flatten(screen.getByTestId('map-card-0').props.style).width as number) + 12;
   await act(async () => fireEvent.press(screen.getByTestId('map-pin-3')));
+  act(() => fireEvent(screen.getByTestId('map-carousel'), 'scrollBeginDrag'));
   act(() => fireEvent(screen.getByTestId('map-carousel'), 'momentumScrollEnd', {
     nativeEvent: { contentOffset: { x: 3 * stride, y: 0 } },
   }));
@@ -853,6 +885,7 @@ it('keeps the final C card, pin and native literal name/count proof synchronized
   expect(evaluate(steps.find(step => step.assertTrue?.includes('output.mapLastName'))!.assertTrue!)).toBe(true);
   expect(screen.getByTestId('map-pin-3').props.accessibilityState.selected).toBe(true);
   expect(within(screen.getByTestId('map-preview')).getByText('4 / 4')).toBeTruthy();
+  act(() => fireEvent(screen.getByTestId('map-carousel'), 'scrollBeginDrag'));
   act(() => fireEvent(screen.getByTestId('map-carousel'), 'momentumScrollEnd', {
     nativeEvent: { contentOffset: { x: 2 * stride, y: 0 } },
   }));

@@ -54,6 +54,9 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
   const carousel = useRef<ScrollView>(null);
   const [mapRevision, setMapRevision] = useState(0);
   const [selectedId, setSelectedId] = useState<string>();
+  // iOS fires onMomentumScrollEnd when the carousel re-lays out after the map was
+  // hidden; only a real drag may select a card from scroll position (#921).
+  const userDragged = useRef(false);
   const [trayHeight, setTrayHeight] = useState(220);
   const [topHeight, setTopHeight] = useState(104);
   const [layoutHeight, setLayoutHeight] = useState(height);
@@ -82,6 +85,7 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
   // the carousel at the first current result again, as before the dual mount.
   useEffect(() => {
     if (!active) return;
+    userDragged.current = false;
     setSelectedId(undefined);
     carousel.current?.scrollTo({ x: 0, animated: false });
   }, [firstId, lat, lng, d.tourVisible, active]);
@@ -233,7 +237,10 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
           showsHorizontalScrollIndicator={false} snapToInterval={stride} decelerationRate="fast" disableIntervalMomentum
           contentContainerStyle={s.carousel} keyboardShouldPersistTaps="handled"
           onLayout={() => { restoreCarousel(); onTourLayoutChange?.(); }} onContentSizeChange={restoreCarousel}
+          onScrollBeginDrag={() => { userDragged.current = true; }}
           onMomentumScrollEnd={event => {
+            if (!userDragged.current) return;
+            userDragged.current = false;
             const result = cards[Math.min(cards.length - 1, Math.max(0, Math.round(event.nativeEvent.contentOffset.x / stride)))];
             if (result) select(result, false);
           }}>
