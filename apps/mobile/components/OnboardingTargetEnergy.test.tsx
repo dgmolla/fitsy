@@ -96,7 +96,7 @@ it.each([
     copyTextFrom?: { id: string }; evalScript?: string; assertTrue?: string; assertVisible?: string };
   const [, commands] = loadAll(readFileSync(resolve(__dirname, `../e2e/flows/${flow}.yaml`), 'utf8')) as [unknown, Step[]];
   const start = commands.findIndex(step => step.assertVisible === 'What works.*for one meal.*');
-  const end = commands.findIndex((step, index) => index > start && step.assertVisible === 'A little context.*A better choice.*');
+  const end = commands.findIndex((step, index) => index > start && step.assertVisible === 'Where we get.*the numbers.*');
   expect(start).toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
   await saveOnboardingField('goal', 'lose_fat');

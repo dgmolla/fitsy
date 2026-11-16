@@ -25,15 +25,16 @@ tags: [onboarding, changed-journey]
           timeout: 30000
 - assertVisible: ".*Log in.*"
 - assertVisible: "Good food. Your goals in mind."
-# Start requires account sign-in before a live location lookup.
+# Start opens the location step with an anonymous session (#801/#820); no
+# account sign-in gate sits between the welcome screen and discovery.
 - tapOn:
     id: welcome-start
 - extendedWaitUntil:
-    visible:
-      id: signup-apple
+    visible: "Where would you like to eat?"
     timeout: 15000
-- assertVisible:
-    id: signup-google
+- assertVisible: "Use my location"
+- assertNotVisible:
+    id: signup-apple
 - assertNotVisible:
     id: paywall-plan-yearly
 - assertNotVisible: "Discover restaurants that fit your goals"

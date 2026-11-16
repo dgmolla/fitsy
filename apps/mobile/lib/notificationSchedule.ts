@@ -20,6 +20,10 @@ export async function readReminderPreferences(userId: string | null, options?: {
     return { ...DEFAULT_REMINDER_PREFERENCES };
   }
 }
+/** True once the account has stored a reminder choice, so a later grant in iOS Settings enables the defaults only once. */
+export async function hasStoredReminderPreferences(userId: string): Promise<boolean> {
+  return (await AsyncStorage.getItem(preferenceKey(userId))) !== null;
+}
 export async function saveReminderPreferences(userId: string, preferences: ReminderPreferences): Promise<void> {
   await AsyncStorage.setItem(preferenceKey(userId), JSON.stringify(preferences));
   for (const listener of listeners) listener();
@@ -131,6 +135,6 @@ export async function readScheduledReminders(userId: string | null) {
 export function reminderDestination(data: Record<string, unknown>, userId: string | null) {
   if (!userId || data.userId !== userId) return null;
   if (data.kind === 'meal') return '/(tabs)/search' as const;
-  if (data.kind === 'trial') return '/notification-settings' as const;
+  if (data.kind === 'trial') return '/(tabs)/profile' as const;
   return null;
 }

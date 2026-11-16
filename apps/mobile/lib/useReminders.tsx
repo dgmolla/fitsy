@@ -6,7 +6,7 @@ import { supabase } from './supabase';
 import { trackReminderAction } from './analytics';
 import { usePurchases } from './usePurchases';
 import { DEFAULT_REMINDER_PREFERENCES, REMINDER_PREFIX, planReminders, type ReminderPreferences } from './notificationPlan';
-import { readReminderPreferences, readScheduledReminders, reconcileReminderOwnership, replaceReminders, reminderDestination, saveReminderPreferences, subscribeReminderPreferences } from './notificationSchedule';
+import { hasStoredReminderPreferences, readReminderPreferences, readScheduledReminders, reconcileReminderOwnership, replaceReminders, reminderDestination, saveReminderPreferences, subscribeReminderPreferences } from './notificationSchedule';
 import { reconcileDevTrialReminderOwnership } from './devTrialReminderProbe';
 import { explainMissedTrialReminder, missedTrialReminderWindow } from './trialReminderFeedback';
 
@@ -55,6 +55,22 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
     void Promise.all([reconcileReminderOwnership(account.id), reconcileDevTrialReminderOwnership(account.id)])
       .then(() => { if (live) scheduledAccountRef.current = account.id; })
       .catch(reportFailure);
+    return () => { live = false; };
+  }, [account.ready, account.id, revision]);
+
+  // No in-app toggle: iOS Settings is the only control. When notification
+  // permission is granted anywhere (onboarding or later in iOS Settings) and
+  // this account has never stored a choice, turn both reminders on once.
+  useEffect(() => {
+    const id = account.id;
+    if (!account.ready || !id) return;
+    let live = true;
+    void (async () => {
+      const permission = await Notifications.getPermissionsAsync();
+      if (!live || permission.status !== 'granted' || await hasStoredReminderPreferences(id) || !live) return;
+      await saveReminderPreferences(id, { meals: true, trial: true });
+      trackReminderAction({ action: 'preferences_changed', meals: true, trial: true });
+    })().catch(reportFailure);
     return () => { live = false; };
   }, [account.ready, account.id, revision]);
 
@@ -136,7 +152,7 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
     setResponse(null);
     void Notifications.clearLastNotificationResponseAsync().catch(reportFailure);
     if (destination) {
-      trackReminderAction({ action: 'opened', kind: destination === '/notification-settings' ? 'trial' : 'meal' });
+      trackReminderAction({ action: 'opened', kind: destination === '/(tabs)/profile' ? 'trial' : 'meal' });
       router.push(destination);
     }
   }, [response, account, ready, pathname]);
