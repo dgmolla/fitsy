@@ -129,9 +129,11 @@ env:
     timeout: 30000
 - tapOn:
     id: coachmark-skip
-# Preview is map-first; switch to list so the applied-calories assertion
-# below has a macro strip to show against (the map toolbar's own Macros
-# button opens the same editor but never displays the numbers themselves).
+# This is the onboarding preview, not the subscriber search screen (#829) -
+# its own Macros control is MacroStrip's "preview-edit-targets" pill, not the
+# real search toolbar's "discovery-goals". Verify the applied value by
+# reopening the editor and reading its own field, not by looking for the
+# number rendered on the underlying screen.
 - extendedWaitUntil:
     visible:
       id: map-search-entry
@@ -149,9 +151,6 @@ env:
 - assertTrue: ${Number(maestro.copiedText) === output.kcal + 20}
 - tapOn:
     id: meal-filter-apply
-- extendedWaitUntil:
-    visible: "${output.kcal + 20}"
-    timeout: 30000
 - tapOn:
     id: preview-edit-targets
 - copyTextFrom: "Calories per meal"
