@@ -1,21 +1,21 @@
 {
   "version": 1,
   "platform": "ios",
-  "source_sha": "542ccb71fcb5faaa226022b4650857fdd05ec635",
-  "eas_build_id": "97c2753e-ac3e-4613-9f52-33bd31e92855",
-  "asc_build_id": "b78cf0a3-98a8-4844-8e85-ed8583fe5708",
+  "source_sha": "b00f85586df5d387fa48c0cb4e0498347e7fad94",
+  "eas_build_id": "013de5ba-c5d0-4320-901d-fd5bd323d1af",
+  "asc_build_id": "e009ae57-0ce8-4da9-b364-cab1f92ba1ea",
   "bundle_id": "com.fitsy.mobile",
-  "build_number": "10",
-  "runtime_version": "9c50cb147f782ac94fc0c1f1b1d7802c6f7acab4",
+  "build_number": "11",
+  "runtime_version": "94b2e34cf06dde9c073aadecdda471e6d79a8d39",
   "fingerprint": {
-    "hash": "9c50cb147f782ac94fc0c1f1b1d7802c6f7acab4",
+    "hash": "94b2e34cf06dde9c073aadecdda471e6d79a8d39",
     "package_version": "0.15.4"
   },
   "channel": "testflight",
   "google_ios_client_id": "56878207179-voo8iloc0si51ae7n8illrsu3hapks4d.apps.googleusercontent.com",
-  "ipa_url": "https://expo.dev/artifacts/eas/CzCCASSJ7CRkXu650MV9k56yPRmGw8QjdHUYh0M7Da4.ipa",
-  "ipa_sha256": "cf707d71b425cbb7cbf9e31fb8406d8d9228448713f2d745a62e82a0c8860de0",
-  "verified_at": "2026-11-15T20:57:07.046Z",
-  "evidence": "https://expo.dev/accounts/dgmolla/projects/fitsy/builds/97c2753e-ac3e-4613-9f52-33bd31e92855",
+  "ipa_url": "https://expo.dev/artifacts/eas/32Z7f0Hof3w8XeK5HRk-CVvVHQFSnthfyrtnM9IBnFI.ipa",
+  "ipa_sha256": "65e8bb31c530c67ae2d29f9e4e685f29d06dad3271894ad5df1f1ade9f8ccebf",
+  "verified_at": "2026-11-16T17:47:40.750Z",
+  "evidence": "https://expo.dev/accounts/dgmolla/projects/fitsy/builds/013de5ba-c5d0-4320-901d-fd5bd323d1af",
   "verification_note": "IPA identity and SHA-256 match the source fingerprint and exact EAS build; Apple processing and Internal membership confirmed. Real-device billing acceptance remains separate."
 }
