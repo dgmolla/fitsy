@@ -321,7 +321,7 @@ const card = <HeroMealContent result={result} locked={locked} hideDishName={hide
 });
 
 test.each([
-  ['apps/mobile/app/notification-settings.tsx', ['reminders'], ['notifications']],
+  ['apps/mobile/lib/notificationSchedule.ts', ['onboarding-guided-preview'], ['notifications']],
   ['apps/mobile/app/widget.tsx', ['widget-setup'], ['billing', 'changed-journey', 'discovery']],
   ['apps/mobile/app/(tabs)/saved.tsx', ['log-meal'], ['discovery']],
   ['apps/api/app/api/restaurants/[id]/menu/route.ts', ['chain-menu-serving', 'log-meal', 'map-search', 'map-search-location-denied', 'menu-load-recovery', 'menu-macro-serving', 'paywall-access', 'shuffle'], ['billing', 'discovery']],

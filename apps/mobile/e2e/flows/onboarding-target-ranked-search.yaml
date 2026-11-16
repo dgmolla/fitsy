@@ -135,7 +135,7 @@ env:
 # Whole grams settle to 502 kcal, rather than the original 500 kcal draft.
 - tapOn:
     id: welcome-continue
-- assertVisible: "A little context.*A better choice.*"
+- assertVisible: "Where we get.*the numbers.*"
 - tapOn:
     id: welcome-back
 - evalScript: ${output.targets = {}}
@@ -178,7 +178,7 @@ env:
 - assertTrue: ${output.pizza.data[0].name === 'Pizza Roma' && output.pizza.data[0].bestMatch.name === 'Buffalo Chicken  Pizza'}
 - tapOn:
     id: welcome-continue
-- assertVisible: "A little context.*A better choice.*"
+- assertVisible: "Where we get.*the numbers.*"
 - tapOn:
     id: welcome-continue
 # The widget screen moved to the end of onboarding (after payment); continue

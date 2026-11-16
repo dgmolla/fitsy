@@ -110,8 +110,8 @@ const screenFlows = [
   [/^apps\/mobile\/(app\/\(tabs\)\/saved\.|lib\/menuBookmarks\.)/, /^log-meal$/, ['discovery']],
   [/^apps\/mobile\/(app\/restaurant\/|components\/MenuItemCard\.|lib\/(menuFilters|menuLoadState)\.)/,
     /^(chain-menu-serving|log-meal|map-search|menu-load-recovery|menu-macro-serving|shuffle)$/, ['billing', 'discovery', 'changed-journey']],
-  [/^apps\/mobile\/(app\/notification-settings\.|lib\/(notification|pushToken|useNotifications|useReminders))/,
-    /^reminders$/, ['notifications']],
+  [/^apps\/mobile\/(lib\/(notification|pushToken|useNotifications|useReminders))/,
+    /^onboarding-guided-preview$/, ['notifications']],
   [/^apps\/mobile\/app\/macro-setup\./, /^onboarding-assisted-targets$/, ['onboarding']],
   [/^apps\/mobile\/(components\/ScrollPicker\.|lib\/(macroCalculator|macroPresets|macroSuggestions)\.)/,
     /^(meal-target-energy-sync|onboarding-(assisted-targets|target-ranked-search))$/, ['onboarding', 'discovery']],
@@ -517,7 +517,6 @@ function renderOnly(path, range, cwd, env) {
 export const renderCheckpoints = [
   [/^apps\/mobile\/app\/\(tabs\)\/saved\./, 'log-meal', 'Grilled Chicken Bowl'],
   [/^apps\/mobile\/app\/macro-setup\./, 'onboarding-assisted-targets', { id: 'macro-setup-save' }],
-  [/^apps\/mobile\/app\/notification-settings\./, 'reminders', { id: 'reminder-permission' }],
   [/^apps\/mobile\/app\/restaurant\//, 'chain-menu-serving', 'Seed Bowl Co #01'],
   [/^apps\/mobile\/app\/welcome\/problem\./, 'cold-start-welcome', { id: 'welcome-start' }],
   [/^apps\/mobile\/app\/welcome\/location-permission\./, 'onboarding-guided-preview', { id: 'location-use-current' }],
@@ -531,7 +530,7 @@ export const renderCheckpoints = [
   [/^apps\/mobile\/app\/welcome\/sex\./, 'onboarding-assisted-targets', "What's your biological sex.*"],
   [/^apps\/mobile\/app\/welcome\/activity\./, 'onboarding-assisted-targets', 'How active are you.*'],
   [/^apps\/mobile\/app\/welcome\/tuning\./, 'onboarding-assisted-targets', 'Estimated from your answers.*'],
-  [/^apps\/mobile\/app\/welcome\/how-it-works\./, 'onboarding-assisted-targets', 'A little context.*A better choice.*'],
+  [/^apps\/mobile\/app\/welcome\/how-it-works\./, 'onboarding-assisted-targets', 'Where we get.*the numbers.*'],
   [/^apps\/mobile\/app\/welcome\/preview\./, 'onboarding-guided-preview', { id: 'discovery-hero' }],
 ];
 
@@ -545,7 +544,10 @@ export function simulatorSelection(files, { cwd = repository, env = process.env,
   if (unknownContext) return full('Event context unavailable; simulator overrides cannot be ruled out');
   if (release) return full('Release candidate requires the full simulator flow set');
   const source = files.filter(path => simulatorSource(path) && !verificationScriptsOnly(path, range, cwd, env));
-  const highPath = source.find(highSimulatorPath);
+  // #906: a PR whose only simulator-relevant source is release tooling under scripts/deploy/ cannot change app behavior,
+  // so it needs unit/focused tests, not a native run. Any other source file in the PR keeps the full high-path rule.
+  const releaseToolingOnly = source.length > 0 && source.every(path => path.startsWith('scripts/deploy/'));
+  const highPath = releaseToolingOnly ? undefined : source.find(highSimulatorPath);
   if (highPath) return full(`Navigation, auth, billing, native configuration or release path: ${highPath}`);
   const entry = discoveryPreviewImpact(source, configKeys, range, cwd, env) || discoveryEntryImpact(source, configKeys, range, cwd, env);
   if (entry && entry.flows.every(flow => all.includes(flow)) && (entry.flows.length || !labels.includes('needs-sim'))) {

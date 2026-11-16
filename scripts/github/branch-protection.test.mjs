@@ -1,5 +1,7 @@
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 const read = path => readFileSync(new URL(`../../${path}`, import.meta.url), 'utf8');
@@ -20,7 +22,7 @@ test('Verify covers every job and rejects failed, cancelled, missing or unexpect
     for (const name of ['static', 'test', 'test-other', 'build'])
       needs[name].result = needs.classify.outputs[flagKeys[name]] === 'true' ? 'success' : 'skipped';
     needs['domain-check'].result = event === 'pull_request' ? 'success' : 'skipped';
-    needs['mark-non-product'].result = event === 'pull_request' && needs.classify.outputs.simulator !== 'true' && needs.classify.outputs.media !== 'true' ? 'success' : 'skipped';
+    needs['mark-non-product'].result = event === 'pull_request' ? 'success' : 'skipped';
     assert.equal(run(needs, event), 0);
     for (const name of names) for (const result of ['failure', 'cancelled', 'skipped', undefined]) {
       if (result !== needs[name].result) assert.notEqual(run({ ...needs, [name]: { ...needs[name], result } }, event), 0, `${event}: ${name} ${result}`);
@@ -28,6 +30,33 @@ test('Verify covers every job and rejects failed, cancelled, missing or unexpect
     delete needs.classify.outputs.code;
     assert.notEqual(run(needs, event), 0);
   }
+});
+test('mark-non-product posts success for non-product changes, invalidates its own stale success when applicability expands, and leaves real evidence alone', () => {
+  const script = read('.github/workflows/verify.yml').split('\n  mark-non-product:\n')[1]
+    .split(/\n  [\w-]+:\n/)[0].split('        run: |\n')[1].replace(/^ {10}/gm, '');
+  const run = (existingDescription, { simulator = 'false', media = 'false' } = {}) => {
+    const dir = mkdtempSync(join(tmpdir(), 'mark-non-product-'));
+    try {
+      const canned = JSON.stringify({ statuses: existingDescription === null ? [] : [{ context: 'product-flow/local', description: existingDescription }] });
+      writeFileSync(join(dir, 'gh'), `#!/usr/bin/env bash\ncase "$3" in\n  --jq) echo '${canned}' | jq -r "$4" ;;\n  --input) cat > "${join(dir, 'posted.json')}" ;;\nesac\n`, { mode: 0o755 });
+      const result = spawnSync('bash', ['-e', '-c', script], { encoding: 'utf8',
+        env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, SIMULATOR: simulator, MEDIA: media, SHA: 'deadbeef', REPO: 'dgmolla/fitsy', GH_TOKEN: 'x' } });
+      assert.equal(result.status, 0, result.stderr);
+      const posted = join(dir, 'posted.json');
+      return existsSync(posted) ? JSON.parse(readFileSync(posted, 'utf8')) : null;
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  };
+  const marker = 'Not applicable: no mobile-facing product changes';
+  // Non-product change: posts success with the auto-skip marker, same as today.
+  assert.deepEqual(run(null), { state: 'success', context: 'product-flow/local', description: marker });
+  // Applicability expanded after a same-head label change, but the only
+  // existing status is our own earlier auto-skip marker: invalidate it.
+  assert.deepEqual(run(marker, { simulator: 'true' }), { state: 'pending', context: 'product-flow/local', description: 'Applicability expanded since the last auto-skip; needs real evidence' });
+  assert.deepEqual(run(marker, { media: 'true' }), { state: 'pending', context: 'product-flow/local', description: 'Applicability expanded since the last auto-skip; needs real evidence' });
+  // Real evidence already posted (a different description) - leave it alone.
+  assert.equal(run('Verified via local walkthrough', { simulator: 'true' }), null);
+  // Required but nothing posted yet - nothing to invalidate.
+  assert.equal(run(null, { simulator: 'true' }), null);
 });
 test('protection payload adds requirements without dropping existing gates; never executes gh or the script', () => {
   const query = read('scripts/github/apply-branch-protection.sh').match(/payload=\$\(jq --argjson app "\$app" '([\s\S]*?)' <<<"\$current"\)/)[1];

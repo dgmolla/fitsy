@@ -506,11 +506,11 @@ test.each(['https://dev.fitsy.org', 'https://fitsy-api-git-codex-issue-583-dawit
 
 test.each([
   ['--scope=none'], ['--scope=flow', '--flows=signin-options'],
-  ['--scope=smoke', '--flows=reminders'],
+  ['--scope=smoke', '--flows=signin-options'],
 ])('explicit local scope cannot remove mandatory affected coverage: %j', (...args) => {
   const result = spawnSync(process.execPath, ['--input-type=module', '-e',
     `import {localSelection} from ${JSON.stringify(modulePath)};
-     localSelection(${JSON.stringify(args)}, {simulator:{scope:'flow', flows:['reminders'], smoke:[]}});`],
+     localSelection(${JSON.stringify(args)}, {simulator:{scope:'flow', flows:['onboarding-guided-preview'], smoke:[]}});`],
   { env: cleanEnv, encoding: 'utf8' });
   expect(result.status).toBe(1);
   expect(result.stderr).toContain('cannot omit affected journeys');

@@ -108,7 +108,7 @@ env:
 - assertTrue: ${output.kcal === 4 * output.p + 4 * output.c + 9 * output.f && output.p > 55}
 - tapOn:
     id: welcome-continue
-- assertVisible: "A little context.*A better choice.*"
+- assertVisible: "Where we get.*the numbers.*"
 - tapOn:
     id: welcome-back
 - copyTextFrom:

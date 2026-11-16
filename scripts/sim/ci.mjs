@@ -68,7 +68,7 @@ export async function runLocal(args = process.argv.slice(2)) {
   if (process.platform !== 'darwin') throw new Error('Simulator execution requires macOS with Xcode');
   const udid = options.udid || process.env.FITSY_XCTEST_SIM_UDID;
   if (!/^[a-f0-9-]{36}$/i.test(udid || '')) throw new Error('Pass --udid=<owned booted simulator UDID> or set FITSY_XCTEST_SIM_UDID');
-  const { environment, simulatorSession, claimDevice, releaseDevice, startMetro, stopMetro, prepareEntitledEvidence, prepareBillingEvidence } = await import('./product-flow.mjs');
+  const { environment, simulatorSession, claimDevice, releaseDevice, startMetro, stopMetro, prepareEntitledEvidence, prepareBillingEvidence, isCommandReceiptPath } = await import('./product-flow.mjs');
   const { admitDisk, runOwnedMaestro, nearestFailure } = await import('./runner-controls.mjs');
   const { inspectScreenshotDirectory, requireScreenRecognition } = await import('./screen-guard.mjs');
   const { inputHash, assertFlowCommands } = await import('../verify/product-flow.mjs');
@@ -139,7 +139,7 @@ export async function runLocal(args = process.argv.slice(2)) {
               FITSY_XCTEST_SIM_UDID: udid, FITSY_XCTEST_CAPTURE_RECEIPT: resolve(dir, 'capture.jsonl') },
             diagnostic: () => command('xcrun', ['simctl', 'io', udid, 'screenshot', resolve(dir, 'failure.png')]),
           }));
-          const reports = readdirSync(dir, { recursive: true }).filter(file => /(?:^|\/)commands-.*\.json$/.test(file) &&
+          const reports = readdirSync(dir, { recursive: true }).filter(file => isCommandReceiptPath(file) &&
             !file.startsWith('active-setup/') && !file.startsWith('billing-setup/'));
           const parsed = reports.length === 1 ? JSON.parse(readFileSync(resolve(dir, reports[0]), 'utf8')) : null;
           if (result.code !== 0 || result.reason)

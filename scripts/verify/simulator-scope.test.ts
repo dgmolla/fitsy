@@ -45,8 +45,7 @@ test.each([
   ['apps/mobile/e2e/helpers/map-first-spot.yaml', ['map-search', 'map-search-location-denied']],
   ['apps/mobile/e2e/flows/map-search.yaml', ['map-search']],
   ['apps/mobile/e2e/flows/map-search-location-denied.yaml', ['map-search-location-denied']],
-  ['apps/mobile/app/notification-settings.tsx', ['reminders']],
-  ['apps/mobile/lib/notificationSchedule.ts', ['reminders']],
+  ['apps/mobile/lib/notificationSchedule.ts', ['onboarding-guided-preview']],
   ['apps/mobile/app/macro-setup.tsx', ['onboarding-assisted-targets']],
   ['apps/mobile/lib/macroCalculator.ts', ['meal-target-energy-sync', 'onboarding-assisted-targets', 'onboarding-target-ranked-search']],
   ['apps/mobile/app/(tabs)/saved.tsx', ['log-meal']],
@@ -94,7 +93,7 @@ test.each([
   'apps/api/lib/auth.ts', 'apps/api/app/api/revenuecat/webhook/route.ts',
   'apps/api/next.config.ts',
   'prisma/schema.prisma', 'package-lock.json',
-  'scripts/deploy/mobile.sh', '.github/workflows/deploy.yml',
+  '.github/workflows/deploy.yml',
   'apps/mobile/components/NewUnmappedScreen.tsx',
   'apps/mobile/assets/icon.png', 'apps/mobile/lib/colors.ts',
   'apps/web/public/logo.png', 'apps/web/src/components/Logo.styles.ts',
@@ -103,10 +102,20 @@ test.each([
   expect(select([path])).toMatchObject({ risk: 'high', scope: 'full', required: true, flows: allFlows });
 });
 
+test.each(['scripts/deploy/mobile.sh', 'scripts/deploy/testflight-post-submit'])(
+  'release tooling only (%s) needs no simulator run (#906)', path => {
+  expect(select([path])).toMatchObject({ scope: 'none', required: false, flows: [] });
+});
+
+test('release tooling mixed with any other source keeps the full high-path rule (#906)', () => {
+  expect(select(['scripts/deploy/mobile.sh', 'apps/mobile/lib/menuFilters.ts'])).toMatchObject({ risk: 'high', scope: 'full', flows: allFlows });
+  expect(select(['scripts/deploy/mobile.sh', 'scripts/sim/product-flow.mjs'])).toMatchObject({ scope: 'full' });
+});
+
 test('multiple affected areas union and deduplicate flows independently of path order', () => {
-  const paths = ['apps/mobile/lib/menuFilters.ts', 'apps/mobile/app/notification-settings.tsx',
+  const paths = ['apps/mobile/lib/menuFilters.ts', 'apps/mobile/app/macro-setup.tsx',
     'apps/mobile/app/restaurant/[id].tsx', 'docs/guide.md'];
-  const expected = ['chain-menu-serving', 'log-meal', 'map-search', 'menu-load-recovery', 'menu-macro-serving', 'reminders', 'shuffle'];
+  const expected = ['chain-menu-serving', 'log-meal', 'map-search', 'menu-load-recovery', 'menu-macro-serving', 'onboarding-assisted-targets', 'shuffle'];
   expect(select(paths).flows).toEqual(expected);
   expect(select(paths.reverse()).flows).toEqual(expected);
 });
@@ -116,9 +125,9 @@ test('an unmapped backend contract cannot disappear from a mixed mapped selectio
 });
 
 test('affected selections explain each omitted journey without adding unrelated baselines', () => {
-  const result = select(['apps/mobile/app/notification-settings.tsx']);
-  expect(result.flows).toEqual(['reminders']);
-  expect(result.omitted).toEqual(allFlows.filter(name => name !== 'reminders').map(flow => ({
+  const result = select(['apps/mobile/app/macro-setup.tsx']);
+  expect(result.flows).toEqual(['onboarding-assisted-targets']);
+  expect(result.omitted).toEqual(allFlows.filter(name => name !== 'onboarding-assisted-targets').map(flow => ({
     flow, reason: expect.stringMatching(/unaffected/i),
   })));
 });
@@ -285,8 +294,8 @@ test.each([
 // Pinned literal baseline for the final Verify job: a human must deliberately
 // update this string (not just the workflow file) to change the required-check
 // aggregation, so a silent edit to the job graph fails this test instead of
-// slipping through unreviewed. Last reviewed when mark-non-product's media
-// condition was added (#846 follow-up).
+// slipping through unreviewed. Last reviewed when mark-non-product was
+// changed to always run on pull_request (#849).
 const EXPECTED_VERIFY_JOB = `    name: Verify
     needs: [classify, static, domain-check, test, test-other, build, mark-non-product]
     if: \${{ always() }}
@@ -306,7 +315,7 @@ const EXPECTED_VERIFY_JOB = `    name: Verify
             ."test-other".result == expected(.classify.outputs.tests) and
             .build.result == expected(.classify.outputs.build) and
             ."domain-check".result == (if $event == "pull_request" then "success" else "skipped" end) and
-            ."mark-non-product".result == (if $event == "pull_request" and .classify.outputs.simulator != "true" and .classify.outputs.media != "true" then "success" else "skipped" end)
+            ."mark-non-product".result == (if $event == "pull_request" then "success" else "skipped" end)
           ' <<<"$NEEDS_JSON"
 `;
 test('label additions and removals rerun classification, and the final Verify job matches its reviewed baseline', () => {
@@ -367,7 +376,7 @@ test.each([
   write('package.json', JSON.stringify({ ...manifest, scripts: { ...manifest.scripts, 'verify:sim-plan': 'node scripts/verify/impact-plan.mjs --simulator' } }));
   write('apps/api/package.json', JSON.stringify({ ...manifest, scripts: { 'type-check': 'prisma generate && tsc --noEmit' } }));
   write('.github/workflows/verify.yml', workflowText);
-  if (entry.ui) write('apps/mobile/app/notification-settings.tsx', screen());
+  if (entry.ui) write('apps/mobile/app/macro-setup.tsx', screen());
   const head = commit();
   write('.evidence/event.json', JSON.stringify({ pull_request: {
     base: { sha: base }, head: { sha: head }, labels: entry.label ? [{ name: 'needs-sim' }] : [],
@@ -386,8 +395,6 @@ test.each([
   { path: 'apps/mobile/app/(tabs)/saved.tsx', after: screen('Saved meals'), mode: 'render', scope: 'smoke', flow: 'log-meal' },
   { path: 'apps/mobile/app/macro-setup.tsx', after: screen('Daily energy'), mode: 'render', scope: 'smoke', flow: 'onboarding-assisted-targets' },
   { path: 'apps/mobile/app/welcome/goal.tsx', after: screen('Your goal', 12), mode: 'render', scope: 'smoke', flow: 'onboarding-assisted-targets' },
-  { path: 'apps/mobile/app/notification-settings.tsx', after: screen('Notifications'), mode: 'render', scope: 'smoke', flow: 'reminders' },
-  { path: 'apps/mobile/app/notification-settings.styles.ts', after: screen('Your goal', 12), mode: 'render', scope: 'smoke', flow: 'reminders' },
   { path: 'apps/mobile/app/welcome/goal.tsx', after: screen('Your goal', 8, 'router.push("/welcome/tried")'), mode: 'e2e', scope: 'flow' },
   { path: 'apps/mobile/app/welcome/goal.tsx', after: screen('Your goal', 8, 'setGoal("lose_fat")'), mode: 'e2e', scope: 'flow' },
   { path: 'apps/mobile/components/ContinueButton.tsx', after: screen('Continue'), mode: 'e2e', scope: 'full' },
