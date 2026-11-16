@@ -1,0 +1,131 @@
+# Gate 3 of the four-gate model (#931): everything on main works.
+# PRs run only the checks relevant to their change (verify.yml, --scope=changed). This workflow runs the same CI check
+# set unscoped on every push to main plus nightly, then records the result as the non-required commit status
+# `full-suite/green`. Releases are cut only from a commit where that status is success
+# (node scripts/deploy/green-main.mjs --latest). It is not a required check and never blocks a merge: fix forward.
+name: Main full suite
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "30 10 * * *" # nightly ~2:30am LA, re-validates the head of main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: main-full-suite-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  static:
+    name: Full static (L0-L1)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Restore pinned workflow lint tool archives
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/lint-tools
+          key: lint-tools-actionlint-1.7.12-8aca8db9-shellcheck-0.11.0-8c3be12b
+      - name: Install required workflow lint tools
+        run: |
+          dir="$RUNNER_TEMP/lint-tools"
+          mkdir -p "$dir"
+          [ -f "$dir/actionlint.tar.gz" ] || curl --fail --show-error --location --retry 3 \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz \
+            --output "$dir/actionlint.tar.gz"
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $dir/actionlint.tar.gz" | sha256sum --check
+          tar xzf "$dir/actionlint.tar.gz" -C /usr/local/bin actionlint
+          [ -f "$dir/shellcheck.tar.xz" ] || curl --fail --show-error --location --retry 3 \
+            https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz \
+            --output "$dir/shellcheck.tar.xz"
+          echo "8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198  $dir/shellcheck.tar.xz" | sha256sum --check
+          tar xJf "$dir/shellcheck.tar.xz" -C /usr/local/bin --strip-components=1 shellcheck-v0.11.0/shellcheck
+      - run: git fetch origin main
+      - name: Run L0-L1 checks on the whole repository
+        run: node scripts/verify/run.mjs --layer=0-1 --runs=ci --scope=all
+
+  tests:
+    name: Full tests (L2) (${{ matrix.group }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [api, scripts, mobile]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: git fetch origin main
+      - name: Run the whole ${{ matrix.group }} test group
+        env:
+          FITSY_VERIFY_TEST_GROUP: ${{ matrix.group }}
+        run: node scripts/verify/run.mjs --layer=2 --runs=ci --scope=all --only=test
+
+  tests-other:
+    name: Full tests (L2 other)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: git fetch origin main
+      - run: node scripts/verify/run.mjs --layer=2 --runs=ci --scope=all --only=own-code-mocks,rate-limit-store
+
+  build:
+    name: Full build (L3)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: git fetch origin main
+      - run: node scripts/verify/run.mjs --layer=3 --runs=ci --scope=all
+
+  # Record the outcome on the commit. The status is informational (not a required check): releases read it, merges do not.
+  record:
+    name: Record full-suite/green
+    needs: [static, tests, tests-other, build]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    permissions:
+      statuses: write
+      contents: read
+    steps:
+      - name: Post the commit status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RESULTS: ${{ needs.static.result }} ${{ needs.tests.result }} ${{ needs.tests-other.result }} ${{ needs.build.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          state=success
+          for result in $RESULTS; do [ "$result" = success ] || state=failure; done
+          description="Full suite on main: static, tests, build"
+          [ "$state" = success ] || description="Full suite on main failed or was cancelled; fix forward"
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -f state="$state" -f context="full-suite/green" -f description="$description" -f target_url="$RUN_URL"
