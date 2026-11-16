@@ -161,9 +161,10 @@ Include contact details, precise coverage, any feature limitations and fixes for
 
 ## Artwork and device evidence
 
-**Unknown/not produced:** no refreshed App Store screenshots or final-candidate device receipt were captured in this preparation.
-The only available mobile device was the simulator named `Fitsy-442-c7913e95-iPhone-15`, owned by #442; it was inventoried without launching, resetting or using it.
-Prior development screenshots and Test Store results cannot be relabeled as this release's production-binary evidence.
+**Provisional set captured (Nov 16, 2026), not yet approved:** five map-led simulator captures exist under `~/fitsy-review/763/` (local, not in the repo, not uploaded to App Store Connect).
+Dawit chose "Option 1" on #881 (simulator captures from the commit build 11 is cut from).
+A Release simulator build cannot sign in to an entitled fixture account (a production bundle refuses `EXPO_PUBLIC_*PASSWORD`, so Dev Login is absent), so the provisional set comes from the Debug Test Store build of main `7136c73e` instead, as disclosed on #881.
+Prior development screenshots and Test Store results still cannot be relabeled as this release's production-binary evidence; Dawit's real-device pass remains the binary evidence.
 
 Apple's current [screenshot specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/) require a Dynamic Island medium-display iPhone screenshot, accepting portrait `1179 × 2556` or `1206 × 2622`.
 Prepare a consistent `1179 × 2556` set, opaque PNG/JPEG, 1-10 images per size; the proposed set below has five images.
@@ -171,13 +172,19 @@ The current page also retains a large-display fallback requirement; confirm the 
 No iPad artwork is planned because the app config does not support tablets; confirm the final binary agrees.
 Recheck the official page and ASC slots at capture time.
 
-| Proposed image | State and truthful caption | Acceptance |
+| Image | State and truthful caption | Acceptance |
 | --- | --- | --- |
-| `01-targets.png` | Current goal/known-target setup: “Targets that fit your day” | Show real complete values and coherent calorie/gram totals; no retired preset-only onboarding |
-| `02-preview.png` | Settled real restaurant preview: “Find meals that fit your targets” | Correct restaurant and meal data, no loading overlay or invented coverage count |
-| `03-guidance.png` | Accepted post-fetch coachmark: “A little guidance to get started” | Correct spotlight geometry after fetch/scroll, no clipped controls |
-| `04-nutrition.png` | Candidate meal detail: “Understand the nutrition behind each pick” | Actual source/confidence/range labeling; never equate high confidence with verified facts |
-| `05-editing.png` | Linked target editor: “Adjust calories and macros together” | Demonstrate settled edits without fabricated health outcomes |
+| `01-map.png` | Map-first search, DTLA: “Meals near you, on the map” | Real nearby restaurants with estimated macros and confidence; no invented coverage claim |
+| `02-targets.png` | Per-meal targets sheet: “Set targets that fit your day” | Coherent calorie and gram values; no health-outcome claim |
+| `03-nutrition.png` | Restaurant menu with macro fit: “See how each dish fits your targets” | Estimated-nutrition and confidence labeling kept; never equate high confidence with verified facts |
+| `04-search.png` | Ranked list view: “Search meals and restaurants” | Real ranked picks with macros; no loading overlay |
+| `05-editing.png` | Edited targets: “Adjust calories and macros together” | Settled edited values (700 kcal, 69/61/20 g); same sheet as 02 with different values, so confirm 02/05 are visually distinct enough or replace one |
+
+**Provisional manifest** (all simulator captures, not a store binary):
+- Device: iPhone 15 simulator, `1179 × 2556`, opaque PNG (alpha flattened with ffmpeg `rgb24`), real status bar.
+- Source: Debug Test Store build, JS served by Metro from main `7136c73e`; backend `https://dev.fitsy.org`; billing: RevenueCat Test Store with a promotional `pro` entitlement on the synthetic entitled fixture (revoked after capture).
+- SHA-256: `01-map` `d0fc4021…`, `02-targets` `fec9067f…`, `03-nutrition` `bd652fd3…`, `04-search` `b4d4850c…`, `05-editing` `78c17686…`.
+- Not captured: onboarding, paywall and Profile (the Profile tab shows the fixture email and a Development card, so it is not shippable artwork).
 
 Keep extra reviewer evidence for onboarding/recovery, sign-in/payment/resubscribe, both offer-eligibility states, trial reminder/timeline and target editing; these are journey captures, not another hardware matrix.
 For each capture retain source, binary ID/hash, runtime/update identity, backend, billing environment, dimensions, checksum and visual sign-off.
