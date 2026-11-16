@@ -40,7 +40,9 @@ type Step = {
 };
 const [, commands] = loadAll(readFileSync(resolve(__dirname, '../e2e/flows/onboarding-returning-preview.yaml'), 'utf8')) as [unknown, Step[]];
 const [, signinCommands] = loadAll(readFileSync(resolve(__dirname, '../e2e/helpers/discovery-signin.yaml'), 'utf8')) as [unknown, Step[]];
-const login = signinCommands.find(step => typeof step.tapOn === 'object' && step.tapOn.id === 'signup-dev')!.tapOn as { id: string };
+// The helper signs in only when the sign-in screen appears, so the tap lives inside its conditional runFlow.
+const signinSteps = signinCommands.flatMap(step => step.runFlow?.commands ?? [step]);
+const login = signinSteps.find(step => typeof step.tapOn === 'object' && step.tapOn.id === 'signup-dev')!.tapOn as { id: string };
 const routeMap = { ...routes, 'welcome/payment': () => <Payment />, 'welcome/preview': () => <Preview /> };
 const noSubscription = { entitlements: { active: {}, all: {} } } as CustomerInfo;
 const annual = { identifier: '$rc_annual', product: { identifier: 'annual', price: 59.99,
