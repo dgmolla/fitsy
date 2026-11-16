@@ -788,6 +788,24 @@ it('returning from the ordinary list starts the carousel at the first result aga
   expect(scrollTo).toHaveBeenCalledWith({ x: 0, animated: false });
 });
 
+it('remounts the map markers when the map returns from the list so MapKit drops its stale native selection (#921)', async () => {
+  const screen = open('/search?query=meal&mapDebug=1');
+  const before = await screen.findByTestId('map-pin-0');
+  await act(async () => fireEvent.press(before));
+  expect(screen.getByTestId('map-preview-open')).toBeTruthy();
+  const pinAfterSelect = screen.getByTestId('map-pin-0');
+  expect(pinAfterSelect).toBe(before);
+
+  await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
+  await screen.findByTestId('discovery-hero');
+  await act(async () => fireEvent.press(screen.getByTestId('discovery-view-toggle')));
+  const after = await screen.findByTestId('map-pin-0');
+
+  expect(after).not.toBe(before);
+  expect(screen.queryByTestId('map-preview-open')).toBeNull();
+  expect(screen.getByTestId('map-card-0')).toBeTruthy();
+});
+
 it.each(['pin', 'drag'])(
   'restores C after %s selection, failed Shuffle and unchanged retry rows', async selection => {
   const scrollTo = jest.spyOn(ScrollView.prototype, 'scrollTo');
