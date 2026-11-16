@@ -32,6 +32,7 @@ jest.mock('./supabase', () => ({
 }));
 
 const SecureStore = jest.requireMock('expo-secure-store') as {
+  getItemAsync: jest.Mock;
   setItemAsync: jest.Mock;
   deleteItemAsync: jest.Mock;
 };
@@ -56,6 +57,33 @@ const sampleAuthResponse: AuthApiResponse = {
 const errorResponse: AuthApiResponse = {
   error: 'Invalid credentials',
 };
+
+describe('getStoredToken without a live session (#837)', () => {
+  beforeEach(() => {
+    SupabaseMock.supabase.auth.getSession.mockResolvedValue({ data: { session: null } });
+    SecureStore.getItemAsync.mockResolvedValue('stale-legacy-token');
+  });
+  afterEach(() => { SecureStore.getItemAsync.mockResolvedValue(null); });
+
+  it('does not resurrect a dead session from a stale legacy SecureStore token', async () => {
+    await expect(getStoredToken()).resolves.toBeNull();
+    expect(SecureStore.getItemAsync).not.toHaveBeenCalled();
+  });
+
+  it('returns the access token of a live real-account session', async () => {
+    SupabaseMock.supabase.auth.getSession.mockResolvedValue({
+      data: { session: { access_token: 'live-token', user: { id: 'u1' } } },
+    });
+    await expect(getStoredToken()).resolves.toBe('live-token');
+  });
+
+  it('returns null for an anonymous session', async () => {
+    SupabaseMock.supabase.auth.getSession.mockResolvedValue({
+      data: { session: { access_token: 'anon-token', user: { id: 'u2', is_anonymous: true } } },
+    });
+    await expect(getStoredToken()).resolves.toBeNull();
+  });
+});
 
 describe('confirmed session adoption', () => {
   const originalFetch = global.fetch;
