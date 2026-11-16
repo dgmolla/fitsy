@@ -1,6 +1,7 @@
-// #934: a previous run or a manual session can leave the shared dev fixture account with a blank profile, which makes every
-// entitled flow land on onboarding right after Dev Login. Verify the baseline profile through the supported API before each
-// flow and restore it when it is missing; fail with a clear message when it cannot be restored. Dev backends only.
+// #934: a previous run or a manual session can leave a shared dev fixture account in the wrong state: a blank profile makes
+// every entitled flow land on onboarding right after Dev Login, and a purchase left on the unsubscribed account makes locked
+// menus open. Verify the account through the supported API before each flow, restore the profile when it is blank, and fail
+// with a clear fixture message when the subscription verdict is wrong or the profile cannot be restored. Dev backends only.
 import { execFileSync } from 'node:child_process';
 
 // Values seeded for the entitled fixture (dev data only). Fixtures not listed here are left exactly as they are:
@@ -9,6 +10,10 @@ export const baselineProfiles = {
   'entitled-dev': { goal: 'lose_fat', heightCm: 178, weightKg: 80,
     macroTarget: { calories: 595, proteinG: 49, carbsG: 57, fatG: 19, source: 'manual' } },
 };
+
+// The server's subscription verdict each shared account must show before a flow starts. Not restored here: a wrong verdict
+// means a purchase, grant or expiry from an earlier flow or session, which only its owner can undo.
+export const expectedVerdicts = { 'entitled-dev': 'active', 'unsubscribed-dev': 'never_subscribed', 'expired-subscription': 'expired' };
 
 const allowedOrigin = origin => origin === 'https://dev.fitsy.org' || /^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/.test(origin);
 const complete = profile => Boolean(profile?.user?.goal && profile.user.heightCm && profile.user.weightKg && profile.macroTarget);
@@ -28,7 +33,8 @@ export function curlJson(method, url, { token, body } = {}) {
 
 export function ensureBaselineProfile(fixture, http = curlJson) {
   const baseline = baselineProfiles[fixture?.name];
-  if (!baseline) return 'not-applicable';
+  const verdict = expectedVerdicts[fixture?.name];
+  if (!baseline && !verdict) return 'not-applicable';
   const { EXPO_PUBLIC_API_URL: origin, EXPO_PUBLIC_DEV_LOGIN_EMAIL: email, EXPO_PUBLIC_DEV_LOGIN_PASSWORD: password } = fixture.env ?? {};
   const fail = reason => { throw new Error(`Fixture ${fixture.name}: ${reason}`); };
   if (!origin || !email || !password) fail('needs EXPO_PUBLIC_API_URL and its own dev login credentials to verify the profile');
@@ -36,6 +42,13 @@ export function ensureBaselineProfile(fixture, http = curlJson) {
   const login = http('POST', `${origin}/api/auth/login`, { body: { email, password } });
   if (login.status !== 200 || !login.json?.token) fail(`dev login failed (HTTP ${login.status}); cannot verify the profile`);
   const token = login.json.token;
+  if (verdict) {
+    const status = http('GET', `${origin}/api/subscriptions/status`, { token });
+    if (status.status !== 200) fail(`subscription status read failed (HTTP ${status.status})`);
+    if (status.json?.verdict !== verdict)
+      fail(`subscription verdict is ${status.json?.verdict}, expected ${verdict}; an earlier flow or session left the shared account in the wrong state, so flows that depend on it would fail for reasons outside the change. Undo the purchase, grant or expiry and rerun`);
+  }
+  if (!baseline) return 'present';
   const read = () => http('GET', `${origin}/api/user/profile`, { token });
   const first = read();
   if (first.status !== 200) fail(`profile read failed (HTTP ${first.status})`);

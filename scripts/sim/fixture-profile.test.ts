@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
 import { resolve } from 'node:path';
 
-type State = { profile: { user: Record<string, unknown>; macroTarget: unknown }; loginStatus: number; patchStatus: number; patches: number };
+type State = { verdict: string; profile: { user: Record<string, unknown>; macroTarget: unknown }; loginStatus: number; patchStatus: number; patches: number };
 const blank = () => ({ user: { goal: null, heightCm: null, weightKg: null }, macroTarget: null });
 const filled = () => ({ user: { goal: 'lose_fat', heightCm: 178, weightKg: 80 }, macroTarget: { calories: 595 } });
 
@@ -14,6 +14,7 @@ function startServer(state: State): Promise<{ server: Server; origin: string }> 
       const send = (status: number, json: unknown) => { response.writeHead(status, { 'content-type': 'application/json' }); response.end(JSON.stringify(json)); };
       if (request.url === '/api/auth/login') return state.loginStatus === 200 ? send(200, { token: 't-1' }) : send(state.loginStatus, { error: 'no' });
       if (request.headers.authorization !== 'Bearer t-1') return send(401, { error: 'unauthorized' });
+      if (request.url === '/api/subscriptions/status') return send(200, { verdict: state.verdict, active: state.verdict === 'active' });
       if (request.method === 'PATCH') {
         state.patches += 1;
         if (state.patchStatus !== 200) return send(state.patchStatus, { error: 'rejected' });
@@ -45,7 +46,7 @@ const credentials = (origin: string) => ({ EXPO_PUBLIC_API_URL: origin, EXPO_PUB
 describe('entitled fixture baseline profile (#934)', () => {
   let state: State; let server: Server; let origin: string;
   beforeEach(async () => {
-    state = { profile: blank(), loginStatus: 200, patchStatus: 200, patches: 0 };
+    state = { verdict: 'active', profile: blank(), loginStatus: 200, patchStatus: 200, patches: 0 };
     ({ server, origin } = await startServer(state));
   });
   afterEach(() => new Promise<void>(done => { server.close(() => done()); }));
@@ -80,8 +81,26 @@ describe('entitled fixture baseline profile (#934)', () => {
     expect(state.patches).toBe(0);
   });
 
-  test('fixtures without a baseline (onboarding accounts) are not touched', async () => {
-    expect(await ensure({ name: 'unsubscribed-dev', env: credentials(origin) })).toBe('OK:not-applicable');
+  test('fixtures without any expectation are not touched', async () => {
+    expect(await ensure({ name: 'empty-store', env: credentials(origin) })).toBe('OK:not-applicable');
     expect(state.patches).toBe(0);
+  });
+
+  test('the entitled account must show an active verdict', async () => {
+    state.verdict = 'expired';
+    expect(await ensure({ name: 'entitled-dev', env: credentials(origin) })).toContain('subscription verdict is expired, expected active');
+    expect(state.patches).toBe(0);
+  });
+
+  test.each([['never_subscribed', 'OK:present'], ['active', 'subscription verdict is active, expected never_subscribed']])(
+    'the unsubscribed account with verdict %s gives %s (never touches its profile)', async (verdict, expected) => {
+      state.verdict = verdict;
+      expect(await ensure({ name: 'unsubscribed-dev', env: credentials(origin) })).toContain(expected);
+      expect(state.patches).toBe(0);
+    });
+
+  test.each([['expired', 'OK:present'], ['never_subscribed', 'expected expired']])('the expired account with verdict %s gives %s', async (verdict, expected) => {
+    state.verdict = verdict;
+    expect(await ensure({ name: 'expired-subscription', env: credentials(origin) })).toContain(expected);
   });
 });
