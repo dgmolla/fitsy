@@ -359,6 +359,15 @@ env:
     id: coachmark-skip
 - assertNotVisible:
     id: discovery-clear-search
+# The tour returns to the map-first preview; the picks below live in the list.
+# The welcome preview is map-first; the picks live in the list.
+- runFlow:
+    when:
+      visible:
+        id: discovery-map
+    commands:
+      - tapOn:
+          id: map-search-entry
 - extendedWaitUntil:
     visible:
       id: discovery-hero
@@ -377,6 +386,14 @@ env:
 - eraseText: 100
 - inputText: "chicken"
 - pressKey: Enter
+# The welcome preview is map-first; the picks live in the list.
+- runFlow:
+    when:
+      visible:
+        id: discovery-map
+    commands:
+      - tapOn:
+          id: map-search-entry
 - extendedWaitUntil:
     visible:
       id: discovery-hero
@@ -408,6 +425,14 @@ env:
     visible: "654"
     timeout: 30000
 - assertVisible: "654"
+# The welcome preview is map-first; the picks live in the list.
+- runFlow:
+    when:
+      visible:
+        id: discovery-map
+    commands:
+      - tapOn:
+          id: map-search-entry
 - extendedWaitUntil:
     visible:
       id: discovery-hero
@@ -424,6 +449,14 @@ env:
     visible:
       id: discovery-search
     timeout: 30000
+# The welcome preview is map-first; the picks live in the list.
+- runFlow:
+    when:
+      visible:
+        id: discovery-map
+    commands:
+      - tapOn:
+          id: map-search-entry
 - extendedWaitUntil:
     visible:
       id: discovery-hero
@@ -437,6 +470,14 @@ env:
     id: discovery-search
 - assertTrue: ${maestro.copiedText === 'pizza'}
 - pressKey: Enter
+# The welcome preview is map-first; the picks live in the list.
+- runFlow:
+    when:
+      visible:
+        id: discovery-map
+    commands:
+      - tapOn:
+          id: map-search-entry
 - extendedWaitUntil:
     visible:
       id: discovery-hero
@@ -477,7 +518,15 @@ env:
     id: preview-pick-4
 - tapOn:
     id: preview-pick-3
-# Sign-in already happened before location lookup. Entitlement still gates checkout.
+# Anonymous-first onboarding (#801/#820): opening a locked pick asks for an
+# account first. Entitlement still gates checkout after sign-in.
+- runFlow:
+    when:
+      visible:
+        id: signup-dev
+    commands:
+      - tapOn:
+          id: signup-dev
 - extendedWaitUntil:
     visible:
       id: paywall-logo
@@ -500,6 +549,17 @@ env:
 - takeScreenshot: "guided-preview-payment-before-back"
 - tapOn:
     id: welcome-back
+# A checkout reached through the anonymous-first sign-in owns a continuation,
+# so Back opens the exit offers: decline both to return to the preview.
+- runFlow:
+    when:
+      visible: "No thanks"
+    commands:
+      - tapOn: "No thanks"
+      - extendedWaitUntil:
+          visible: "Browse the preview"
+          timeout: 15000
+      - tapOn: "Browse the preview"
 - extendedWaitUntil:
     visible:
       id: preview-back
@@ -538,6 +598,17 @@ env:
     id: paywall-offer-paid
 - tapOn:
     id: welcome-back
+# A checkout reached through the anonymous-first sign-in owns a continuation,
+# so Back opens the exit offers: decline both to return to the preview.
+- runFlow:
+    when:
+      visible: "No thanks"
+    commands:
+      - tapOn: "No thanks"
+      - extendedWaitUntil:
+          visible: "Browse the preview"
+          timeout: 15000
+      - tapOn: "Browse the preview"
 - extendedWaitUntil:
     visible:
       id: preview-back
@@ -582,6 +653,14 @@ env:
 # now reaches the preview directly.
 - tapOn:
     id: welcome-continue
+# The welcome preview is map-first; the picks live in the list.
+- runFlow:
+    when:
+      visible:
+        id: discovery-map
+    commands:
+      - tapOn:
+          id: map-search-entry
 - extendedWaitUntil:
     visible:
       id: discovery-hero
@@ -595,6 +674,14 @@ env:
 - tapOn:
     text: "^Open$"
     optional: true
+# The welcome preview is map-first; the picks live in the list.
+- runFlow:
+    when:
+      visible:
+        id: discovery-map
+    commands:
+      - tapOn:
+          id: map-search-entry
 - extendedWaitUntil:
     visible:
       id: discovery-hero
@@ -618,6 +705,18 @@ env:
           visible:
             id: preview-guide
           timeout: 30000
+# A relaunch lands on the map-first preview; open the list for the picks.
+- runFlow:
+    when:
+      visible:
+        id: discovery-map
+    commands:
+      - tapOn:
+          id: map-search-entry
+- extendedWaitUntil:
+    visible:
+      id: discovery-hero
+    timeout: 30000
 - assertVisible: "pizza"
 - assertVisible: "654"
 
@@ -703,6 +802,14 @@ env:
     id: discovery-search
 - inputText: "pizza"
 - pressKey: Enter
+# The welcome preview is map-first; the picks live in the list.
+- runFlow:
+    when:
+      visible:
+        id: discovery-map
+    commands:
+      - tapOn:
+          id: map-search-entry
 - extendedWaitUntil:
     visible:
       id: discovery-hero
