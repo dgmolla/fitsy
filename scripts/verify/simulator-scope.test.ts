@@ -365,6 +365,23 @@ test.each([
   expect(JSON.parse(result.stdout)).toMatchObject({ scope: entry.scope, required: entry.scope !== 'none' });
 });
 
+const appConfig = (build = '8', extra = '') => `export default { ios: { bundleIdentifier: 'com.fitsy.mobile', buildNumber: "${build}", supportsTablet: false${extra} } };\n`;
+test.each([
+  { name: 'only the recorded buildNumber changes', after: appConfig('10'), scope: 'none' },
+  { name: 'buildNumber changes with another native setting', after: appConfig('10', ", usesAppleSignIn: true"), scope: 'full' },
+  { name: 'another native setting changes alone', after: appConfig('8', ", usesAppleSignIn: true"), scope: 'full' },
+  { name: 'buildNumber is duplicated', after: appConfig('10') + 'const other = { buildNumber: "3" };\n', scope: 'full' },
+])('baseline PR app.config.ts diff (#917): $name selects $scope', entry => {
+  fixture(); write('apps/mobile/app.config.ts', appConfig('8')); const base = commit();
+  write('apps/mobile/app.config.ts', entry.after);
+  write('scripts/deploy/ios-binary-baseline.json', '{"build_number":"10"}'); const head = commit();
+  const result = spawnSync(process.execPath, ['scripts/verify/impact-plan.mjs', '--simulator'], {
+    cwd: directory, env: { ...env, CI: 'true', FITSY_DIFF_BASE: base, FITSY_DIFF_HEAD: head }, encoding: 'utf8',
+  });
+  expect(result.status).toBe(0);
+  expect(JSON.parse(result.stdout)).toMatchObject({ scope: entry.scope, required: entry.scope !== 'none' });
+});
+
 test.each([
   { label: false, ui: false, scope: 'none', host: 'ubuntu-latest' },
   { label: true, ui: false, scope: 'full', host: 'ubuntu-latest' },

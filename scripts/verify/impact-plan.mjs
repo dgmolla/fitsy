@@ -471,6 +471,20 @@ function discoveryEntryImpact(source, configKeys, range, cwd, env) {
     acceptanceCategories: entryChanged ? ['auth', 'billing', 'changed-journey'] : [] };
 }
 
+// A baseline PR records an already-shipped TestFlight build: the one buildNumber line in app.config.ts changes and nothing else
+// does. That cannot alter app behavior (the binary is already built), so it needs no simulator run. Any other edit to the
+// file, a missing/duplicate buildNumber, or an unknown comparison keeps the full high-path rule.
+export function recordedBuildNumberOnly(path, range, cwd, env) {
+  if (path !== 'apps/mobile/app.config.ts' || !range || range.unknown) return false;
+  try {
+    const normalized = sourceVersions(path, range, cwd, env).map(text => {
+      if ((text.match(/buildNumber:\s*["']\d+["']/g) || []).length !== 1) throw new Error('Ambiguous buildNumber');
+      return text.replace(/(buildNumber:\s*)["']\d+["']/, '$1"N"');
+    });
+    return normalized[0] === normalized[1];
+  } catch { return false; }
+}
+
 export function verificationScriptsOnly(path, range, cwd, env) {
   // API Jest setup affects tests, never the served API or native application.
   if (path === 'apps/api/jest.config.js') return true;
@@ -543,7 +557,7 @@ export function simulatorSelection(files, { cwd = repository, env = process.env,
   if (files === null) return full('Comparison history unavailable; all journeys may be affected');
   if (unknownContext) return full('Event context unavailable; simulator overrides cannot be ruled out');
   if (release) return full('Release candidate requires the full simulator flow set');
-  const source = files.filter(path => simulatorSource(path) && !verificationScriptsOnly(path, range, cwd, env));
+  const source = files.filter(path => simulatorSource(path) && !verificationScriptsOnly(path, range, cwd, env) && !recordedBuildNumberOnly(path, range, cwd, env));
   // #906: a PR whose only simulator-relevant source is release tooling under scripts/deploy/ cannot change app behavior,
   // so it needs unit/focused tests, not a native run. Any other source file in the PR keeps the full high-path rule.
   const releaseToolingOnly = source.length > 0 && source.every(path => path.startsWith('scripts/deploy/'));

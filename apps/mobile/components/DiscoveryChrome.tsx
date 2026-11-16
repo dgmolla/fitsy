@@ -5,7 +5,9 @@ import type { MacroValues } from '@/lib/macroPresets';
 import { EDITORIAL } from '@/lib/brand';
 import { BlurFallback } from '@/lib/BlurFallback';
 import { DiscoveryViewToggle } from './DiscoveryViewToggle';
+import { ShuffleButton } from './ShuffleButton';
 import { s } from './DiscoveryScreen.styles';
+import { s as map } from './DiscoveryMap.styles';
 
 function getSelectionLabel(): string {
   const hour = new Date().getHours();
@@ -55,6 +57,68 @@ export function Masthead({
     </View>
   );
 }
+
+// ─── Discovery toolbar (real search screen) ────────────────────────────────────
+
+// Reuses the map screen's own pill styles so the search bar and controls match
+// it exactly, on the same row layout, instead of drifting from a second,
+// independently-styled header (#824). No logo, no "picks" heading, no macro
+// values - just the search bar and the same location/Macros/Shuffle/view
+// controls the map shows, matched pill-for-pill.
+export function DiscoveryToolbar({
+  query,
+  onQueryChange,
+  onClear,
+  searchRef,
+  locationLabel,
+  onLocationPress,
+  locationRef,
+  onMacrosPress,
+  canShuffle,
+  onShuffle,
+  onViewToggle,
+}: {
+  query: string;
+  onQueryChange: (text: string) => void;
+  onClear: () => void;
+  searchRef?: React.RefObject<View | null>;
+  locationLabel?: string;
+  onLocationPress?: () => void;
+  locationRef?: React.RefObject<View | null>;
+  onMacrosPress: () => void;
+  canShuffle: boolean;
+  onShuffle: () => void;
+  onViewToggle?: () => void;
+}) {
+  return (
+    <View style={toolbar.wrap} testID="discovery-toolbar">
+      <SearchBar value={query} onChangeText={onQueryChange} onClear={onClear} containerRef={searchRef} frosted />
+      <View style={map.topRow}>
+        {/* Location lives on the map when it's available (#829) - the map stays
+            mounted under this sheet. Without a map (map-search flag off), this
+            is the only way to change or clear the search area, so keep it here. */}
+        {!onViewToggle && locationLabel !== undefined && onLocationPress && (
+          <Pressable ref={locationRef} collapsable={false} style={map.location} testID="discovery-location" onPress={onLocationPress}
+            accessibilityRole="button" accessibilityLabel={`Location: ${locationLabel}`} accessibilityHint="Change search area">
+            <Ionicons name="location" size={15} color={EDITORIAL.green} />
+            <Text style={map.locationText} numberOfLines={1}>{locationLabel}</Text>
+            <Ionicons name="chevron-down" size={12} color={EDITORIAL.green} />
+          </Pressable>
+        )}
+        <Pressable style={map.goals} testID="discovery-goals" onPress={onMacrosPress}
+          accessibilityRole="button" accessibilityLabel="Edit macros">
+          <Ionicons name="options-outline" size={16} color={EDITORIAL.green} /><Text style={map.locationText}>Macros</Text>
+        </Pressable>
+        <ShuffleButton style={map.shuffle} disabled={!canShuffle} onPress={onShuffle} testID="discovery-shuffle-button" />
+        {onViewToggle && <DiscoveryViewToggle map={false} onPress={onViewToggle} />}
+      </View>
+    </View>
+  );
+}
+
+const toolbar = StyleSheet.create({
+  wrap: { backgroundColor: EDITORIAL.cream, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12, gap: 8 },
+});
 
 // ─── Macro strip ──────────────────────────────────────────────────────────────
 

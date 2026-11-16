@@ -33,8 +33,9 @@ const TOKEN_KEY = 'fitsy_authToken';
 
 /**
  * Returns the current access token from the Supabase session.
- * Falls back to the legacy SecureStore key if the SDK has no session — covers
- * the upgrade window where users had a token stored before S-228 shipped.
+ * There is no legacy SecureStore fallback (#837): a stale pre-SDK token would
+ * make a returning subscriber look signed in after their Supabase session died
+ * (refresh failure emits SIGNED_OUT), then 401 on profile sync.
  * An anonymous session (#801) has no token here — every consumer of this
  * function wants "does a real account own this device," and sending that
  * token to an endpoint that doesn't expect it would 401.
@@ -42,9 +43,7 @@ const TOKEN_KEY = 'fitsy_authToken';
 export async function getStoredToken(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
   if (isRealAccountSession(data.session) && data.session!.access_token) return data.session!.access_token;
-  if (data.session) return null;
-  // Legacy fallback: pre-S-228 token still in SecureStore.
-  return SecureStore.getItemAsync(TOKEN_KEY);
+  return null;
 }
 
 export async function storeToken(token: string): Promise<void> {
