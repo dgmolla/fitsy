@@ -70,6 +70,7 @@ export function DiscoveryToolbar({
   onQueryChange,
   onClear,
   searchRef,
+  searchInputRef,
   locationLabel,
   onLocationPress,
   locationRef,
@@ -82,6 +83,7 @@ export function DiscoveryToolbar({
   onQueryChange: (text: string) => void;
   onClear: () => void;
   searchRef?: React.RefObject<View | null>;
+  searchInputRef?: React.RefObject<TextInput | null>;
   locationLabel?: string;
   onLocationPress?: () => void;
   locationRef?: React.RefObject<View | null>;
@@ -92,8 +94,12 @@ export function DiscoveryToolbar({
 }) {
   return (
     <View style={toolbar.wrap} testID="discovery-toolbar">
-      <SearchBar value={query} onChangeText={onQueryChange} onClear={onClear} containerRef={searchRef} frosted />
+      <SearchBar value={query} onChangeText={onQueryChange} onClear={onClear} containerRef={searchRef} inputRef={searchInputRef} frosted />
       <View style={map.topRow}>
+        {/* The map toolbar anchors its location pill at the left and right-aligns
+            Macros and Shuffle; the Map control takes the pill's slot here so the
+            two rows line up (#927). */}
+        {onViewToggle && <DiscoveryViewToggle map={false} onPress={onViewToggle} style={chrome.toggleAnchor} />}
         {/* Location lives on the map when it's available (#829) - the map stays
             mounted under this sheet. Without a map (map-search flag off), this
             is the only way to change or clear the search area, so keep it here. */}
@@ -110,7 +116,6 @@ export function DiscoveryToolbar({
           <Ionicons name="options-outline" size={16} color={EDITORIAL.green} /><Text style={map.locationText}>Macros</Text>
         </Pressable>
         <ShuffleButton style={map.shuffle} disabled={!canShuffle} onPress={onShuffle} testID="discovery-shuffle-button" />
-        {onViewToggle && <DiscoveryViewToggle map={false} onPress={onViewToggle} />}
       </View>
     </View>
   );
@@ -175,6 +180,7 @@ export function SearchBar({
   onChangeText,
   onClear,
   containerRef,
+  inputRef,
   action,
   placeholder = 'Search restaurants or dishes',
   frosted = false,
@@ -183,6 +189,7 @@ export function SearchBar({
   onChangeText: (text: string) => void;
   onClear: () => void;
   containerRef?: React.RefObject<View | null>;
+  inputRef?: React.RefObject<TextInput | null>;
   action?: React.ReactNode;
   placeholder?: string;
   frosted?: boolean;
@@ -193,6 +200,7 @@ export function SearchBar({
       {frosted && <FrostedSearchSurface />}
       <Text style={s.searchIco}>⌕</Text>
       <TextInput
+        ref={inputRef}
         style={s.searchInput}
         value={value}
         onChangeText={onChangeText}
@@ -228,6 +236,7 @@ export function FrostedSearchSurface() {
 }
 
 const chrome = StyleSheet.create({
+  toggleAnchor: { marginRight: 'auto' },
   mapButton: { backgroundColor: 'rgba(255,255,255,0.8)' },
   search: { backgroundColor: 'rgba(255,255,255,0.8)', borderColor: 'rgba(58,112,80,0.2)', borderRadius: 24, overflow: 'hidden', minHeight: 48, paddingVertical: 2 },
   searchFocused: { borderColor: EDITORIAL.greenAccent },
