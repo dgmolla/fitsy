@@ -6,6 +6,7 @@ import { readFileSync, realpathSync } from 'node:fs';
 import { isAbsolute, relative } from 'node:path';
 import { parseEnv } from 'node:util';
 import { git, gitEnv, repository } from '../verify/impact-plan.mjs';
+import { ensureBaselineProfile } from './fixture-profile.mjs';
 
 // Owner6716597294 grants exactly this release exception, never a passing flow.
 // PR759 is the serial production successor to merged PR754 for this release.
@@ -114,6 +115,8 @@ export function prepareJourney(fixture, flow, udid) {
   // Pre-provision real billing histories; adapter success is not native proof.
   // Debug billing runs independently verify history and sign in after Metro starts.
   execFileSync(binary, [...args, flow, udid], { cwd: repository, env: gitEnv(), stdio: 'inherit', timeout: 60000 });
+  // #934: a blank profile on the shared account sends entitled flows to onboarding; verify it and restore the baseline.
+  if (ensureBaselineProfile(fixture) === 'restored') console.error(`fixture ${fixture.name}: restored the blank baseline profile`);
 }
 
 export function assertJourneyStore(fixture, built) {
