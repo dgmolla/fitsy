@@ -705,6 +705,18 @@ env:
           visible:
             id: preview-guide
           timeout: 30000
+# A relaunch lands on the map-first preview; open the list for the picks.
+- runFlow:
+    when:
+      visible:
+        id: discovery-map
+    commands:
+      - tapOn:
+          id: map-search-entry
+- extendedWaitUntil:
+    visible:
+      id: discovery-hero
+    timeout: 30000
 - assertVisible: "pizza"
 - assertVisible: "654"
 
