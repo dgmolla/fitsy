@@ -770,6 +770,24 @@ it('synchronizes the chosen carousel cards and settled pins without fetching', a
   expect(searchRequests()).toHaveLength(before);
 });
 
+it('returning from the ordinary list starts the carousel at the first result again', async () => {
+  const screen = open('/search?query=meal&mapDebug=1');
+  await screen.findByTestId('map-pin-2');
+  await act(async () => fireEvent.press(screen.getByTestId('map-pin-2')));
+  expect(screen.getByTestId('map-preview-open').props.accessibilityLabel).toContain('Pizza House');
+  const scrollTo = jest.spyOn(ScrollView.prototype, 'scrollTo');
+
+  await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
+  await screen.findByTestId('discovery-hero');
+  scrollTo.mockClear();
+  await act(async () => fireEvent.press(screen.getByTestId('discovery-view-toggle')));
+  await screen.findByTestId('map-pin-0');
+
+  expect(screen.queryByTestId('map-preview-open')).toBeNull();
+  expect(screen.getByTestId('map-card-0')).toBeTruthy();
+  expect(scrollTo).toHaveBeenCalledWith({ x: 0, animated: false });
+});
+
 it.each(['pin', 'drag'])(
   'restores C after %s selection, failed Shuffle and unchanged retry rows', async selection => {
   const scrollTo = jest.spyOn(ScrollView.prototype, 'scrollTo');

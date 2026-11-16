@@ -78,10 +78,13 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
   const { lat, lng } = d.location;
   useEffect(() => { setPendingArea(null); panning.current = false; }, [lat, lng]);
   const firstId = cards[0]?.id;
+  // The map stays mounted behind the ordinary list. Coming back to it starts
+  // the carousel at the first current result again, as before the dual mount.
   useEffect(() => {
+    if (!active) return;
     setSelectedId(undefined);
     carousel.current?.scrollTo({ x: 0, animated: false });
-  }, [firstId, lat, lng, d.tourVisible]);
+  }, [firstId, lat, lng, d.tourVisible, active]);
   useEffect(() => {
     if (!mapRevision || d.location.loading || pendingArea) return;
     // One camera writer, after measured layout. Do not also set mapPadding:
