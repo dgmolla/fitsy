@@ -35,6 +35,14 @@ The [historical production receipt](../../../scripts/deploy/ios-production-binar
 Its [provenance](ios-ota-baseline.md) establishes historical EAS/Apple processing and actual IPA identity, not the last submission.
 Use [app.config.ts](../../../apps/mobile/app.config.ts) and [eas.json](../../../apps/mobile/eas.json) for current repository identity; preserve the established bundle instead of matching obsolete `app.fitsy.mobile` drafts.
 Read ASC and EAS allocations before proposing an increasing unused build number.
+
+### Cut releases only from a green main commit
+
+The Main full suite workflow runs the whole CI check set on every push to main and nightly, and posts the non-required commit status `full-suite/green`.
+Before a TestFlight or production build, print the newest green commit with `node scripts/deploy/green-main.mjs --latest`, or confirm a specific commit with `--check <sha>`.
+Build from that commit, not from the tip of main, unless the tip itself is green.
+The status is a record, not a merge gate: a red main is fixed forward, and releases simply wait for the next green commit.
+If no commit in the newest 30 is green, stop and report instead of building.
 Before each local TestFlight build, compare `buildNumber` in `app.config.ts` with the newest EAS and App Store Connect builds, because main can lag when a baseline PR was never merged.
 If main is stale, set the next unused number in a local-only commit, regenerate the fingerprint from that commit, and build from it; EAS reports `appBuildVersion` for the build, so check it before `eas submit`.
 Never submit a build whose number already exists in App Store Connect.
