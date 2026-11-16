@@ -144,6 +144,10 @@ export const s = StyleSheet.create({
   errorText: { fontFamily: FONTS.nunitoSans, fontSize: 14, textAlign: 'center', color: '#DC2626' },
   emptyState: { alignItems: 'center', justifyContent: 'center', paddingTop: 60, gap: 12 },
   emptyText: { fontFamily: FONTS.nunitoSans, fontSize: 16, fontWeight: '500', color: EDITORIAL.textSoft },
+
+  // The list rides over the map as a full-screen sheet (#829) - map stays
+  // mounted underneath so the swipe up/down never flickers or reloads it.
+  listSheet: { ...StyleSheet.absoluteFillObject, backgroundColor: EDITORIAL.cream },
 });
 
 export const hero = StyleSheet.create({

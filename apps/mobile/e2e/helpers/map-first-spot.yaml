@@ -7,7 +7,7 @@ appId: com.fitsy.mobile
 - assertNotVisible:
     id: discovery-map
 - assertVisible:
-    id: discovery-macro-strip
+    id: discovery-goals
 - tapOn:
     id: discovery-view-toggle
 - extendedWaitUntil:

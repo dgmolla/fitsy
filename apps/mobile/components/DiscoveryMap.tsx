@@ -43,8 +43,8 @@ const RestaurantMarker = React.memo(function RestaurantMarker({ result, position
 });
 
 // Loaded only when the iOS Discovery map is selected.
-export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, onTourLayoutChange }: {
-  discovery: Discovery; onShowList: () => void; previewHeader?: React.ReactNode; onTourLayoutChange?: () => void;
+export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, onTourLayoutChange, active = true }: {
+  discovery: Discovery; onShowList: () => void; previewHeader?: React.ReactNode; onTourLayoutChange?: () => void; active?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const tabBarClearance = useFloatingNavClearance();
@@ -78,10 +78,13 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
   const { lat, lng } = d.location;
   useEffect(() => { setPendingArea(null); panning.current = false; }, [lat, lng]);
   const firstId = cards[0]?.id;
+  // The map stays mounted behind the ordinary list. Coming back to it starts
+  // the carousel at the first current result again, as before the dual mount.
   useEffect(() => {
+    if (!active) return;
     setSelectedId(undefined);
     carousel.current?.scrollTo({ x: 0, animated: false });
-  }, [firstId, lat, lng, d.tourVisible]);
+  }, [firstId, lat, lng, d.tourVisible, active]);
   useEffect(() => {
     if (!mapRevision || d.location.loading || pendingArea) return;
     // One camera writer, after measured layout. Do not also set mapPadding:
@@ -172,7 +175,7 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
       onLayout={event => { setTopHeight(event.nativeEvent.layout.height); onTourLayoutChange?.(); }}>
       {previewHeader && <View style={s.previewHeader}>{previewHeader}</View>}
       <View style={s.searchRow}>
-        <Pressable ref={d.tourSearchRef} collapsable={false} style={s.searchEntry} testID="map-search-entry" onPress={onShowList}
+        <Pressable ref={active ? d.tourSearchRef : undefined} collapsable={false} style={s.searchEntry} testID="map-search-entry" onPress={onShowList}
           accessibilityRole="button" accessibilityLabel={d.query ? `Search: ${d.query}` : 'Search restaurants or dishes'}
           accessibilityHint="Open the list with search and macro editing">
           <FrostedSearchSurface />
@@ -181,13 +184,13 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
         </Pressable>
       </View>
       <View style={s.topRow} pointerEvents="box-none" testID="map-toolbar">
-        <Pressable ref={d.tourLocationRef} collapsable={false} style={s.location} testID="discovery-location" onPress={d.handleOpenLocationPicker}
+        <Pressable ref={active ? d.tourLocationRef : undefined} collapsable={false} style={s.location} testID="discovery-location" onPress={d.handleOpenLocationPicker}
           accessibilityRole="button" accessibilityLabel={`Location: ${d.locationLabel}`} accessibilityHint="Change search area">
           <Ionicons name="location" size={15} color={EDITORIAL.green} />
           <Text style={s.locationText} numberOfLines={1}>{d.locationLabel}</Text>
           <Ionicons name="chevron-down" size={12} color={EDITORIAL.green} />
         </Pressable>
-        <Pressable ref={d.tourEditRef} collapsable={false} style={s.goals} testID="map-goals" onPress={() => d.setFilterVisible(true)}
+        <Pressable ref={active ? d.tourEditRef : undefined} collapsable={false} style={s.goals} testID="map-goals" onPress={() => d.setFilterVisible(true)}
           accessibilityRole="button" accessibilityLabel="Edit macros">
           <Ionicons name="options-outline" size={16} color={EDITORIAL.green} /><Text style={s.locationText}>Macros</Text>
         </Pressable>
@@ -234,7 +237,7 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
             const result = cards[Math.min(cards.length - 1, Math.max(0, Math.round(event.nativeEvent.contentOffset.x / stride)))];
             if (result) select(result, false);
           }}>
-          {cards.map((result, position) => <View key={result.id} ref={position === 0 ? d.tourHeroRef : undefined} collapsable={false} testID={result.id === selectedId ? 'map-preview' : undefined}>
+          {cards.map((result, position) => <View key={result.id} ref={position === 0 && active ? d.tourHeroRef : undefined} collapsable={false} testID={result.id === selectedId ? 'map-preview' : undefined}>
             <DiscoveryMapCard result={result} locked={(d.locked === true && !d.isOnboardingPreview) || result.id === d.lockedTeaser?.id}
               onboardingPreview={d.isOnboardingPreview} hideDishName={d.isOnboardingPreview && position > 0}
               style={{ width: cardWidth, height: compact ? 174 : 210 }}
@@ -245,7 +248,7 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
           {more && <View style={s.moreCard}>{more}</View>}
         </ScrollView>}
         {d.isOnboardingPreview && !d.loading && !d.refreshing && !d.error && !d.outOfArea &&
-          <Pressable ref={d.tourMoreRef} collapsable={false} style={s.previewUnlock} testID="locked-value-cta"
+          <Pressable ref={active ? d.tourMoreRef : undefined} collapsable={false} style={s.previewUnlock} testID="locked-value-cta"
             onPress={() => { void d.unlockPreview(); }} accessibilityRole="button"
             accessibilityLabel={cards.length ? 'Explore full menus. Explore full menus with Pro.' : 'Keep exploring. Try another dish or area. Explore Pro plans.'}>
             <Text style={s.link}>{cards.length ? 'Explore full menus with Pro →' : 'Explore Pro plans →'}</Text>

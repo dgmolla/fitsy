@@ -68,7 +68,7 @@ env:
     direction: DOWN
 - tapOn: "Search near DTLA"
 - tapOn:
-    id: preview-edit-targets
+    id: discovery-goals
 - runFlow:
     when:
       visible:
@@ -96,13 +96,13 @@ env:
       id: discovery-hero
     timeout: 30000
 - assertVisible:
-    id: shuffle-button
+    id: discovery-shuffle-button
 # Opening an unrelated editor must preserve the loaded hero and usable list.
 - copyTextFrom:
     id: discovery-hero
 - evalScript: ${output.perfHero = maestro.copiedText}
 - tapOn:
-    id: preview-edit-targets
+    id: discovery-goals
 - runFlow: ../helpers/dismiss-meal-targets.yaml
 - extendedWaitUntil:
     visible:
@@ -126,7 +126,7 @@ env:
     id: discovery-hero
 - evalScript: ${output.beforeShuffleHero = maestro.copiedText}
 - tapOn:
-    id: shuffle-button
+    id: discovery-shuffle-button
 - extendedWaitUntil:
     visible:
       id: discovery-hero
@@ -134,7 +134,7 @@ env:
 - assertVisible:
     id: discovery-search-bar
 - assertVisible:
-    id: discovery-macro-strip
+    id: discovery-goals
 - assertNotVisible:
     id: shuffle-section
 - assertNotVisible:
@@ -145,7 +145,7 @@ env:
     id: shuffle-view-menu
 - extendedWaitUntil:
     visible:
-      id: shuffle-button
+      id: discovery-shuffle-button
       enabled: true
     timeout: 30000
 - copyTextFrom:
@@ -154,10 +154,10 @@ env:
 - evalScript: ${output.beforeSecondShuffleHero = maestro.copiedText}
 - takeScreenshot: shuffle-search
 - tapOn:
-    id: shuffle-button
+    id: discovery-shuffle-button
 - extendedWaitUntil:
     visible:
-      id: shuffle-button
+      id: discovery-shuffle-button
       enabled: true
     timeout: 30000
 - assertVisible:
