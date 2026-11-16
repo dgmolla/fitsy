@@ -223,6 +223,9 @@ env:
 # extra navigation, so it does not need its own toggle back to list.
 - tapOn:
     id: map-search-entry
+# Tapping the search entry now focuses the field (#927); settle the keyboard so
+# the rest of the list stays reachable.
+- hideKeyboard
 - copyTextFrom:
     id: discovery-search
 - assertTrue: ${maestro.copiedText === 'pizza'}
