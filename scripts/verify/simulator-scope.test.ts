@@ -365,13 +365,19 @@ test.each([
   expect(JSON.parse(result.stdout)).toMatchObject({ scope: entry.scope, required: entry.scope !== 'none' });
 });
 
-const appConfig = (build = '8', extra = '') => `export default { ios: { bundleIdentifier: 'com.fitsy.mobile', buildNumber: "${build}", supportsTablet: false${extra} } };\n`;
+const appConfig = (build = '8', extra = '', version = '1.0.0') =>
+  `export default {\n  name: 'Fitsy',\n  version: "${version}",\n  ios: { bundleIdentifier: 'com.fitsy.mobile', buildNumber: "${build}", supportsTablet: false${extra} },\n};\n`;
 test.each([
   { name: 'only the recorded buildNumber changes', after: appConfig('10'), scope: 'none' },
   { name: 'buildNumber changes with another native setting', after: appConfig('10', ", usesAppleSignIn: true"), scope: 'full' },
   { name: 'another native setting changes alone', after: appConfig('8', ", usesAppleSignIn: true"), scope: 'full' },
   { name: 'buildNumber is duplicated', after: appConfig('10') + 'const other = { buildNumber: "3" };\n', scope: 'full' },
-])('baseline PR app.config.ts diff (#917): $name selects $scope', entry => {
+  { name: 'only the version string changes (#943)', after: appConfig('8', '', '1.0.1'), scope: 'none' },
+  { name: 'version and buildNumber change together', after: appConfig('13', '', '1.0.1'), scope: 'none' },
+  { name: 'version changes with another native setting', after: appConfig('8', ', usesAppleSignIn: true', '1.0.1'), scope: 'full' },
+  { name: 'version is not a plain x.y.z string', after: appConfig('8', '', 'next'), scope: 'full' },
+  { name: 'version line is duplicated', after: appConfig('8', '', '1.0.1') + '  version: "2.0.0",\n', scope: 'full' },
+])('release-numbers PR app.config.ts diff (#917, #943): $name selects $scope', entry => {
   fixture(); write('apps/mobile/app.config.ts', appConfig('8')); const base = commit();
   write('apps/mobile/app.config.ts', entry.after);
   write('scripts/deploy/ios-binary-baseline.json', '{"build_number":"10"}'); const head = commit();
