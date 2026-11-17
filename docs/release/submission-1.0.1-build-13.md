@@ -137,17 +137,23 @@ Not verified: server-side request logs for coordinates, the map provider's data 
 ## 6. Age rating
 
 The stored answers say none of the following apply: health or wellness topics, medical or treatment information, user-generated content, unrestricted web access, alcohol references, contests, gambling or mature content.
-Three of those need Dawit's decision before he submits, because the app now contains them:
+Dawit decided on 2026-11-16 (10:40 PM PT, #953 item E) to use these answers instead:
 
-| Question | Stored | Recommended | Why |
+| Question | Stored | Decided answer | Why |
 | --- | --- | --- | --- |
 | Health or wellness topics | No | **Yes** | The app turns height, weight and goal into calorie and macro targets |
-| User-generated content | No | **Yes** | The feedback board shows user posts, public by default, with a profanity filter and up-front moderation; confirm report and block controls exist |
-| Alcohol, tobacco or drug references | None | Likely **Infrequent or mild** | Restaurant search can show bars and liquor menus; confirm what is displayed |
-| Medical or treatment information | None | None | Estimates are labeled as planning information, not medical advice (see open item C) |
+| User-generated content | No | **Yes** | Every feedback submission is also a public post on the in-app feedback board, with a profanity filter up front |
+| Alcohol, tobacco or drug references | None | **Infrequent or mild** | Restaurant search can show bars and liquor menus |
+| Medical or treatment information | None | None | Estimates are labeled as planning information, not medical advice |
 
 Everything else stays as stored.
 The resulting rating is whatever Apple's questionnaire computes; it may rise above the current one.
+
+**Finding that affects the user-generated-content answer:** the feedback board has no report or block controls.
+Source on main has a profanity filter and votes (`apps/api/app/api/feedback/route.ts`, `[id]/vote/route.ts`) and no report or block endpoint, and `apps/mobile/app/feedback-board.tsx` has no such control.
+Apple's user-generated-content rules expect a way to filter, report and block, so this is a likely review risk.
+It needs a decision from Dawit: add report and block (an API change plus app code), or hide the public board for this version.
+Tracked on #953.
 
 ## 7. Dawit's App Store Connect steps (he does these; no lane uploads, creates or submits)
 
@@ -164,11 +170,11 @@ The resulting rating is whatever Apple's questionnaire computes; it may rise abo
 
 ## 8. Open items for Dawit
 
-- **A. Privacy policy does not match the app.** `https://fitsy.org/privacy` lists only macro targets and saved items. It omits birthday, height, weight, sex, activity level, goal, push token and feedback posts. Its deletion text omits the other profile fields. It does not name Sentry, RevenueCat or Expo updates, and does not mention that native crash reports bypass the scrubber. Fixing legal text is Dawit's call; this packet does not edit it.
+- **A. Privacy policy does not match the app.** A corrected draft is in [PR #955](https://github.com/dgmolla/fitsy/pull/955), not merged. `https://fitsy.org/privacy` lists only macro targets and saved items. It omits birthday, height, weight, sex, activity level, goal, push token and feedback posts. Its deletion text omits the other profile fields. It does not name Sentry, RevenueCat or Expo updates, and does not mention that native crash reports bypass the scrubber. Fixing legal text is Dawit's call; this packet does not edit it.
 - **B. Reviewer contact and demo account.** Confirm the contact details, and that the demo credentials still work on build 13.
 - **C. No in-app medical disclaimer.** The description says estimates are not medical advice, but the app has no matching text. Decide whether to add one before submitting.
 - **D. Screenshot slot.** Confirm which ASC slot takes `1179 x 2556`.
-- **E. Age-rating answers in section 6.**
+- **E. Age-rating answers in section 6.** Decided; see the feedback-board finding there.
 - **F. Real Apple billing test** on this build ([#431](https://github.com/dgmolla/fitsy/issues/431)).
 
 ## 9. What was and was not checked
