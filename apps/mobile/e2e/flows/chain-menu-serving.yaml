@@ -81,8 +81,10 @@ env:
 - tapOn: "Clear search"
 - assertVisible: "3 dishes match"
 # The soft keyboard stays up after Clear search and covers lower rows, so a tap
-# on a hidden dish lands on a keyboard key instead; dismiss it first.
-- hideKeyboard
+# on a hidden dish lands on a keyboard key instead. The menu search is a
+# single-line field, so its return key submits and closes the keyboard.
+- pressKey: Enter
+- waitForAnimationToEnd
 - tapOn:
     id: ${"menu-item-" + output.chicken.id}
 # A signed-in free account still needs a subscription to open the full menu.
