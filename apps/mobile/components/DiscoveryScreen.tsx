@@ -1,5 +1,5 @@
 import React, { Suspense, useCallback, useReducer, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WelcomeNav } from './WelcomeNav';
@@ -62,6 +62,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
   const listRef = useRef<FlatList<(typeof results)[number]>>(null);
   const scrollOffset = useRef(0);
   const viewportRef = useRef<View>(null);
+  const searchInputRef = useRef<TextInput>(null);
   const [tourLayoutVersion, refreshTourLayout] = useReducer((version: number) => version + 1, 0);
   const onTourLayoutChange = () => { if (tourVisible) refreshTourLayout(); };
   const prepareTourStep = useCallback((step: CoachMarkStep) => new Promise<void>(resolve => {
@@ -79,7 +80,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
     });
   }), [showMap]);
   const closeTour = () => { finishTour(); listRef.current?.scrollToOffset({ offset: 0, animated: false }); };
-  const renderSearchBar = (action?: React.ReactNode) => <SearchBar value={query} onChangeText={setQuery} onClear={handleClearQuery} containerRef={!showMap ? tourSearchRef : undefined} action={action} frosted={mapEnabled} />;
+  const renderSearchBar = (action?: React.ReactNode) => <SearchBar value={query} onChangeText={setQuery} onClear={handleClearQuery} containerRef={!showMap ? tourSearchRef : undefined} inputRef={searchInputRef} action={action} frosted={mapEnabled} />;
   const previewGoBack = onPreviewBack ?? (navigation.canGoBack() ? () => router.back() : undefined);
   // The map preview is the real map screen, not an onboarding step: no
   // progress-bar chrome there, just a small back control inline with the tip.
@@ -207,7 +208,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
       {previewNav}
       {isOnboardingPreview
         ? <Masthead preview locationRef={!showMap ? tourLocationRef : undefined} locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker} />
-        : <DiscoveryToolbar query={query} onQueryChange={setQuery} onClear={handleClearQuery} searchRef={!showMap ? tourSearchRef : undefined}
+        : <DiscoveryToolbar query={query} onQueryChange={setQuery} onClear={handleClearQuery} searchRef={!showMap ? tourSearchRef : undefined} searchInputRef={searchInputRef}
             locationRef={!showMap ? tourLocationRef : undefined} locationLabel={locationLabel} onLocationPress={handleOpenLocationPicker}
             onMacrosPress={() => setFilterVisible(true)} canShuffle={canShuffle} onShuffle={handleShuffle}
             onViewToggle={mapEnabled ? () => switchView('map') : undefined} />}
@@ -301,7 +302,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
       <View style={{ flex: 1 }} collapsable={false}
         accessibilityElementsHidden={view === 'list'} importantForAccessibility={view === 'list' ? 'no-hide-descendants' : 'auto'}>
         <Suspense fallback={<ActivityIndicator accessibilityLabel="Loading map" />}>
-          <DiscoveryMap discovery={discovery} onShowList={() => switchView('list')} active={showMap}
+          <DiscoveryMap discovery={discovery} onShowList={() => { switchView('list'); if (!isOnboardingPreview) searchInputRef.current?.focus(); }} active={showMap}
             previewHeader={isOnboardingPreview ? <>{previewNav}{previewIntro}</> : undefined}
             onTourLayoutChange={onTourLayoutChange} />
         </Suspense>

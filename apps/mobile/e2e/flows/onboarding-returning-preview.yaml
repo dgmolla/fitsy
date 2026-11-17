@@ -214,6 +214,15 @@ env:
       visible:
         id: goal-lose_fat
     commands:
+      # Account hydration right after sign-in can replace the saved choice, so
+      # choose the goal again before pressing Continue the second time.
+      - tapOn:
+          id: goal-lose_fat
+      - extendedWaitUntil:
+          visible:
+            id: welcome-continue
+            enabled: true
+          timeout: 15000
       - tapOn:
           id: welcome-continue
 - extendedWaitUntil:

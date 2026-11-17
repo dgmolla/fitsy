@@ -3,7 +3,7 @@ import React from 'react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { runInNewContext } from 'node:vm';
-import { Platform, ScrollView, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { Platform, ScrollView, StyleSheet, TextInput, type StyleProp, type ViewStyle } from 'react-native';
 import { within } from '@testing-library/react-native';
 import PostHog from 'posthog-react-native';
 import Purchases, { type CustomerInfo } from 'react-native-purchases';
@@ -387,6 +387,30 @@ it.each(['published', 'locked', 'missing'])('preserves %s meal disclosure throug
   await screen.findByTestId('discovery-hero'); assertCard('discovery-hero');
 });
 
+it('tapping the map search entry focuses the list search field, and the list controls mirror the map row', async () => {
+  // The Jest TextInput mock keeps its native methods on the prototype.
+  const focus = jest.spyOn(TextInput.prototype as unknown as { focus: () => void }, 'focus');
+  focus.mockClear();
+  const screen = open();
+  await screen.findByTestId('map-pin-0');
+  await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
+  expect(focus).toHaveBeenCalledTimes(1);
+  // Map control takes the location pill's left slot; Macros then Shuffle sit right-aligned, as on the map.
+  type Json = { props: { testID?: string; style?: StyleProp<ViewStyle> }; children: (Json | string)[] | null };
+  const find = (node: Json | string, testID: string): Json | undefined => typeof node === 'string' ? undefined
+    : node.props.testID === testID ? node : (node.children ?? []).map(child => find(child, testID)).find(Boolean);
+  const tree = screen.toJSON() as Json | Json[];
+  const toolbar = (Array.isArray(tree) ? tree : [tree]).map(node => find(node, 'discovery-toolbar')).find(Boolean)!;
+  const row = toolbar.children!.filter((child): child is Json => typeof child !== 'string')[1];
+  expect(row.children!.map(child => (child as Json).props.testID)).toEqual(['discovery-view-toggle', 'discovery-goals', 'discovery-shuffle-button']);
+  expect(StyleSheet.flatten((row.children![0] as Json).props.style)).toMatchObject({ marginRight: 'auto' });
+  // Only the search entry focuses; the Map control must not touch the keyboard.
+  focus.mockClear();
+  await act(async () => fireEvent.press(screen.getByTestId('discovery-view-toggle')));
+  await screen.findByTestId('map-pin-0');
+  expect(focus).not.toHaveBeenCalled();
+});
+
 it('opens the real search list and Macros editor while preserving bounded results, targets and shuffle', async () => {
   const screen = open();
   await screen.findByTestId('map-pin-0');
@@ -674,6 +698,11 @@ it('shows a real, named fourth restaurant locked as a paid-tier teaser, with no 
   expect(screen.getByText('Fourth Spot')).toBeTruthy();
   expect(screen.getByTestId('map-card-3').props.accessibilityLabel).toBe('Fourth Spot. Unlock meal name and full menu with Pro.');
   expect(screen.queryByTestId('preview-hidden-dish-spot-3')).toBeNull();
+  // The guided preview keeps its keyboard-free tour: the search entry opens the list without focusing (#927).
+  const focus = jest.spyOn(TextInput.prototype as unknown as { focus: () => void }, 'focus');
+  focus.mockClear();
+  await act(async () => fireEvent.press(screen.getByTestId('map-search-entry')));
+  expect(focus).not.toHaveBeenCalled();
 });
 
 it('shows only the three real picks when the area has no fourth nearby restaurant', async () => {
