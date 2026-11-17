@@ -8,7 +8,7 @@ import { resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { parseEnv } from 'node:util';
-import { comparison, isMain, mappedCategories, simulatorContext, simulatorSelection, verificationScriptsOnly, recordedReleaseNumbersOnly } from './impact-plan.mjs';
+import { comparison, isMain, mappedCategories, simulatorContext, simulatorSelection, verificationScriptsOnly, recordedReleaseNumbersOnly, staticLegalPage } from './impact-plan.mjs';
 import { backendOrigin } from '../sim/backend-identity.mjs';
 import { assertScreenCheck, inspectWalkthrough } from '../sim/screen-guard.mjs';
 const yaml = createRequire(import.meta.url)('js-yaml');
@@ -80,6 +80,7 @@ export function impact(paths, configKeys = [], options = {}) {
   const simulator = simulatorSelection(paths, { ...options, cwd, env, configKeys });
   const source = paths.filter(p => !/\.md$/.test(p) &&
     !verificationScriptsOnly(p, options.comparison, cwd, env) && !recordedReleaseNumbersOnly(p, options.comparison, cwd, env) &&
+    !staticLegalPage(p) &&
     !/(?:\.test\.|\.spec\.|__tests__\/|__mocks__\/)/.test(p));
   const affected = source.filter(p => /^(apps\/mobile\/|packages\/shared\/|apps\/api\/(app\/api\/|lib\/|services\/|[^/]+$)|prisma\/|package(-lock)?\.json$)/.test(p) && !serviceHealthPath(p));
   const categories = new Set();
