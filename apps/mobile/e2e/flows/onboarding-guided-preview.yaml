@@ -27,6 +27,16 @@ env:
             id: welcome-start
           timeout: 30000
 - waitForAnimationToEnd
+# Pin the paywall access variant (Debug builds only, #967): the flow asserts a
+# decline returns to the preview, which live RevenueCat metadata does not promise.
+- openLink: com.fitsy.mobile://welcome/problem?devPaywallAccess=preview
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: welcome-start
+    timeout: 30000
 - tapOn:
     point: "92%,93%"
 - tapOn:
@@ -690,7 +700,7 @@ env:
 - assertNotVisible:
     id: paywall-price-yearly
 - stopApp
-- openLink: com.fitsy.mobile://search?preview=1
+- openLink: com.fitsy.mobile://search?preview=1&devPaywallAccess=preview
 # Relaunch can briefly invalidate the native accessibility hierarchy.
 # Retry the first hierarchy read with the required preview assertion.
 - retry:

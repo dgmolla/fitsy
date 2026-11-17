@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { canPreviewAfterDecline, paywallVariants, readPaywallDecline, rememberPaywallDecline } from './paywallAccess';
+import { canPreviewAfterDecline, paywallVariants, readPaywallDecline, rememberPaywallDecline, setDevPaywallAccess } from './paywallAccess';
 
 jest.mock('@react-native-async-storage/async-storage', () => ({ __esModule: true, default: { getItem: jest.fn(), setItem: jest.fn(), removeItem: jest.fn() } }));
 
@@ -23,4 +23,32 @@ test('a pending storage read cannot reopen preview after the user declines', asy
   expect(await readPaywallDecline()).toBe(true);
   expect(AsyncStorage.setItem).toHaveBeenCalledWith('@fitsy/paywallDeclined', '1');
   expect(AsyncStorage.removeItem).toHaveBeenCalledWith('@fitsy/onboardingPreviewEntry');
+});
+
+const globals = globalThis as { __DEV__?: boolean };
+
+test('a Debug-only pin overrides the live metadata for native flows, and any other value clears it', () => {
+  globals.__DEV__ = true;
+  expect(paywallVariants({ paywall_access_variant: 'unknown' }).access).toBe('hard');
+  setDevPaywallAccess('preview');
+  expect(paywallVariants().access).toBe('preview');
+  expect(paywallVariants({ paywall_access_variant: 'preview' }).access).toBe('preview');
+  setDevPaywallAccess('hard');
+  expect(paywallVariants({ paywall_access_variant: 'preview' }).access).toBe('hard');
+  setDevPaywallAccess('nonsense');
+  expect(paywallVariants({ paywall_access_variant: 'preview' }).access).toBe('preview');
+  expect(paywallVariants().access).toBe('hard');
+  delete globals.__DEV__;
+});
+
+test('release builds ignore the pin entirely', () => {
+  const original = globals.__DEV__;
+  globals.__DEV__ = false;
+  try {
+    jest.isolateModules(() => {
+      const release = require('./paywallAccess') as typeof import('./paywallAccess');
+      release.setDevPaywallAccess('preview');
+      expect(release.paywallVariants().access).toBe('hard');
+    });
+  } finally { if (original === undefined) delete globals.__DEV__; else globals.__DEV__ = original; }
 });

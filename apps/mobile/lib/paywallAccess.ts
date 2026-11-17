@@ -7,11 +7,25 @@ let declined: boolean | null = null;
 let reading: Promise<boolean> | null = null;
 export const subscribePaywallAccess = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
 
+let devAccess: 'hard' | 'preview' | null = null;
+// The plain Node test project defines no __DEV__ global; Release and Debug builds always do.
+const isDebugBuild = () => typeof __DEV__ !== 'undefined' && __DEV__;
+/**
+ * Debug builds only: pin the access variant so a native flow does not depend on
+ * live RevenueCat offering metadata that real users also read (#967). Release
+ * builds ignore it, and a value other than hard or preview clears the pin.
+ */
+export function setDevPaywallAccess(value: string | null | undefined): void {
+  if (!isDebugBuild()) return;
+  devAccess = value === 'hard' || value === 'preview' ? value : null;
+  for (const listener of listeners) listener();
+}
+
 /** RevenueCat can assign offerings to experiment cohorts. Missing/invalid
  * metadata uses the launch baseline; it never grants post-decline browsing. */
 export function paywallVariants(metadata?: Record<string, unknown> | null) {
   return {
-    access: metadata?.paywall_access_variant === 'preview' ? 'preview' as const : 'hard' as const,
+    access: (isDebugBuild() && devAccess) || (metadata?.paywall_access_variant === 'preview' ? 'preview' as const : 'hard' as const),
     image: metadata?.paywall_image_variant === 'none' ? 'none' as const : 'meal' as const,
   };
 }
