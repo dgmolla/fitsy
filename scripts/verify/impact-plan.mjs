@@ -138,7 +138,10 @@ export function mappedCategories(path) {
   const matches = screenFlows.filter(([pattern]) => pattern.test(path));
   return matches.length ? [...new Set(matches.flatMap(([, , categories]) => categories))].sort() : null;
 }
-const simulatorSource = path => !documentationPath(path) && !/\.(md|rst|txt)$/.test(path) &&
+// The static legal pages (privacy, terms, support) are server-rendered text on the website; the mobile app does not read them,
+// so editing one cannot change a mobile journey. Only these three exact files qualify; any other web UI keeps the full rule.
+export const staticLegalPage = path => /^apps\/api\/app\/(?:privacy|terms|support)\/page\.tsx$/.test(path);
+const simulatorSource = path => !documentationPath(path) && !staticLegalPage(path) && !/\.(md|rst|txt)$/.test(path) &&
   !/(?:\.test\.|\.spec\.|\.d\.ts$|__tests__\/|__mocks__\/|(?:^|\/)(?:__fixtures__|test-fixtures)\/)/.test(path);
 const uiPath = path => /\.(?:[jt]sx?|mdx|css|scss|sass|less|svg|png|jpe?g|webp|gif|avif|ico|ttf|otf|woff2?)$/.test(path) &&
   /^(?:apps\/mobile\/(?:app|components|assets|styles|theme|tokens)\/|apps\/(?:web|landing|api)\/(?:src\/)?(?:app\/(?!api\/)|pages\/(?!api\/)|components\/|styles\/|public\/|assets\/)|(?:(?:web|src)\/)?(?:app\/(?!api\/)|pages\/(?!api\/)|components\/|styles\/|public\/|assets\/))/.test(path);
