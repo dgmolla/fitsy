@@ -210,8 +210,20 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      # #931 gate 2: the scripts group is the long pole (p50 17 min on one runner), so it runs as four jest partitions in
+      # parallel; the job name stays 'Tests (L2) (scripts, i/4)' and the aggregate Verify job still waits on the whole matrix.
       matrix:
-        group: [api, scripts, mobile]
+        include:
+          - group: api
+          - group: mobile
+          - group: scripts
+            partition: 1/4
+          - group: scripts
+            partition: 2/4
+          - group: scripts
+            partition: 3/4
+          - group: scripts
+            partition: 4/4
     steps:
       - uses: actions/checkout@v4
         with:
@@ -230,6 +242,7 @@ jobs:
       - name: Run L2 checks
         env:
           FITSY_VERIFY_TEST_GROUP: ${{ matrix.group }}
+          FITSY_VERIFY_TEST_PARTITION: ${{ matrix.partition }}
         run: node scripts/verify/run.mjs --layer=2 --runs=ci --scope=changed --only=test
       - name: Upload L2 diagnostics
         if: ${{ always() }}
@@ -237,7 +250,7 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
-          name: verify-l2-logs-attempt-${{ github.run_attempt }}-${{ matrix.group }}
+          name: verify-l2-logs-attempt-${{ github.run_attempt }}-${{ strategy.job-index }}-${{ matrix.group }}
           path: .evidence/verify/logs/
           include-hidden-files: true
           retention-days: 7
