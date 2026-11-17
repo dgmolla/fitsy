@@ -100,6 +100,10 @@ export function cleanupMergedWorktrees({ repo = process.cwd(), apply = false, cw
       try { (result.archived ??= []).push({ path: worktree.path, archive: archiveEvidence(worktree.path, retained, archiveRoot) }); }
       catch (error) { result.refused.push({ path: worktree.path, reason: `evidence archive failed, checkout kept: ${String(error.message).slice(0, 160)}` }); continue; }
     }
+    // The shared native build cache under .evidence/product-build is made read-only on purpose, and git cannot delete a
+    // read-only directory: without this the removal stopped halfway, deregistered the worktree and left a hollowed-out folder.
+    // The evidence is ignored and already archived (or disposable), so restore write permission on it just before removing.
+    try { run('chmod', ['-R', 'u+w', join(worktree.path, '.evidence')], main.path); } catch { /* no evidence directory */ }
     try { run('git', [...GIT_STRICT, 'worktree', 'remove', worktree.path], main.path); result.removed.push(worktree.path); }
     catch (error) { result.refused.push({ path: worktree.path, reason: String(error.stderr || error.message).trim().slice(0, 200) }); }
   }
