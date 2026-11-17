@@ -46,8 +46,15 @@ export function ensureBaselineProfile(fixture, http = curlJson) {
   if (login.status !== 200 || !login.json?.token) fail(`dev login failed (HTTP ${login.status}); cannot verify the profile`);
   const token = login.json.token;
   if (verdict) {
-    const status = http('GET', `${origin}/api/subscriptions/status`, { token });
+    let status = http('GET', `${origin}/api/subscriptions/status`, { token });
     if (status.status !== 200) fail(`subscription status read failed (HTTP ${status.status})`);
+    // The server reports 'unknown' for an account whose RevenueCat state has not been verified
+    // recently (idle account, or a long run); ask it to verify once instead of failing the fixture.
+    if (status.json?.verdict === 'unknown') {
+      http('POST', `${origin}/api/subscriptions/sync`, { token, body: { reason: 'manual' } });
+      status = http('GET', `${origin}/api/subscriptions/status`, { token });
+      if (status.status !== 200) fail(`subscription status read failed (HTTP ${status.status})`);
+    }
     if (status.json?.verdict !== verdict)
       fail(`subscription verdict is ${status.json?.verdict}, expected ${verdict}; an earlier flow or session left the shared account in the wrong state, so flows that depend on it would fail for reasons outside the change. Undo the purchase, grant or expiry and rerun`);
   }
