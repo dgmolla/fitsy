@@ -184,8 +184,8 @@ Include contact details, precise coverage, any feature limitations and fixes for
 
 ## Artwork and device evidence
 
-**Provisional set recaptured (Nov 16, 2026) from the build 12 code, not yet approved:** five map-led simulator captures exist under `~/fitsy-review/763b/` (local, not in the repo, not uploaded to App Store Connect).
-Dawit chose "Option 1" on #881 (simulator captures from the commit build 11 is cut from).
+**Final set (approved by Dawit, Nov 16, 2026 6:42 PM PT on #881; recaptured from the build 12 code):** five map-led simulator captures exist under `~/fitsy-review/763b/` (local, not in the repo, not uploaded to App Store Connect).
+Dawit chose "Option 1" on #881 and then approved these Debug Test Store captures as the final #763 screenshots, so no Release-simulator recapture is needed.
 A Release simulator build cannot sign in to an entitled fixture account (a production bundle refuses `EXPO_PUBLIC_*PASSWORD`, so Dev Login is absent), so the provisional set comes from the Debug Test Store build of main `507fa575` (the code in TestFlight build 12) instead, as disclosed on #881.
 Prior development screenshots and Test Store results still cannot be relabeled as this release's production-binary evidence; Dawit's real-device pass remains the binary evidence.
 
