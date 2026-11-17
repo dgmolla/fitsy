@@ -112,6 +112,17 @@ test('release tooling mixed with any other source keeps the full high-path rule 
   expect(select(['scripts/deploy/mobile.sh', 'scripts/sim/product-flow.mjs'])).toMatchObject({ scope: 'full' });
 });
 
+test.each(['apps/api/app/privacy/page.tsx', 'apps/api/app/terms/page.tsx', 'apps/api/app/support/page.tsx'])(
+  'the static legal page %s needs no simulator run (#953)', path => {
+  expect(select([path])).toMatchObject({ scope: 'none', required: false, flows: [] });
+});
+
+test('only the three legal pages are exempt: other web UI and a legal page never narrows or widens a mobile selection (#953)', () => {
+  expect(select(['apps/api/app/page.tsx'])).toMatchObject({ scope: 'full' });
+  expect(select(['apps/api/app/privacy/layout.tsx'])).toMatchObject({ scope: 'full' });
+  expect(select(['apps/api/app/privacy/page.tsx', 'apps/mobile/lib/menuFilters.ts'])).toEqual(select(['apps/mobile/lib/menuFilters.ts']));
+});
+
 test('multiple affected areas union and deduplicate flows independently of path order', () => {
   const paths = ['apps/mobile/lib/menuFilters.ts', 'apps/mobile/app/macro-setup.tsx',
     'apps/mobile/app/restaurant/[id].tsx', 'docs/guide.md'];
