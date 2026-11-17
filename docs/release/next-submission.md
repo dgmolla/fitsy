@@ -85,6 +85,21 @@ The following are candidate changes since the verified build-5 source, pending a
 | URLs and reviewer access | Unknown -> propose `https://fitsy.org/privacy`, `/support`, `/terms`, and a tested reviewer path | Current code has those legal routes and allowlisted `appreview@fitsy.org` via `fitsy://auth/reviewer`; the draft's `review@fitsy.app` subscription was never proven | Confirm URLs and inbox delivery, real production login/API access and written instructions; do not create an active-subscription claim from the allowlist |
 | Nutrition, coverage and claims | Unknown -> distinguish estimates from reviewed official nutrition and support manual area selection | March draft equated high confidence with verification and required GPS; current source retains estimates plus reviewed facts and manual-location behavior | Remove those misleading claims; verify provenance/ranges on the final screen and avoid fixed coverage counts, “full menu for every restaurant,” or guaranteed fitness results |
 
+### App changes since TestFlight build 10 (merged on main `507fa575`, the code in build 12)
+
+These are the user-visible product changes the app lane merged after build 10 (`0e1f2de4`).
+Each is verified by jest and a native product-flow run on its PR, not by a store binary.
+
+| Change | What a user sees | Evidence |
+| --- | --- | --- |
+| Search screen restyled to match the map (#829) | The list's controls and chrome match the map screen; the list rides over the map as a sheet | `bbbbbc07`; native product-flow on the PR |
+| Stale session token fix (#837, #918) | A leftover legacy token can no longer bring back a signed-out or deleted session | `ee5731bd`; jest, with a negative control |
+| Location choice (#836, #919) | A refresh no longer overwrites a manually picked area, and "Use current location" without permission keeps the current area | `5af9514b`; jest with two new regression tests |
+| Map carousel and markers (#921, #922) | Returning from the list to the map keeps the carousel on the first card and clears a stale selection; scrolling only selects after a real drag | `3f548cdf`; jest regression plus a native map-search run |
+| Search list buttons and keyboard (#927, #929) | The list's Map, Macros and Shuffle controls sit where the map's row has them, and tapping the map search bar opens the list with the keyboard up (not in the guided onboarding preview) | `507fa575`; 24-flow native run and Dawit-approved video |
+
+Release-relevant caveats for the human reviewer: the screenshots for this release are labeled simulator captures from a Debug build because a Release simulator build has no scripted sign-in (#881); `chain-menu-serving` and `onboarding-guided-preview` were excluded for #929 only (#936) and remain open until fixed.
+
 At 2,000 daily calories, #443's automatic protein fractions are 15% muscle, 14% fat loss, 13% performance, and 12% maintenance, replacing the build-5 source's higher defaults.
 Daily targets are allocated across 3.5 meal portions; settled calories use `4 × protein + 4 × carbs + 9 × fat`, so whole-gram rounding can adjust the displayed total.
 Calorie edits rescale a complete allocation; gram edits recalculate energy; partial discovery filters remain independent constraints.
