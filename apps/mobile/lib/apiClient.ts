@@ -234,6 +234,26 @@ export async function voteFeedback(
   }
 }
 
+/** Reports a board post for moderation. True when the server stored (or already had) the report. */
+export async function reportFeedback(feedbackId: string): Promise<boolean> {
+  try {
+    await api.post<{ data: { reported: true } }>(`/api/feedback/${feedbackId}/report`, {}, true);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Blocks the author of a board post. True when the server stored (or already had) the block. */
+export async function blockFeedbackAuthor(feedbackId: string): Promise<boolean> {
+  try {
+    await api.post<{ data: { blocked: true } }>(`/api/feedback/${feedbackId}/block`, {}, true);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export interface SubscriptionSyncResult extends SubscriptionStatusResult {
   /** False when the server couldn't reach RevenueCat and `active` is its existing state. */
   synced: boolean;
