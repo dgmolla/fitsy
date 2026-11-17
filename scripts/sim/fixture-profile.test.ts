@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
 import { resolve } from 'node:path';
 
@@ -79,6 +79,19 @@ describe('entitled fixture baseline profile (#934)', () => {
     const result = await ensure({ name: 'entitled-dev', env: credentials('https://api.example.com') });
     expect(result).toContain('not the dev backend');
     expect(state.patches).toBe(0);
+  });
+
+  test.each([
+    ['https://dev.fitsy.org', true],
+    ['http://localhost:3000', true],
+    ['https://fitsy-hsmpsdj4u-dawits-projects-74b6e00f.vercel.app', true],
+    ['https://fitsy-hsmpsdj4u-someone-else.vercel.app', false],
+    ['https://fitsy.org', false],
+    ['https://api.example.com', false],
+  ])("origin %s is allowed: %s (the dev backend, loopback or this project's own preview, never production)", (candidate, allowed) => {
+    const script = `import { allowedOrigin } from ${JSON.stringify(resolve(__dirname, 'fixture-profile.mjs'))}; process.stdout.write(String(allowedOrigin(${JSON.stringify(candidate)})));`;
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8' });
+    expect(result.stdout).toBe(String(allowed));
   });
 
   test('fixtures without any expectation are not touched', async () => {
