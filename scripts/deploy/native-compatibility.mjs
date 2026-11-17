@@ -30,7 +30,11 @@ export function checkCompatibility(root, { productionEnv = false, env = process.
       !/^\d+\.\d+\.\d+$/.test(fingerprint.package_version))
     throw new Error(`Build ${baseline.build_number} has no verified Expo fingerprint; record the actual binary fingerprint before OTA`);
   const head = git(['rev-parse', 'HEAD']);
-  git(['merge-base', '--is-ancestor', baseline.source_sha, head]);
+  // A TestFlight build may be cut from a local-only build-number commit that GitHub never sees; the baseline then also records the
+  // integrated commit on main it was built from, and that is the one that must be in the history.
+  const integrated = baseline.integrated_source_sha ?? baseline.source_sha;
+  if (!/^[a-f0-9]{40}$/.test(integrated)) throw new Error('Invalid integrated source commit in the verified iOS binary baseline');
+  git(['merge-base', '--is-ancestor', integrated, head]);
   // Expo ignores generated CNG directories. Retain the existing refusal of
   // ignored local native inputs rather than trusting their omission.
   const dirty = git(['status', '--porcelain', '--untracked-files=all', '--ignored', '--',

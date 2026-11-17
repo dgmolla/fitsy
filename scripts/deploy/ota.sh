@@ -82,7 +82,9 @@ if sys.argv[2]:
     assert len(ios) == 1 and not ios[0].get('isRollBackToEmbedded'), 'missing actual channel iOS source'
     source = ios[0]['gitCommitHash']
 else:
-    source = json.load(open(sys.argv[4] + '/' + sys.argv[5]))['source_sha']
+    baseline = json.load(open(sys.argv[4] + '/' + sys.argv[5]))
+    # A local-only build-number commit is not in main's history; its integrated parent is.
+    source = baseline.get('integrated_source_sha') or baseline['source_sha']
 assert re.fullmatch('[0-9a-f]{40}', source), 'missing full channel update commit'
 # A feature parent or absent source cannot establish the currently applied inputs.
 main = subprocess.check_output(['git', 'rev-list', '--first-parent', 'origin/main'], text=True, cwd=sys.argv[4]).splitlines()

@@ -2,6 +2,7 @@
   "version": 1,
   "platform": "ios",
   "source_sha": "ba5ddb8b5405ae39c14674f3dde78a6cf632f7a8",
+  "integrated_source_sha": "bb84c55c71117cbbea1e5704120df584848f20dc",
   "eas_build_id": "21daa1ca-c7b7-425a-96c9-c4f66ee28a2a",
   "asc_build_id": "2ba4a3ce-e589-4417-86a9-995a05f83248",
   "bundle_id": "com.fitsy.mobile",
