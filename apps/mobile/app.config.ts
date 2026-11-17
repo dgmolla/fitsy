@@ -91,7 +91,7 @@ const config: ExpoConfig = {
   name: "Fitsy",
   slug: "fitsy",
   scheme: reversedGoogleScheme ? ["fitsy", reversedGoogleScheme] : "fitsy",
-  version: "1.0.0",
+  version: "1.0.1",
   orientation: "portrait",
   platforms: ["ios", "android"],
   icon: "./assets/icon.png",
