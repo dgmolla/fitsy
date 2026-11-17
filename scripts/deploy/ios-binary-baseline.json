@@ -12,6 +12,10 @@
     "hash": "3b44b178e61594bf6d817a16737229504b5bda7c",
     "package_version": "0.15.4"
   },
+  "fingerprint_env": {
+    "SENTRY_ORG": "fitsy-ui",
+    "SENTRY_PROJECT": "fitsy-mobile"
+  },
   "channel": "testflight",
   "google_ios_client_id": "56878207179-voo8iloc0si51ae7n8illrsu3hapks4d.apps.googleusercontent.com",
   "ipa_url": "https://expo.dev/artifacts/eas/u1VTMHpaJ7MlPVwOoL6MP8YxZ77aEQ02QZk0LJ_--Xs.ipa",
