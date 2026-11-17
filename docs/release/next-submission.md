@@ -3,6 +3,7 @@
 **TL;DR:** Preparation is documented; Apple baseline, prerequisite acceptance, final binary, artwork, and human approval remain open.
 
 Prepared on 2026-10-24 for [#444](https://github.com/dgmolla/fitsy/issues/444).
+Updated 2026-11-17 with the confirmed Apple baseline and TestFlight build 12 identity (tooling lane); nothing here uploads, submits, or releases.
 This is a local review packet, not approval to publish metadata, upload, submit for review, or release.
 No EAS build/submit, Apple mutation, version edit, commit, or push was performed.
 The existing Fitsy Delivery owner retains release execution; prerequisite owners retain their acceptance work.
@@ -15,7 +16,7 @@ The existing Fitsy Delivery owner retains release execution; prerequisite owners
 
 | Identity | Evidence and state |
 | --- | --- |
-| Actual last Apple submission | **Unknown:** submitted version/build, submission date/status, metadata/localizations, screenshots, reviewer information, declarations, product configuration at submission, and prior Apple feedback have not been retrieved |
+| Actual last Apple submission | **Confirmed by a read-only App Store Connect read on 2026-11-17:** one App Store version exists, `1.0.0` for iOS, created 2026-04-25 with manual release, state `PENDING_DEVELOPER_RELEASE` (approved, waiting for the developer to release it, so it is not live); build `4` (uploaded 2026-06-24, processing `VALID`) is attached. Two review submissions are `COMPLETE`: 2026-06-20 and 2026-06-25 (the last). App Review contact details exist with a demo account marked required and notes set; their values were not read. No phased release is configured. Metadata/localizations, screenshots, declarations and prior Apple feedback text were not read |
 | Last version-like Git tag | **Confirmed:** `v1.0.0` points to `4d6cc5d12824ad576eabf32ba753186f26f0ab15` (commit date 2026-08-26); its app config says version `1.0.0`, build `4`, bundle `com.fitsy.mobile`; a tag is not an Apple submission receipt |
 | Other local tag | `e2e-sprint7` points to `c402df4db6c5b0c3d9c7626a7ce586fb34cd6e3b`; this is a test milestone, not submission evidence |
 | Best verified native anchor | **Confirmed historical evidence:** processed version `1.0.0` / build `5`, source `2e515fdc339d27e33110e128379fb16bd3a2d3a5`, verified 2026-10-07; processing/eligibility does not prove App Review submission or public release |
@@ -23,8 +24,8 @@ The existing Fitsy Delivery owner retains release execution; prerequisite owners
 | Anchor IPA SHA-256 | `e31663a3f57f715a357ffbd487f4d912fe46ed9b5ac82543d3a87724ed506c56` |
 | Native identity | `com.fitsy.mobile`; ASC app `6763851364`; runtime `1.0.0`; channel `production`; EAS project `a204190c-0b71-4c31-b126-f3bc62d1c4ee` |
 | Inspected source snapshot | `5f9831add945c26004442c678ac2a4917580c191`, tree `783f53e1ecf61bcc54b28e5dd6d457bc5e3bcecb`, branch `codex/issue-444`, equal to local `origin/main` when inspection began; remote freshness, CI, deployment, and device uptake were not established |
-| Current version files | [app.config.ts](../../apps/mobile/app.config.ts): `1.0.0` / `6`, `runtimeVersion.policy = fingerprint`, iPhone only; [eas.json](../../apps/mobile/eas.json): separate production and TestFlight store profiles/channels and ASC app ID; no tracked `app.json` exists; workspace package version `0.1.0` is not the iOS marketing version |
-| Proposed final source / binary | **Unknown:** no release freeze, new build ID, IPA hash, native fingerprint, embedded JS identity, or processed Apple build exists for this packet |
+| Current version files | [app.config.ts](../../apps/mobile/app.config.ts): `1.0.0` / `12`, `runtimeVersion.policy = fingerprint`, iPhone only; [eas.json](../../apps/mobile/eas.json): separate production and TestFlight store profiles/channels and ASC app ID; no tracked `app.json` exists; workspace package version `0.1.0` is not the iOS marketing version |
+| Proposed final source / binary | **Confirmed for TestFlight build 12 (not yet a submission):** version `1.0.0`, build `12`; EAS build `aedbfd88-d2b5-4cc0-838e-978e84790841`; Apple build `47c03193-50e9-4854-94f3-272400351af4` (processed `VALID`, Internal group); IPA SHA-256 `7906a0985f26c99c3fa3cc0452891d3faa8c82542d880233d8ddc6da252726ed`; native fingerprint and runtime `85c07830038d9c859d01bb5c9e80c1f0c144dd6f`; channel `testflight` (the build-5 `production` channel difference noted below still applies). Source: main `507fa57524fb9c9905a6558b65512aaa98bfb113` (includes #927, #929) plus a local-only commit changing only the build number to 12 (`5245132323c6aea9abc63ca66478d218f73e5ecd`, recorded by the merged baseline PR #938). The full suite on `507fa575` is recorded green (`full-suite/green`). Embedded JS identity and the real-device pass are still open |
 | Intervening OTA | **Unknown:** production update group(s), runtime, manifest/bundle hashes, rollout dates, rollback state, and actual device uptake must be read and compared with both the embedded build-5 bundle and the next binary |
 
 Historical build-5 evidence: [production binary receipt](../../scripts/deploy/ios-production-binary-baseline.json), [OTA baseline and provenance](../engineering/devops/ios-ota-baseline.md), and [#243](https://github.com/dgmolla/fitsy/issues/243).
@@ -33,6 +34,13 @@ History inspected with `git tag`, `git log --all -- apps/mobile/app.config.ts ap
 The September 23 history explicitly describes “TestFlight build 5”; that also does not identify the last App Review submission.
 
 ### Apple account boundary and supported recovery
+
+**Update 2026-11-17:** read-only App Store Connect reads now succeed for builds, App Store versions, the attached build, review details and review submissions.
+The October agreement refusal was not observed.
+The baseline row above is therefore confirmed.
+Not read: localized metadata, screenshot assets, declarations, in-app purchase configuration, and App Review feedback text.
+Whether version `1.0.0` (state `PENDING_DEVELOPER_RELEASE`, build 4) must be released, replaced or superseded by a new version before build 12 can be submitted is a decision for the human submitter.
+Check it in App Store Connect instead of assuming it here.
 
 The coordinator's `work/app-store-baseline-read-blocker.json`, observed 2026-10-04T01:16:35Z, records a read-only `appStoreVersions`/builds request returning HTTP 403, `FORBIDDEN.REQUIRED_AGREEMENTS_MISSING_OR_EXPIRED`.
 The retained October 5 recheck records the same refusal.
