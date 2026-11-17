@@ -204,6 +204,18 @@ test('accepts a local-only build commit through its recorded integrated source a
   expect(check().status).toBe(1);
 });
 
+test('applies only a plain Sentry organization and project from the baseline fingerprint environment (#972)', () => {
+  const path = join(root, 'scripts/deploy/ios-production-binary-baseline.json');
+  const baseline = JSON.parse(readFileSync(path, 'utf8'));
+  // The fixture config has no Sentry plugin, so valid slugs leave the fingerprint unchanged and the check still passes.
+  writeFileSync(path, JSON.stringify({ ...baseline, fingerprint_env: { SENTRY_ORG: 'fitsy-ui', SENTRY_PROJECT: 'fitsy-mobile' } }));
+  expect(check().status).toBe(0);
+  for (const bad of [{ PATH: '/tmp' }, { SENTRY_ORG: 'a b' }, { SENTRY_PROJECT: 'x;rm' }, { SENTRY_ORG: 7 }, { SENTRY_ORG: 'a'.repeat(65) }]) {
+    writeFileSync(path, JSON.stringify({ ...baseline, fingerprint_env: bad }));
+    expect(check().status).toBe(1);
+  }
+});
+
 test('uses the real Deploy step to deny an incompatible binary', () => {
   const yaml = require('js-yaml') as { load: (input: string) => {
     jobs: { ota: { steps: { id?: string; run?: string }[] } } } };
