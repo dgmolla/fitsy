@@ -21,8 +21,8 @@ The older working packet is [next-submission.md](next-submission.md); this file 
 | Native fingerprint / runtime | `3b44b178e61594bf6d817a16737229504b5bda7c`; channel `testflight` |
 | Bundle / ASC app | `com.fitsy.mobile` / `6763851364` |
 
-What this does not prove: a real-device pass on this build, a real Apple purchase, or Apple's acceptance.
-The production-store check of billing is Dawit's TestFlight pass ([#431](https://github.com/dgmolla/fitsy/issues/431)).
+What this does not prove on its own: a real-device pass on this build, a real Apple purchase, or Apple's acceptance.
+Dawit reports he tested a real purchase on this build on his device ([#431](https://github.com/dgmolla/fitsy/issues/431), open item F); that statement is the only billing evidence for this binary.
 
 ## 2. Where ASC stands today (read-only, 2026-11-17)
 
@@ -175,7 +175,7 @@ Tracked on #953.
 - **C. No in-app medical disclaimer.** The description says estimates are not medical advice, but the app has no matching text. Decide whether to add one before submitting.
 - **D. Screenshot slot.** Confirm which ASC slot takes `1179 x 2556`.
 - **E. Age-rating answers in section 6.** Decided; see the feedback-board finding there.
-- **F. Real Apple billing test** on this build ([#431](https://github.com/dgmolla/fitsy/issues/431)).
+- **F. Real Apple billing test** on this build ([#431](https://github.com/dgmolla/fitsy/issues/431)). Dawit reported on 2026-11-16 (11:00 PM PT, relayed on [#953](https://github.com/dgmolla/fitsy/issues/953) and in steering) that he tested a real purchase on TestFlight build 13 on his device. This is his own statement; no receipt, transaction id or screenshot is attached, so it is not store evidence from this packet.
 
 ## 9. What was and was not checked
 
