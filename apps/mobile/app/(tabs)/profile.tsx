@@ -374,6 +374,11 @@ export default function ProfileScreen() {
           <Text style={s.deleteText}>Delete account</Text>
         </Pressable>
 
+        {/* Estimates are planning information, not medical advice (App Store listing, #953) */}
+        <Text testID="profile-disclaimer" style={s.disclaimer}>
+          Nutrition values are estimates and approximate planning information, not medical advice.
+        </Text>
+
         {/* Legal / support — quiet footer */}
         <View style={s.legalRow}>
           <Pressable testID="profile-privacy" hitSlop={8} onPress={() => openLegalLink('privacy')}>
@@ -624,6 +629,15 @@ const s = StyleSheet.create({
     marginTop: 8,
   },
   deleteText: { fontFamily: FONTS.nunitoSans, fontSize: 13, fontWeight: '500', color: '#B85450' },
+  disclaimer: {
+    fontFamily: FONTS.nunitoSans,
+    fontSize: 12,
+    lineHeight: 17,
+    color: EDITORIAL.textSoft,
+    textAlign: 'center',
+    marginTop: 16,
+    paddingHorizontal: 24,
+  },
   // Legal / support footer — quiet, centered, well below the primary actions
   legalRow: {
     flexDirection: 'row',
