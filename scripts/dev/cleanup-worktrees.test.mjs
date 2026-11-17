@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { activeCwds, cleanupMergedWorktrees, listWorktrees } from './cleanup-worktrees.mjs';
@@ -168,4 +168,20 @@ test('evidence that may be the only copy is archived outside the checkout before
   assert.equal(readFileSync(join(archive, 'chain-x/run.log'), 'utf8'), 'sole copy');
   assert.equal(existsSync(join(archive, 'verify')), false, 'known-disposable evidence is not archived');
   assert.equal(readFileSync(join(ok.archived.find(item => item.path === blocked.path).archive, 'run.log'), 'utf8'), 'must survive a failed archive');
+});
+
+test('an immutable (read-only) native build cache in the evidence does not leave a half-removed checkout', t => {
+  const { base, repo, add } = fixture(t);
+  appendFileSync(join(repo, '.git/info/exclude'), '.evidence/\n');
+  const merged = add('immutable-cache', { extraCommit: true });
+  const bundle = join(merged.path, '.evidence/product-build/shared-native/key/Fitsy.app/_CodeSignature');
+  mkdirSync(bundle, { recursive: true });
+  writeFileSync(join(bundle, 'CodeResources'), 'signed');
+  // The shared native cache is made immutable on purpose: directories and files lose their write bits.
+  execFileSync('chmod', ['-R', 'a-w', join(merged.path, '.evidence/product-build')]);
+  t.after(() => { try { execFileSync('chmod', ['-R', 'u+w', base]); } catch { /* already gone */ } });
+  const result = cleanupMergedWorktrees({ repo, cwds: ['/nowhere'], caller: repo, apply: true, mergedHeads: () => [merged.head], archiveRoot: join(base, 'archive') });
+  assert.deepEqual(result.removed, [merged.path], JSON.stringify(result.refused));
+  assert.equal(existsSync(merged.path), false, 'no hollowed-out directory is left behind');
+  assert.equal(git(repo, 'worktree', 'list', '--porcelain').includes('immutable-cache'), false, 'the registration is gone too');
 });
