@@ -56,12 +56,23 @@ jobs:
         run: node scripts/verify/run.mjs --layer=0-1 --runs=ci --scope=all
 
   tests:
-    name: Full tests (L2) (${{ matrix.group }})
+    name: Full tests (L2) (${{ matrix.group }}${{ matrix.partition && format(' {0}', matrix.partition) || '' }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      # The scripts group is the long pole (about 25 min whole), so it runs as four jest partitions like verify.yml (#931).
       matrix:
-        group: [api, scripts, mobile]
+        include:
+          - group: api
+          - group: mobile
+          - group: scripts
+            partition: 1/4
+          - group: scripts
+            partition: 2/4
+          - group: scripts
+            partition: 3/4
+          - group: scripts
+            partition: 4/4
     steps:
       - uses: actions/checkout@v4
         with:
@@ -75,6 +86,7 @@ jobs:
       - name: Run the whole ${{ matrix.group }} test group
         env:
           FITSY_VERIFY_TEST_GROUP: ${{ matrix.group }}
+          FITSY_VERIFY_TEST_PARTITION: ${{ matrix.partition }}
         run: node scripts/verify/run.mjs --layer=2 --runs=ci --scope=all --only=test
 
   tests-other:
