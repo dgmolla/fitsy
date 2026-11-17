@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 const PRIVACY_EMAIL = "privacy@fitsy.app";
-const EFFECTIVE_DATE = "November 12, 2026";
+const EFFECTIVE_DATE = "November 17, 2026";
 
 export default function PrivacyPage() {
   return (
@@ -36,16 +36,18 @@ export default function PrivacyPage() {
             When you sign in with Apple or Google, we receive your name and
             email address to create and identify your account. If you use Sign
             in with Apple&rsquo;s &ldquo;Hide My Email&rdquo; feature, we only
-            ever see the relay address Apple provides.
+            ever see the relay address Apple provides. We also create an
+            internal account ID that identifies your account across Fitsy.
           </p>
 
           <h3>Location</h3>
           <p>
             With your permission, Fitsy uses your device&rsquo;s precise
             location <strong>while you are using the app</strong> to find and
-            rank nearby restaurants. We do not track your location in the
-            background, and we do not store your location history on our
-            servers. You can revoke location access at any time in your
+            rank nearby restaurants. Your device sends the coordinates to our
+            servers with each search so we can return nearby results. We do
+            not track your location in the background, and we do not store
+            your location history on our servers. You can revoke location access at any time in your
             device&rsquo;s Settings.
           </p>
 
@@ -66,19 +68,39 @@ export default function PrivacyPage() {
             purpose, and only if you opt in.
           </p>
 
-          <h3>Macro targets and saved items</h3>
+          <h3>Profile, targets and saved items</h3>
           <p>
-            Your protein, carb, and fat targets and your saved restaurants are
-            stored so the app can rank results for you and sync across sessions.
-            These are used only to power features inside Fitsy.
+            If you enter them, we store your height, weight, birthday, sex,
+            activity level and goal, along with the calorie and macro targets
+            you set or accept, and your saved restaurants and meals. This
+            information is linked to your account. It is stored so the app can
+            rank results for you and sync across sessions, and it is used only
+            to power features inside Fitsy.
+          </p>
+
+          <h3>Feedback</h3>
+          <p>
+            If you send feedback from the app, we store your message with your
+            account. Feedback you submit also appears as a public post on the
+            in-app feedback board, where other people can see and vote on it.
+            Do not include personal information in a post.
+          </p>
+
+          <h3>Notifications</h3>
+          <p>
+            If you allow notifications, we store a push notification token for
+            your device with your account so we can send notifications you
+            have asked for, such as a launch announcement for your area.
+            Reminders you turn on are scheduled on your device.
           </p>
 
           <h3>Subscription information</h3>
           <p>
             Subscriptions are processed by Apple through the App Store. We
             receive a transaction identifier and your subscription status from
-            Apple to unlock features. We never receive or store your payment
-            card details.
+            Apple to unlock features. We use RevenueCat to manage subscription
+            status; RevenueCat receives your purchase information and your
+            account ID. We never receive or store your payment card details.
           </p>
 
           <h3>Usage analytics</h3>
@@ -89,7 +111,8 @@ export default function PrivacyPage() {
             linked to your account &mdash; your user ID, and your email if
             you&rsquo;ve shared one with us &mdash; so it is not anonymous.
             We filter out location, nutrition values, and other sensitive
-            fields before they reach PostHog. We do not use this data to
+            fields before they reach PostHog, and we turn off IP-based
+            location in PostHog. We do not use this data to
             track you across other companies&rsquo; apps or websites, and
             Fitsy does not use the Advertising Identifier (IDFA).
           </p>
@@ -101,6 +124,24 @@ export default function PrivacyPage() {
             tracking program. Fitsy&rsquo;s own staff and test accounts are
             excluded from these counts.
           </p>
+
+          <h3>Crash reports</h3>
+          <p>
+            We use Sentry to receive crash reports so we can fix problems. We
+            remove personal details from reports from the app&rsquo;s code and
+            do not attach your account to them. Reports of crashes in the
+            device&rsquo;s native code are sent in the standard form and
+            include your device model, operating system version, the app
+            version and technical details of the crash.
+          </p>
+
+          <h3>App updates</h3>
+          <p>
+            Fitsy can receive app updates through Expo&rsquo;s update service.
+            When the app checks for an update, Expo receives the app&rsquo;s
+            version, release channel and the request details any internet
+            service receives, such as your IP address.
+          </p>
         </section>
 
         <section className={styles.section}>
@@ -111,6 +152,18 @@ export default function PrivacyPage() {
             <li>To manage your subscription and unlock paid features.</li>
             <li>To understand product usage in aggregate and improve Fitsy.</li>
           </ul>
+        </section>
+
+        <section className={styles.section}>
+          <h2>Service providers</h2>
+          <p>
+            We use these service providers to run Fitsy, and each receives only
+            the information described above for its purpose: Apple and Google
+            (sign-in), Supabase (account sign-in), RevenueCat (subscriptions),
+            PostHog (product analytics), Sentry (crash reports) and Expo
+            (app updates). They process data on our behalf and do not use it
+            to advertise to you.
+          </p>
         </section>
 
         <section className={styles.section}>
@@ -128,8 +181,14 @@ export default function PrivacyPage() {
             You can access, export, or delete your data at any time. To delete
             your account and all associated data, open Fitsy, go to{" "}
             <strong>Profile &rarr; Delete account</strong>. This permanently
-            removes your account, saved items, macro targets, and subscription
-            record from our systems. You can also email us at{" "}
+            removes your account, your profile details (height, weight,
+            birthday, sex, activity level and goal), saved items, macro
+            targets, feedback and subscription record from our systems.
+            Deleting your Fitsy account does not cancel your Apple
+            subscription; manage that in your App Store account settings.
+            Deleting your account does not by itself remove records held by
+            our analytics, crash reporting and subscription providers; email
+            us to request removal of those. You can also email us at{" "}
             <a href={`mailto:${PRIVACY_EMAIL}`}>{PRIVACY_EMAIL}</a> to request
             access, export, or deletion.
           </p>
