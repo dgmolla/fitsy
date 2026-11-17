@@ -15,7 +15,10 @@ export const baselineProfiles = {
 // means a purchase, grant or expiry from an earlier flow or session, which only its owner can undo.
 export const expectedVerdicts = { 'entitled-dev': 'active', 'unsubscribed-dev': 'never_subscribed', 'expired-subscription': 'expired' };
 
-const allowedOrigin = origin => origin === 'https://dev.fitsy.org' || /^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/.test(origin);
+// The dev backend, loopback, or this project's own Vercel preview (which also uses the dev database
+// and is what backend-identity.mjs expects for API changes), never production.
+export const allowedOrigin = origin => origin === 'https://dev.fitsy.org' || /^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/.test(origin) ||
+  /^https:\/\/fitsy-[a-z0-9-]+-dawits-projects-74b6e00f\.vercel\.app$/.test(origin);
 const complete = profile => Boolean(profile?.user?.goal && profile.user.heightCm && profile.user.weightKg && profile.macroTarget);
 
 // Credentials and the bearer token travel on curl's stdin, never in process arguments.
