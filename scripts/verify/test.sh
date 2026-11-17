@@ -31,6 +31,16 @@ esac
 case "${FITSY_VERIFY_TEST_GROUP:-}" in ""|api|scripts|mobile) ;;
   *) printf '{"name":"test","status":"fail","summary":"invalid FITSY_VERIFY_TEST_GROUP"}\n'; exit 1 ;;
 esac
+# #931 gate 2: a hosted `scripts` shard may be split into N jest partitions (FITSY_VERIFY_TEST_PARTITION=i/N) so the slowest
+# group fits the PR time budget. Only meaningful for the scripts group; anything else is rejected before any suite runs.
+PARTITION="${FITSY_VERIFY_TEST_PARTITION:-}"
+PARTITION_INDEX=1
+if [ -n "$PARTITION" ]; then
+  if [ "${FITSY_VERIFY_TEST_GROUP:-}" != scripts ] || ! [[ "$PARTITION" =~ ^([1-9][0-9]*)/([1-9][0-9]*)$ ]] || [ "${BASH_REMATCH[1]}" -gt "${BASH_REMATCH[2]}" ]; then
+    printf '{"name":"test","status":"fail","summary":"invalid FITSY_VERIFY_TEST_PARTITION"}\n'; exit 1
+  fi
+  PARTITION_INDEX="${BASH_REMATCH[1]}"
+fi
 FAIL=""
 REPORTS="$(mktemp -d "${TMPDIR:-/tmp}/fitsy-tests.XXXXXX")" || exit 1
 trap 'rm -rf "$REPORTS"' EXIT
@@ -86,9 +96,12 @@ run_jest shared npm test --workspace=@fitsy/shared --
 if [[ " $TEST_GROUPS " == *" scripts "* ]]; then
   unset FITSY_VERIFY_FOCUSED_RECIPE
   # Real decoder and attachment cases retain the required local media lane.
-  run_jest scripts /usr/bin/env FITSY_MEDIA_INTEGRATION=0 NODE_OPTIONS=--max-old-space-size=512 npm test --workspace=@fitsy/scripts -- --maxWorkers=1 --workerIdleMemoryLimit=256MB ${SCRIPTS_ARGS[@]+"${SCRIPTS_ARGS[@]}"}
+  # Whole-group runs split by Jest's own --shard; a related-tests run is already small and stays unsplit.
+  SCRIPTS_SHARD_ARGS=()
+  if [ -n "$PARTITION" ] && [ "$MODE" != related ]; then SCRIPTS_SHARD_ARGS=("--shard=$PARTITION"); fi
+  run_jest scripts /usr/bin/env FITSY_MEDIA_INTEGRATION=0 NODE_OPTIONS=--max-old-space-size=512 npm test --workspace=@fitsy/scripts -- --maxWorkers=1 --workerIdleMemoryLimit=256MB ${SCRIPTS_SHARD_ARGS[@]+"${SCRIPTS_SHARD_ARGS[@]}"} ${SCRIPTS_ARGS[@]+"${SCRIPTS_ARGS[@]}"}
 fi
-if [[ " $TEST_GROUPS " == *" scripts "* ]] && [ "$MODE" != related ]; then
+if [[ " $TEST_GROUPS " == *" scripts "* ]] && [ "$MODE" != related ] && [ "$PARTITION_INDEX" = 1 ]; then
   run_node simple-review scripts/review/simple-review.test.mjs
   run_node github scripts/github/*.test.mjs
   run_node performance scripts/perf/*.test.mjs
