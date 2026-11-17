@@ -405,6 +405,8 @@ export interface FeedbackBoardPost {
   createdAt: string;
   /** Whether the requesting user has already upvoted this post. */
   hasVoted: boolean;
+  /** Whether the requesting user wrote this post (own posts cannot be reported or blocked). */
+  isOwn: boolean;
 }
 
 export interface FeedbackBoardResponse {
@@ -420,3 +422,15 @@ export interface FeedbackVoteResponse {
 }
 
 export type FeedbackVoteApiResponse = { data: FeedbackVoteResponse } | ApiError;
+
+export interface FeedbackReportResponse {
+  reported: true;
+}
+
+export type FeedbackReportApiResponse = { data: FeedbackReportResponse } | ApiError;
+
+export interface FeedbackBlockResponse {
+  blocked: true;
+}
+
+export type FeedbackBlockApiResponse = { data: FeedbackBlockResponse } | ApiError;

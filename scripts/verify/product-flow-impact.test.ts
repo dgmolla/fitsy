@@ -228,7 +228,7 @@ const card = <HeroMealContent result={result} locked={locked} hideDishName={hide
   const expected = ['map-search', 'map-search-location-denied', 'onboarding-assisted-targets', 'onboarding-guided-preview',
     'onboarding-out-of-area', 'onboarding-returning-preview', 'onboarding-search-highlight', 'onboarding-target-ranked-search',
     'paywall-access', 'subscription-expired-routing'];
-  if (retryStartup) expected.push('floating-nav', 'launch-analytics', 'log-meal', 'shuffle', 'widget-setup');
+  if (retryStartup) expected.push('feedback-board-moderation', 'floating-nav', 'launch-analytics', 'log-meal', 'shuffle', 'widget-setup');
   expected.sort();
   const plan = cli();
   expect(plan).toMatchObject({ flows: expected,

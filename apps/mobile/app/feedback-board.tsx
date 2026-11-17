@@ -11,7 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useFocusEffect } from 'expo-router';
 import { FeedbackBoardPost } from '@fitsy/shared';
-import { getFeedbackBoard, sendFeedback, voteFeedback } from '@/lib/apiClient';
+import { blockFeedbackAuthor, getFeedbackBoard, reportFeedback, sendFeedback, voteFeedback } from '@/lib/apiClient';
 import { FeedbackSheet } from '@/components/FeedbackSheet';
 import { FitsyLoader } from '@/components';
 import { EDITORIAL, FONTS } from '@/lib/brand';
@@ -59,6 +59,43 @@ export default function FeedbackBoardScreen() {
       prev.map((p) => (p.id === post.id ? { ...p, voteCount: result.voteCount, hasVoted: result.hasVoted } : p)),
     );
   }, []);
+
+  const handleReport = useCallback(async (post: FeedbackBoardPost) => {
+    if (!(await reportFeedback(post.id))) {
+      Alert.alert('Could not report', 'Please try again.');
+      return;
+    }
+    // The reporter stops seeing the post right away; moderators review it.
+    setPosts((prev) => prev.filter((p) => p.id !== post.id));
+    Alert.alert('Thanks for letting us know', "We'll review this post. You won't see it again.");
+  }, []);
+
+  const handleBlock = useCallback(async (post: FeedbackBoardPost) => {
+    if (!(await blockFeedbackAuthor(post.id))) {
+      Alert.alert('Could not block', 'Please try again.');
+      return;
+    }
+    // Reload so every post by that author disappears, not just this one.
+    await load();
+    Alert.alert('User blocked', `You won't see posts from ${post.displayName} any more.`);
+  }, [load]);
+
+  const openPostMenu = useCallback((post: FeedbackBoardPost) => {
+    Alert.alert('Report or block', undefined, [
+      { text: 'Report post', onPress: () => { void handleReport(post); } },
+      {
+        text: `Block ${post.displayName}`,
+        style: 'destructive',
+        onPress: () => {
+          Alert.alert(`Block ${post.displayName}?`, "You won't see their posts on the feedback board.", [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Block', style: 'destructive', onPress: () => { void handleBlock(post); } },
+          ]);
+        },
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }, [handleReport, handleBlock]);
 
   const openCompose = useCallback(() => {
     trackFeedbackOpened();
@@ -114,6 +151,18 @@ export default function FeedbackBoardScreen() {
                   <Text style={s.message}>{item.message}</Text>
                   <Text style={s.author}>— {item.displayName}</Text>
                 </View>
+                {!item.isOwn && (
+                  <Pressable
+                    testID={`feedback-post-menu-${item.id}`}
+                    style={s.menuBtn}
+                    onPress={() => openPostMenu(item)}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Report or block"
+                  >
+                    <Ionicons name="ellipsis-horizontal" size={18} color={EDITORIAL.textSoft} />
+                  </Pressable>
+                )}
                 <Pressable
                   style={[s.voteBtn, item.hasVoted && s.voteBtnActive]}
                   onPress={() => handleVote(item)}
@@ -205,6 +254,7 @@ const s = StyleSheet.create({
     fontSize: 11,
     color: EDITORIAL.textSoft,
   },
+  menuBtn: { width: 32, height: 44, alignItems: 'center', justifyContent: 'center' },
   // Vertical arrow-over-count control — the familiar Reddit/HN upvote shape,
   // chosen over the earlier pill+icon because a single up-pointing arrow that
   // fills solid on tap reads unambiguously as "vote" at a glance.

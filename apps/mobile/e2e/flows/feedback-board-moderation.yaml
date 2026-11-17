@@ -1,0 +1,62 @@
+# Report and block on the feedback board (#953 report/block decision): the
+# reporter stops seeing the reported post, and a blocked author's posts vanish.
+appId: com.fitsy.mobile
+tags: [feedback, moderation, changed-journey, 'fixture:entitled-dev', 'store:test-store']
+env:
+  LOGIN_EMAIL: ${EXPO_PUBLIC_DEV_LOGIN_EMAIL}
+  LOGIN_PASSWORD: ${EXPO_PUBLIC_DEV_LOGIN_PASSWORD}
+---
+- evalScript: ${output.feedbackMode = 'seed'}
+- runScript: ../helpers/feedback-moderation.mjs
+- assertTrue:
+    condition: ${output.feedbackSeeded === true}
+    label: "Seeding two throwaway authors and three board posts must succeed on the dev backend"
+- runFlow:
+    file: ../helpers/map-search-setup.yaml
+    env:
+      LOCATION_PERMISSION: inuse
+- tapOn:
+    id: tab-profile
+- extendedWaitUntil:
+    visible:
+      id: profile-feedback
+    timeout: 15000
+- tapOn:
+    id: profile-feedback
+- extendedWaitUntil:
+    visible: ${output.messageA}
+    timeout: 20000
+- assertVisible: ${output.messageB1}
+- assertVisible: ${output.messageB2}
+# Report: the post disappears for the reporter and the others stay.
+- tapOn:
+    id: ${"feedback-post-menu-" + output.idA}
+- tapOn: "Report post"
+- extendedWaitUntil:
+    visible: "Thanks for letting us know"
+    timeout: 15000
+- tapOn: "OK"
+- assertNotVisible: ${output.messageA}
+- assertVisible: ${output.messageB1}
+- takeScreenshot: feedback-board-after-report
+# Block: both posts by the blocked author disappear.
+- tapOn:
+    id: ${"feedback-post-menu-" + output.idB1}
+- tapOn: "Block Board Author B"
+- extendedWaitUntil:
+    visible: "Block Board Author B?"
+    timeout: 15000
+- tapOn: "^Block$"
+- extendedWaitUntil:
+    visible: "User blocked"
+    timeout: 15000
+- tapOn: "OK"
+- assertNotVisible: ${output.messageB1}
+- assertNotVisible: ${output.messageB2}
+- takeScreenshot: feedback-board-after-block
+# The server agrees: neither the reported post nor the blocked author's posts are served to this account.
+- evalScript: ${output.feedbackMode = 'verify'}
+- runScript: ../helpers/feedback-moderation.mjs
+- assertTrue:
+    condition: ${output.feedbackVerified === true}
+    label: "The board API must hide the reported post and the blocked author's posts, hidden ${output.feedbackHiddenCount} of 3"
