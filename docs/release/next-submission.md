@@ -161,9 +161,9 @@ Include contact details, precise coverage, any feature limitations and fixes for
 
 ## Artwork and device evidence
 
-**Provisional set captured (Nov 16, 2026), not yet approved:** five map-led simulator captures exist under `~/fitsy-review/763/` (local, not in the repo, not uploaded to App Store Connect).
+**Provisional set recaptured (Nov 16, 2026) from the build 12 code, not yet approved:** five map-led simulator captures exist under `~/fitsy-review/763b/` (local, not in the repo, not uploaded to App Store Connect).
 Dawit chose "Option 1" on #881 (simulator captures from the commit build 11 is cut from).
-A Release simulator build cannot sign in to an entitled fixture account (a production bundle refuses `EXPO_PUBLIC_*PASSWORD`, so Dev Login is absent), so the provisional set comes from the Debug Test Store build of main `7136c73e` instead, as disclosed on #881.
+A Release simulator build cannot sign in to an entitled fixture account (a production bundle refuses `EXPO_PUBLIC_*PASSWORD`, so Dev Login is absent), so the provisional set comes from the Debug Test Store build of main `507fa575` (the code in TestFlight build 12) instead, as disclosed on #881.
 Prior development screenshots and Test Store results still cannot be relabeled as this release's production-binary evidence; Dawit's real-device pass remains the binary evidence.
 
 Apple's current [screenshot specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/) require a Dynamic Island medium-display iPhone screenshot, accepting portrait `1179 × 2556` or `1206 × 2622`.
@@ -182,8 +182,9 @@ Recheck the official page and ASC slots at capture time.
 
 **Provisional manifest** (all simulator captures, not a store binary):
 - Device: iPhone 15 simulator, `1179 × 2556`, opaque PNG (alpha flattened with ffmpeg `rgb24`), real status bar.
-- Source: Debug Test Store build, JS served by Metro from main `7136c73e`; backend `https://dev.fitsy.org`; billing: RevenueCat Test Store with a promotional `pro` entitlement on the synthetic entitled fixture (revoked after capture).
-- SHA-256: `01-map` `d0fc4021…`, `02-targets` `fec9067f…`, `03-nutrition` `bd652fd3…`, `04-search` `b4d4850c…`, `05-editing` `78c17686…`.
+- Source: Debug Test Store build, JS served by Metro from main `507fa575` (build 12 is that commit plus the buildNumber bump); backend `https://dev.fitsy.org`; billing: RevenueCat Test Store with a promotional `pro` entitlement on the synthetic entitled fixture (revoked after capture).
+- SHA-256: `01-map` `804fd697…`, `02-targets` `cca8e2f6…`, `03-nutrition` `3593fdf1…`, `04-search` `19a55a19…`, `05-editing` `1ac889e1…` (all `1179 × 2556`, no alpha).
+- Targets shown: 02 is the saved per-meal targets (601 kcal, 41 p, 62 c, 21 f); 05 is the same sheet after edits (715 kcal, 60 p, 67 c, 23 f), so 02 and 05 should be confirmed distinct enough or one replaced.
 - Not captured: onboarding, paywall and Profile (the Profile tab shows the fixture email and a Development card, so it is not shippable artwork).
 
 Keep extra reviewer evidence for onboarding/recovery, sign-in/payment/resubscribe, both offer-eligibility states, trial reminder/timeline and target editing; these are journey captures, not another hardware matrix.
