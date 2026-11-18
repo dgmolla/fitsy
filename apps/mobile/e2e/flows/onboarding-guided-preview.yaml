@@ -574,6 +574,18 @@ env:
     visible:
       id: preview-back
     timeout: 15000
+# Back remounts the map-first preview; open the list that holds the picks.
+- runFlow:
+    when:
+      visible:
+        id: discovery-map
+    commands:
+      - tapOn:
+          id: map-search-entry
+- extendedWaitUntil:
+    visible:
+      id: discovery-hero
+    timeout: 30000
 # This fresh preview has no prior decline or owned payment continuation.
 # Its Back path returns to preview; the owned checkout exit-modal branch is
 # covered separately in onboarding-returning-preview.yaml.
@@ -623,6 +635,18 @@ env:
     visible:
       id: preview-back
     timeout: 15000
+# Back remounts the map-first preview; open the list that holds the picks.
+- runFlow:
+    when:
+      visible:
+        id: discovery-map
+    commands:
+      - tapOn:
+          id: map-search-entry
+- extendedWaitUntil:
+    visible:
+      id: discovery-hero
+    timeout: 30000
 - scrollUntilVisible:
     element:
       id: preview-guide
