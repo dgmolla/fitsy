@@ -27,6 +27,16 @@ env:
             id: welcome-start
           timeout: 30000
 - waitForAnimationToEnd
+# Pin the paywall access variant (Debug builds only, #967): the flow asserts a
+# decline returns to the preview, which live RevenueCat metadata does not promise.
+- openLink: com.fitsy.mobile://welcome/problem?devPaywallAccess=preview
+- tapOn:
+    text: "^Open$"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: welcome-start
+    timeout: 30000
 - tapOn:
     point: "92%,93%"
 - tapOn:
@@ -564,6 +574,18 @@ env:
     visible:
       id: preview-back
     timeout: 15000
+# Back remounts the map-first preview; open the list that holds the picks.
+- runFlow:
+    when:
+      visible:
+        id: discovery-map
+    commands:
+      - tapOn:
+          id: map-search-entry
+- extendedWaitUntil:
+    visible:
+      id: discovery-hero
+    timeout: 30000
 # This fresh preview has no prior decline or owned payment continuation.
 # Its Back path returns to preview; the owned checkout exit-modal branch is
 # covered separately in onboarding-returning-preview.yaml.
@@ -613,6 +635,18 @@ env:
     visible:
       id: preview-back
     timeout: 15000
+# Back remounts the map-first preview; open the list that holds the picks.
+- runFlow:
+    when:
+      visible:
+        id: discovery-map
+    commands:
+      - tapOn:
+          id: map-search-entry
+- extendedWaitUntil:
+    visible:
+      id: discovery-hero
+    timeout: 30000
 - scrollUntilVisible:
     element:
       id: preview-guide
@@ -690,7 +724,7 @@ env:
 - assertNotVisible:
     id: paywall-price-yearly
 - stopApp
-- openLink: com.fitsy.mobile://search?preview=1
+- openLink: com.fitsy.mobile://search?preview=1&devPaywallAccess=preview
 # Relaunch can briefly invalidate the native accessibility hierarchy.
 # Retry the first hierarchy read with the required preview assertion.
 - retry:

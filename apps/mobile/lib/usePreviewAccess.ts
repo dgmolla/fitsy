@@ -8,6 +8,7 @@ export function usePreviewAccess(allowOnboardingEntry = false) {
   const { offering, isLapsed } = usePurchases();
   const [declined, setDeclined] = useState<boolean | null>(null);
   const [onboardingEntry, setOnboardingEntry] = useState<boolean | null>(null);
+  const [, setVariantRevision] = useState(0);
   const variants = paywallVariants(offering?.metadata);
   useEffect(() => {
     let live = true;
@@ -17,7 +18,8 @@ export function usePreviewAccess(allowOnboardingEntry = false) {
       void Promise.all([readPaywallDecline(), readOnboardingPreviewEntry()])
         .then(([value, entry]) => { if (live && current === revision) { setDeclined(value); setOnboardingEntry(entry); } });
     };
-    const unsubscribePaywall = subscribePaywallAccess(read);
+    // The Debug-only access pin (#967) can change after mount; re-render so the variant is re-derived.
+    const unsubscribePaywall = subscribePaywallAccess(() => { setVariantRevision(value => value + 1); read(); });
     const unsubscribeEntry = subscribeOnboardingPreviewEntry(read);
     read();
     return () => { live = false; unsubscribePaywall(); unsubscribeEntry(); };

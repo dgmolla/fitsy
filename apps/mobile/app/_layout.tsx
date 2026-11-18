@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useGlobalSearchParams } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import { PostHogProvider } from 'posthog-react-native';
@@ -15,6 +15,7 @@ import { recordSession } from '@/lib/ratingPrompt';
 import { supabase } from '@/lib/supabase';
 import { useAuthAnalytics } from '@/lib/useAuthAnalytics';
 import { initializeSentry, wrap } from '@/lib/sentry';
+import { setDevPaywallAccess } from '@/lib/paywallAccess';
 
 // Module scope so uncaught errors during the very first render are captured.
 initializeSentry();
@@ -51,6 +52,14 @@ function RootLayout() {
     'Newsreader-Regular': require('@expo-google-fonts/newsreader/400Regular/Newsreader_400Regular.ttf'),
     'Newsreader-Italic': require('@expo-google-fonts/newsreader/400Regular_Italic/Newsreader_400Regular_Italic.ttf'),
   });
+
+  // ─── Debug-only paywall access pin for native flows (#967) ───────────────────
+  // A deep link with ?devPaywallAccess=preview|hard pins the access variant for
+  // this launch; release builds ignore it (see setDevPaywallAccess).
+  const { devPaywallAccess } = useGlobalSearchParams<{ devPaywallAccess?: string }>();
+  useEffect(() => {
+    if (devPaywallAccess) setDevPaywallAccess(devPaywallAccess);
+  }, [devPaywallAccess]);
 
   // ─── Rating prompt: count this cold-start as a session ──────────────────────
   // Used to gate the App Store rating prompt to return-session users. Runs once

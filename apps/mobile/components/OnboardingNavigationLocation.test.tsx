@@ -235,7 +235,7 @@ it.each([
   type Selector = string | { id: string; enabled?: boolean };
   type Step = { tapOn?: Selector | { point: string }; assertVisible?: Selector; waitForAnimationToEnd?: unknown;
     extendedWaitUntil?: { visible: Selector }; scrollUntilVisible?: { element: { text: string }; direction: string };
-    runFlow?: string | { when: { visible: Selector }; commands: Step[] }; retry?: { maxRetries: number; commands: Step[] } };
+    runFlow?: string | { when: { visible?: Selector; notVisible?: Selector }; commands: Step[] }; retry?: { maxRetries: number; commands: Step[] } };
   const [, commands] = loadAll(readFileSync(resolve(__dirname, '../e2e/flows/onboarding-out-of-area.yaml'), 'utf8')) as [unknown, Step[]];
   const start = commands.findIndex(step => typeof step.tapOn === 'object' && 'id' in step.tapOn && step.tapOn.id === 'waitlist-change-area');
   const end = commands.findIndex((step, index) => index > start && typeof step.extendedWaitUntil?.visible === 'object' && step.extendedWaitUntil.visible.id === 'goal-performance');
@@ -265,7 +265,10 @@ it.each([
           const file = resolve(directory, step.runFlow);
           const [, nested] = loadAll(readFileSync(file, 'utf8')) as [unknown, Step[]];
           await replay(nested, resolve(file, '..'));
-        } else if (visible(step.runFlow.when.visible)) await replay(step.runFlow.commands, directory);
+        } else {
+          const { visible: whenVisible, notVisible: whenNotVisible } = step.runFlow.when;
+          if (whenVisible ? visible(whenVisible) : !visible(whenNotVisible!)) await replay(step.runFlow.commands, directory);
+        }
       } else if (step.tapOn) {
         const selector = step.tapOn;
         if (typeof selector === 'object' && 'point' in selector) {
