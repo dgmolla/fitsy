@@ -46,6 +46,9 @@ it('links the graph to the studies behind it with one short line each (#970)', (
   expect(open).toHaveBeenLastCalledWith('https://pubmed.ncbi.nlm.nih.gov/12574618/');
   fireEvent.press(screen.getByTestId('study-flexible-eating-source'));
   expect(open).toHaveBeenLastCalledWith('https://pubmed.ncbi.nlm.nih.gov/10349584/');
+  expect(screen.getByText(/food choices are especially responsive/, { exact: false })).toBeTruthy();
+  fireEvent.press(screen.getByTestId('study-choice-design-source'));
+  expect(open).toHaveBeenLastCalledWith('https://pubmed.ncbi.nlm.nih.gov/34983836/');
   for (const study of Object.values(STUDIES)) {
     expect(study.text.length).toBeLessThan(130);
     expect(study.url).toMatch(/^https:\/\/pubmed\.ncbi\.nlm\.nih\.gov\/\d+\/$/);

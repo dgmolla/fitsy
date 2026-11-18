@@ -13,4 +13,10 @@ export const STUDIES = {
     sourceLabel: 'Source',
     url: 'https://pubmed.ncbi.nlm.nih.gov/10349584/',
   },
+  choiceDesign: {
+    // Mertens et al., PNAS 2022 (200+ studies): choice architecture changes behavior (small to medium effect), and food choices are particularly responsive.
+    text: 'How options are laid out shapes what we pick, and food choices are especially responsive (a review of 200+ studies).',
+    sourceLabel: 'Source',
+    url: 'https://pubmed.ncbi.nlm.nih.gov/34983836/',
+  },
 } as const;

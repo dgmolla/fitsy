@@ -26,6 +26,7 @@ export function OnboardingGoalGraph({ goal }: { goal?: string }) {
     <View style={s.legend}><View style={s.legendItem}><View style={s.solid} /><Text style={s.legendText}>With Fitsy</Text></View><View style={s.legendItem}><View style={s.dashed} /><Text style={s.legendText}>Without Fitsy</Text></View></View>
     <StudyNote {...STUDIES.smallChanges} testID="study-small-changes" />
     <StudyNote {...STUDIES.flexibleEating} testID="study-flexible-eating" />
+    <StudyNote {...STUDIES.choiceDesign} testID="study-choice-design" />
     <Text style={s.disclaimer}>Conceptual paths, not measured results or a forecast.</Text>
   </View>;
 }
