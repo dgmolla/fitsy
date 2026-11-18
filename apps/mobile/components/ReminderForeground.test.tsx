@@ -216,3 +216,22 @@ describe('no in-app toggle: iOS notification permission is the only control', ()
     expect(saveReminderPreferences).not.toHaveBeenCalled();
   });
 });
+
+test('only a known non-subscriber is planned the generic nudge (#959)', async () => {
+  jest.mocked(readReminderPreferences).mockResolvedValue({ meals: false, trial: false });
+  const replace = jest.mocked(replaceReminders);
+  const planFor = async (entitled: boolean | null) => {
+    replace.mockClear();
+    mockEntitled = entitled;
+    mockCustomerInfoResult = entitled === false ? null : mockCustomerInfo;
+    const screen = render(<ReminderProvider><SettingsView /></ReminderProvider>);
+    // Wait for the resolved account: earlier calls are made before sign-in state loads.
+    await waitFor(() => expect(replace.mock.calls.some(call => call[0] === 'reminder-owner')).toBe(true));
+    const plan = replace.mock.calls.filter(call => call[0] === 'reminder-owner').at(-1)?.[1] ?? [];
+    screen.unmount();
+    return plan.map(reminder => reminder.kind);
+  };
+  expect(await planFor(false)).toEqual(['nudge', 'nudge', 'nudge']);
+  expect(await planFor(null)).toEqual([]);
+  expect(await planFor(true)).not.toContain('nudge');
+});

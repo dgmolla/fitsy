@@ -254,6 +254,8 @@ test('loading preserves pending and delivered reminders; sign-out clears only th
 });
 test('tap destinations require the current account and a supported reminder kind', () => {
   expect(reminderDestination({ userId: 'one', kind: 'meal' }, 'one')).toBe('/(tabs)/search');
+  expect(reminderDestination({ userId: 'one', kind: 'nudge' }, 'one')).toBe('/(tabs)/search'); // opens the map (#959)
+  expect(reminderDestination({ userId: 'one', kind: 'nudge' }, 'two')).toBeNull();
   expect(reminderDestination({ userId: 'one', kind: 'trial' }, 'one')).toBe('/(tabs)/profile');
   expect(reminderDestination({ userId: 'one', kind: 'trial' }, 'two')).toBeNull();
   expect(reminderDestination({ userId: 'one', kind: 'trial' }, null)).toBeNull();

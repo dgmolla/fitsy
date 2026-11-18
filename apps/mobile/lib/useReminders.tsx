@@ -93,7 +93,8 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
       if (preferences.trial && missedTrialReminderWindow(subscription, now.getTime())) explainMissedTrialReminder();
     }
     const nativeUnresolved = !!userId && preferences.trial && !customerInfo;
-    const plan = planReminders({ now, userId: account.id, entitled: entitled === true, preferences, subscription });
+    // Only a known non-subscriber is nudged; an unresolved entitlement never is.
+    const plan = planReminders({ now, userId: account.id, entitled: entitled === true, preferences, subscription, nudge: ready && entitled === false });
     const trial = userId ? plan.find(item => item.kind === 'trial') : undefined;
     if (!preferences.trial) failedTrialNoticeRef.current = null;
     const expiry = Date.parse(subscription?.expirationDate ?? '');
@@ -138,7 +139,8 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let live = true; let received = false;
     Notifications.setNotificationHandler({ handleNotification: async notification => {
-      const show = !notification.request.identifier.startsWith(REMINDER_PREFIX) || notification.request.content.data?.kind !== 'meal';
+      const kind = notification.request.content.data?.kind;
+      const show = !notification.request.identifier.startsWith(REMINDER_PREFIX) || (kind !== 'meal' && kind !== 'nudge');
       return { shouldShowBanner: show, shouldShowList: show, shouldPlaySound: show, shouldSetBadge: false };
     } });
     const listener = Notifications.addNotificationResponseReceivedListener(value => { received = true; setResponse(value); });
@@ -152,7 +154,8 @@ export function ReminderProvider({ children }: { children: React.ReactNode }) {
     setResponse(null);
     void Notifications.clearLastNotificationResponseAsync().catch(reportFailure);
     if (destination) {
-      trackReminderAction({ action: 'opened', kind: destination === '/(tabs)/profile' ? 'trial' : 'meal' });
+      const kind = response.notification.request.content.data?.kind;
+      trackReminderAction({ action: 'opened', kind: destination === '/(tabs)/profile' ? 'trial' : kind === 'nudge' ? 'nudge' : 'meal' });
       router.push(destination);
     }
   }, [response, account, ready, pathname]);

@@ -909,7 +909,7 @@ export function trackTrialCatalogMismatch(props: { offering_id: string; product_
   catch (error) { logCaptureError('trial_catalog_mismatch', error); }
 }
 
-export function trackReminderAction(props: { action: 'opened'; kind: 'meal' | 'trial' } | { action: 'preferences_changed'; meals: boolean; trial: boolean }): void {
+export function trackReminderAction(props: { action: 'opened'; kind: 'meal' | 'trial' | 'nudge' } | { action: 'preferences_changed'; meals: boolean; trial: boolean }): void {
   try { getPostHogClient().capture('reminder_action', props); }
   catch (error) { logCaptureError('reminder_action', error); }
 }

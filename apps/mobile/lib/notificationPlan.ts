@@ -6,7 +6,10 @@ import { trialPresentation, type Terms } from './trialPresentation';
 export interface ReminderPreferences { meals: boolean; trial: boolean }
 export const DEFAULT_REMINDER_PREFERENCES: ReminderPreferences = { meals: false, trial: false };
 export const REMINDER_PREFIX = 'fitsy.reminder.';
-export type ReminderKind = 'meal' | 'trial';
+export type ReminderKind = 'meal' | 'trial' | 'nudge';
+/** Non-subscribers get one generic local nudge this many days after the last app session (#959). */
+export const NUDGE_INTERVAL_DAYS = 4;
+const NUDGE_COUNT = 3;
 export interface PlannedReminder {
   identifier: string;
   kind: ReminderKind;
@@ -26,10 +29,22 @@ const localDay = (d: Date) => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDat
 /** Calendar dates keep meal times local across DST. No recurring native jobs:
  * the next foreground session reconciles meal dates for the next two weeks
  * and the one-off reminder for a verified trial renewal. */
-export function planReminders({ now, userId, entitled, preferences, subscription }: {
+export function planReminders({ now, userId, entitled, preferences, subscription, nudge = false }: {
   now: Date; userId: string | null; entitled: boolean;
   preferences: ReminderPreferences; subscription?: Subscription | null;
+  /** True only for a known non-subscriber: plans the every-4-days generic nudge (#959). */
+  nudge?: boolean;
 }): PlannedReminder[] {
+  if (nudge && !entitled && userId && Number.isFinite(now.getTime())) {
+    // Counted from this session, so an engaged user who keeps opening the app is
+    // never nudged; after three unanswered nudges the next session reschedules.
+    return Array.from({ length: NUDGE_COUNT }, (_, index) => {
+      const date = new Date(now);
+      date.setDate(date.getDate() + NUDGE_INTERVAL_DAYS * (index + 1)); date.setHours(11, 30, 0, 0);
+      return { identifier: `${REMINDER_PREFIX}nudge.${localDay(date)}`, kind: 'nudge' as const, date,
+        title: 'Fitsy', body: 'So many healthy food spots nearby… 👀' };
+    });
+  }
   if (!userId || !entitled || subscription?.isActive === false || !Number.isFinite(now.getTime())) return [];
   const reminders: PlannedReminder[] = [];
   const expiration = Date.parse(subscription?.expirationDate ?? '');
