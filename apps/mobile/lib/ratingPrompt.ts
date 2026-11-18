@@ -12,12 +12,19 @@
  *   - 2 saved meals          — a stronger, higher-intent signal of delight.
  * Whichever comes first wins.
  *
+ * When the trigger fires we first ask "Enjoying Fitsy?" (#960). Yes calls Apple's
+ * native review prompt (guideline 5.6.1: no custom review UI, no App Store link);
+ * No opens the in-app feedback board instead, so unhappy users reach us, not a
+ * public rating. Both answers are tracked.
+ *
  * Decision logic is split into a pure `shouldRequestReview` so it's testable
  * without touching AsyncStorage or StoreReview.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router';
 import * as StoreReview from 'expo-store-review';
-import { trackRatingPromptRequested } from './analytics';
+import { Alert } from 'react-native';
+import { trackRatingPromptAnswered, trackRatingPromptRequested } from './analytics';
 
 export const RATING_PROMPT_KEY = '@fitsy/rating_prompt';
 
@@ -84,7 +91,29 @@ async function maybePrompt(): Promise<void> {
     save_count: state.saveCount,
     search_count: state.searchCount,
   });
-  await StoreReview.requestReview();
+  askEnjoying();
+}
+
+/** Yes goes to Apple's own prompt; No goes to the feedback board. */
+function askEnjoying(): void {
+  Alert.alert('Enjoying Fitsy?', 'Your answer helps us make it better.', [
+    {
+      text: 'Not really',
+      onPress: () => {
+        trackRatingPromptAnswered({ answer: 'no' });
+        router.push('/feedback-board');
+      },
+    },
+    {
+      text: 'Yes',
+      isPreferred: true,
+      onPress: () => {
+        trackRatingPromptAnswered({ answer: 'yes' });
+        // iOS may decline to show it (about 3 a year); nothing to retry or surface.
+        void Promise.resolve(StoreReview.requestReview()).catch(() => {});
+      },
+    },
+  ]);
 }
 
 /**

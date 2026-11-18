@@ -38,19 +38,33 @@ jest.mock('expo-store-review', () => ({
   requestReview: jest.fn(() => Promise.resolve()),
 }));
 
+// ─── "Enjoying Fitsy?" ask (#960): a native alert, and the feedback route ────
+jest.mock('react-native', () => ({ __esModule: true, Alert: { alert: jest.fn() } }));
+jest.mock('expo-router', () => ({ __esModule: true, router: { push: jest.fn() } }));
+
 // ─── analytics mock ──────────────────────────────────────────────────────────
 jest.mock('./analytics', () => ({
   __esModule: true,
   trackRatingPromptRequested: jest.fn(),
+  trackRatingPromptAnswered: jest.fn(),
 }));
 
 const StoreReview = jest.requireMock('expo-store-review') as {
   hasAction: jest.Mock;
   requestReview: jest.Mock;
 };
-const { trackRatingPromptRequested } = jest.requireMock('./analytics') as {
+const { trackRatingPromptRequested, trackRatingPromptAnswered } = jest.requireMock('./analytics') as {
   trackRatingPromptRequested: jest.Mock;
+  trackRatingPromptAnswered: jest.Mock;
 };
+const { Alert } = jest.requireMock('react-native') as { Alert: { alert: jest.Mock } };
+const { router } = jest.requireMock('expo-router') as { router: { push: jest.Mock } };
+
+/** Press one of the ask's buttons by its label, like the user would. */
+function answer(label: 'Yes' | 'Not really') {
+  const buttons = Alert.alert.mock.calls.at(-1)?.[2] as { text: string; onPress: () => void }[];
+  buttons.find(button => button.text === label)?.onPress();
+}
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -113,7 +127,7 @@ describe('recordSearchAndMaybePrompt', () => {
   it('does not prompt on the first session', async () => {
     await recordSession(); // 1 session
     for (let i = 0; i < MIN_SEARCHES; i++) await recordSearchAndMaybePrompt();
-    expect(StoreReview.requestReview).not.toHaveBeenCalled();
+    expect(Alert.alert).not.toHaveBeenCalled();
   });
 
   it('prompts after MIN_SEARCHES on a return session, then never again', async () => {
@@ -121,12 +135,32 @@ describe('recordSearchAndMaybePrompt', () => {
     for (let i = 0; i < MIN_SEARCHES - 1; i++) await recordSearchAndMaybePrompt();
     expect(StoreReview.requestReview).not.toHaveBeenCalled();
 
-    await recordSearchAndMaybePrompt(); // hits MIN_SEARCHES → fires
-    expect(StoreReview.requestReview).toHaveBeenCalledTimes(1);
+    await recordSearchAndMaybePrompt(); // hits MIN_SEARCHES → asks "Enjoying Fitsy?"
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
+    expect(Alert.alert.mock.calls[0][0]).toBe('Enjoying Fitsy?');
+    expect(StoreReview.requestReview).not.toHaveBeenCalled(); // not until the user says yes
     expect(trackRatingPromptRequested).toHaveBeenCalledTimes(1);
 
     await recordSearchAndMaybePrompt(); // already prompted → no repeat
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
+  });
+
+  it('yes calls Apple\'s native review prompt and is tracked', async () => {
+    await reachReturnSession();
+    for (let i = 0; i < MIN_SEARCHES; i++) await recordSearchAndMaybePrompt();
+    answer('Yes');
     expect(StoreReview.requestReview).toHaveBeenCalledTimes(1);
+    expect(trackRatingPromptAnswered).toHaveBeenCalledWith({ answer: 'yes' });
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it('no opens the in-app feedback board and never calls the review prompt', async () => {
+    await reachReturnSession();
+    for (let i = 0; i < MIN_SEARCHES; i++) await recordSearchAndMaybePrompt();
+    answer('Not really');
+    expect(router.push).toHaveBeenCalledWith('/feedback-board');
+    expect(trackRatingPromptAnswered).toHaveBeenCalledWith({ answer: 'no' });
+    expect(StoreReview.requestReview).not.toHaveBeenCalled();
   });
 });
 
@@ -134,14 +168,14 @@ describe('recordSaveAndMaybePrompt', () => {
   it('prompts after MIN_SAVES on a return session, before any search threshold', async () => {
     await reachReturnSession();
     for (let i = 0; i < MIN_SAVES; i++) await recordSaveAndMaybePrompt();
-    expect(StoreReview.requestReview).toHaveBeenCalledTimes(1);
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
   });
 
   it('records the action but does not prompt when the store is unavailable', async () => {
     StoreReview.hasAction.mockResolvedValue(false);
     await reachReturnSession();
     for (let i = 0; i < MIN_SAVES; i++) await recordSaveAndMaybePrompt();
-    expect(StoreReview.requestReview).not.toHaveBeenCalled();
+    expect(Alert.alert).not.toHaveBeenCalled();
     // saveCount advanced, but NOT marked prompted — a later session on a real
     // device can still surface the prompt.
     const s = await getRatingPromptState();
@@ -149,11 +183,12 @@ describe('recordSaveAndMaybePrompt', () => {
     expect(s.promptedAt).toBeUndefined();
   });
 
-  it('never throws when requestReview rejects', async () => {
+  it('never throws when requestReview rejects after a yes', async () => {
     StoreReview.requestReview.mockRejectedValue(new Error('boom'));
     await reachReturnSession();
     await recordSaveAndMaybePrompt();
     await expect(recordSaveAndMaybePrompt()).resolves.toBeUndefined();
+    expect(() => answer('Yes')).not.toThrow();
   });
 
   it('persists state under the namespaced key', async () => {

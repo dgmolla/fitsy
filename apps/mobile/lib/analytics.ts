@@ -793,6 +793,15 @@ export function trackRatingPromptRequested(props: {
   }
 }
 
+// The "Enjoying Fitsy?" answer (#960): yes opens Apple's native prompt, no opens feedback.
+export function trackRatingPromptAnswered(props: { answer: 'yes' | 'no' }): void {
+  try {
+    getPostHogClient().capture('rating_prompt_answered', props as unknown as Record<string, JsonType>);
+  } catch (err) {
+    logCaptureError('rating_prompt_answered', err);
+  }
+}
+
 // ─── Feedback ────────────────────────────────────────────────────────────────
 // `feedback_opened` measures intent (how many users open the sheet) and
 // `feedback_submitted` measures completion, so PostHog can compute an
