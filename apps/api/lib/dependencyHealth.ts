@@ -1,9 +1,28 @@
-import { randomUUID } from 'node:crypto';
 import { authFetch } from '@fitsy/shared/utils/authTransport';
-import { consumeSharedQuota } from '@/services/rateLimitStore';
+import { STORE_TIMEOUT_MS } from '@/services/rateLimitStore';
+import { rateLimitStoreConfig } from '@/services/rateLimitStoreConfig';
 import { prisma } from './restaurantService';
 
 const TIMEOUT_MS = 2_000;
+
+/**
+ * Reachability and authentication probe for the shared store. PING is unbilled by Upstash and runs no script, so
+ * frequent health checks do not spend the monthly command quota (#995). It does not prove the token can write;
+ * the deployment preflight keeps exercising the writable EVAL path.
+ */
+export async function pingSharedStore(): Promise<void> {
+  const { endpoint, token } = rateLimitStoreConfig();
+  const response = await fetch(endpoint, {
+    method: 'POST', redirect: 'error', cache: 'no-store', signal: AbortSignal.timeout(STORE_TIMEOUT_MS),
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(['PING']),
+  });
+  if (!response.ok) throw new Error('rate limit store HTTP error');
+  const body: unknown = await response.json();
+  if (!body || typeof body !== 'object' || 'error' in body || !('result' in body) || body.result !== 'PONG') {
+    throw new Error('invalid rate limit store response');
+  }
+}
 
 /** Bound pool acquisition too, not just query execution once a connection exists. */
 export async function boundedHealthCheck<T>(check: () => PromiseLike<T>): Promise<T> {
@@ -18,10 +37,8 @@ export async function boundedHealthCheck<T>(check: () => PromiseLike<T>): Promis
 export async function deepHealth(): Promise<Record<'supabase' | 'upstash' | 'revenuecat', 'ok' | 'unavailable'>> {
   const checks = {
     supabase: () => prisma.$queryRaw`SELECT 1`,
-    upstash: async () => {
-      const quota = await consumeSharedQuota({ namespace: 'health-readiness', windowMs: 1_000, max: 1, maxKeys: 1_000 }, randomUUID());
-      if (!quota.ok) throw new Error('Store unavailable');
-    },
+    // #995: PING, not the billed sliding-window EVAL, so monitor traffic does not burn the Redis command quota.
+    upstash: () => pingSharedStore(),
     revenuecat: async () => {
       const key = process.env['REVENUECAT_PUBLIC_API_KEY'];
       if (!key || (process.env['VERCEL_ENV'] === 'production' && key.startsWith('test_'))) throw new Error('RevenueCat unconfigured');

@@ -19,7 +19,7 @@ beforeEach(() => {
   failing = null;
   global.fetch = jest.fn(async url => {
     if (String(url) === 'https://quota.example.test/') {
-      return Response.json(failing === 'upstash' ? { error: 'private-provider-detail' } : { result: [1, 0, 0] }, { status: failing === 'upstash' ? 503 : 200 });
+      return Response.json(failing === 'upstash' ? { error: 'private-provider-detail' } : { result: 'PONG' }, { status: failing === 'upstash' ? 503 : 200 });
     }
     if (url === 'https://api.revenuecat.com/v1/subscribers/fitsy-health-probe') return new Response(null, { status: failing === 'revenuecat' ? 503 : 401 });
     throw new Error('Unexpected external request');
@@ -38,14 +38,16 @@ test('deep health authenticates before touching any dependency', async () => {
   expect(global.fetch).not.toHaveBeenCalled();
 });
 
-test('deep health exercises writable EVAL and DB, and checks RC without creating a customer', async () => {
+test('deep health pings the store without billed EVAL, exercises the DB, and checks RC without creating a customer', async () => {
   const response = await GET(request());
   expect(response.status).toBe(200);
   expect(await response.json()).toMatchObject({ status: 'ok', dependencies: { upstash: 'ok', supabase: 'ok', revenuecat: 'ok' } });
   expect(response.headers.get('cache-control')).toContain('no-store');
   expect(mockQuery).toHaveBeenCalledTimes(1);
   expect(global.fetch).toHaveBeenCalledWith('https://api.revenuecat.com/v1/subscribers/fitsy-health-probe', expect.objectContaining({ redirect: 'error' }));
-  expect(JSON.stringify((global.fetch as jest.Mock).mock.calls)).toContain('EVAL');
+  const storeCalls = JSON.stringify((global.fetch as jest.Mock).mock.calls);
+  expect(storeCalls).toContain('PING');
+  expect(storeCalls).not.toContain('EVAL');
 });
 
 test.each(['supabase', 'upstash', 'revenuecat'])('%s failure yields a non-200 deep health result without provider details', async dependency => {
@@ -64,4 +66,15 @@ test('pool exhaustion is bounded even if acquiring a connection never settles', 
   const response = GET(request());
   await jest.advanceTimersByTimeAsync(2_001);
   expect((await response).status).toBe(503);
+});
+
+test('the store probe sends only an unbilled PING and fails closed on anything but PONG', async () => {
+  const { pingSharedStore } = await import('../../../lib/dependencyHealth');
+  await expect(pingSharedStore()).resolves.toBeUndefined();
+  for (const bad of [new Response('', { status: 503 }), Response.json({ error: 'provider error' }), Response.json({ result: 'nope' }), Response.json({})]) {
+    global.fetch = jest.fn(async () => bad.clone()) as typeof fetch;
+    await expect(pingSharedStore()).rejects.toThrow();
+  }
+  global.fetch = jest.fn(async () => { throw new Error('network down'); }) as typeof fetch;
+  await expect(pingSharedStore()).rejects.toThrow();
 });
