@@ -126,9 +126,11 @@ function baselineFor(build, fingerprint, artifact, apple, now = new Date()) {
     artifact.runtime_version === fingerprint.fingerprint.hash && build.runtimeVersion === artifact.runtime_version && artifact.channel === 'testflight' &&
     /^[a-f0-9]{64}$/.test(artifact.ipa_sha256) && artifact.google_ios_client_id?.endsWith('.apps.googleusercontent.com'), 'IPA runtime, channel or fingerprint is unverified');
   assert(uuid.test(apple.id) && apple.attributes?.processingState === 'VALID', 'Apple processing is unverified');
-  return { version: 1, platform: 'ios', source_sha: build.gitCommitHash, eas_build_id: build.id, asc_build_id: apple.id,
+  // source_sha is the exact commit EAS built (it may be a local-only build-number commit); integrated_source_sha is the commit
+  // on main it was built from, which CI can resolve.
+  return { version: 1, platform: 'ios', source_sha: build.gitCommitHash, integrated_source_sha: integrationSource(build.gitCommitHash), eas_build_id: build.id, asc_build_id: apple.id,
     bundle_id: artifact.bundle_id, build_number: artifact.build_number, runtime_version: artifact.runtime_version,
-    fingerprint: fingerprint.fingerprint, channel: artifact.channel, google_ios_client_id: artifact.google_ios_client_id,
+    fingerprint: fingerprint.fingerprint, ...(fingerprint.env && Object.keys(fingerprint.env).length ? { fingerprint_env: fingerprint.env } : {}), channel: artifact.channel, google_ios_client_id: artifact.google_ios_client_id,
     ipa_url: build.artifacts.buildUrl, ipa_sha256: artifact.ipa_sha256, verified_at: now.toISOString(),
     evidence: `https://expo.dev/accounts/dgmolla/projects/fitsy/builds/${build.id}`,
     verification_note: 'IPA identity and SHA-256 match the source fingerprint and exact EAS build; Apple processing and Internal membership confirmed. Real-device billing acceptance remains separate.' };

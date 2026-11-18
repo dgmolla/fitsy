@@ -10,6 +10,7 @@ jest.mock("@/lib/auth", () => ({
 jest.mock("@/lib/restaurantService", () => ({
   prisma: {
     feedback: { count: jest.fn(), create: jest.fn(), findMany: jest.fn() },
+    userBlock: { findMany: jest.fn() },
     user: { findUnique: jest.fn() },
   },
 }));
@@ -59,6 +60,7 @@ beforeEach(() => {
   (prisma.feedback.create as jest.Mock).mockResolvedValue(CREATED);
   (prisma.user.findUnique as jest.Mock).mockResolvedValue({ name: "Alice" });
   (prisma.feedback.findMany as jest.Mock).mockResolvedValue([]);
+  (prisma.userBlock.findMany as jest.Mock).mockResolvedValue([]);
   mockPostSlackMessage.mockResolvedValue(true);
 });
 
@@ -201,6 +203,7 @@ describe("POST /api/feedback — moderation", () => {
 describe("GET /api/feedback — board", () => {
   const ROW = {
     id: "fb-1",
+    userId: "author-1",
     displayName: "Alice",
     message: "add dark mode",
     voteCount: 3,
@@ -227,7 +230,9 @@ describe("GET /api/feedback — board", () => {
 
     expect(res.status).toBe(200);
     expect(prisma.feedback.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { status: "published" } }),
+      expect.objectContaining({
+        where: { status: "published", reports: { none: { reporterId: "user-1" } } },
+      }),
     );
     expect(body.data).toEqual([
       {
@@ -237,9 +242,30 @@ describe("GET /api/feedback — board", () => {
         voteCount: 3,
         createdAt: "2026-06-06T00:00:00.000Z",
         hasVoted: true,
+        isOwn: false,
       },
     ]);
     expect(body.meta.hasMore).toBe(false);
+  });
+
+  it("hides posts by blocked authors and marks the requester's own posts", async () => {
+    (prisma.userBlock.findMany as jest.Mock).mockResolvedValue([{ blockedId: "bad-1" }, { blockedId: "bad-2" }]);
+    (prisma.feedback.findMany as jest.Mock).mockResolvedValue([{ ...ROW, userId: "user-1" }]);
+
+    const res = await GET(makeGetRequest());
+    const body = await res.json();
+
+    expect(prisma.userBlock.findMany).toHaveBeenCalledWith({ where: { blockerId: "user-1" }, select: { blockedId: true } });
+    expect(prisma.feedback.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          status: "published",
+          reports: { none: { reporterId: "user-1" } },
+          userId: { notIn: ["bad-1", "bad-2"] },
+        },
+      }),
+    );
+    expect(body.data[0].isOwn).toBe(true);
   });
 
   it("sets hasVoted false when the requester has no vote row", async () => {

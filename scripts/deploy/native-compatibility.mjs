@@ -30,7 +30,11 @@ export function checkCompatibility(root, { productionEnv = false, env = process.
       !/^\d+\.\d+\.\d+$/.test(fingerprint.package_version))
     throw new Error(`Build ${baseline.build_number} has no verified Expo fingerprint; record the actual binary fingerprint before OTA`);
   const head = git(['rev-parse', 'HEAD']);
-  git(['merge-base', '--is-ancestor', baseline.source_sha, head]);
+  // A TestFlight build may be cut from a local-only build-number commit that GitHub never sees; the baseline then also records the
+  // integrated commit on main it was built from, and that is the one that must be in the history.
+  const integrated = baseline.integrated_source_sha ?? baseline.source_sha;
+  if (!/^[a-f0-9]{40}$/.test(integrated)) throw new Error('Invalid integrated source commit in the verified iOS binary baseline');
+  git(['merge-base', '--is-ancestor', integrated, head]);
   // Expo ignores generated CNG directories. Retain the existing refusal of
   // ignored local native inputs rather than trusting their omission.
   const dirty = git(['status', '--porcelain', '--untracked-files=all', '--ignored', '--',
@@ -43,6 +47,12 @@ export function checkCompatibility(root, { productionEnv = false, env = process.
   const fingerprintEnv = { ...gitEnv, EXPO_NO_DOTENV: '1',
     NODE_ENV: productionEnv ? 'production' : 'development',
     EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: productionEnv ? env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID : baseline.google_ios_client_id };
+  // Public slugs the verified binary's config needs (Sentry organization and project); only these two names, plain values.
+  for (const [key, value] of Object.entries(baseline.fingerprint_env ?? {})) {
+    if (!['SENTRY_ORG', 'SENTRY_PROJECT'].includes(key) || typeof value !== 'string' || !/^[A-Za-z0-9._-]{1,64}$/.test(value))
+      throw new Error('Invalid fingerprint environment in the verified iOS binary baseline');
+    fingerprintEnv[key] = value;
+  }
   for (const key of ['GH_TOKEN', 'GITHUB_TOKEN', 'EXPO_TOKEN']) delete fingerprintEnv[key];
   const current = JSON.parse(execFileSync(process.execPath, [resolve(root, 'scripts/deploy/native-fingerprint.mjs')],
     { cwd: root, env: fingerprintEnv, encoding: 'utf8', maxBuffer: 1024 * 1024, timeout: 120000 }));

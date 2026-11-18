@@ -7,12 +7,18 @@ appId: com.fitsy.mobile
       id: location-choose-area
       enabled: true
     timeout: 15000
-- retry:
-    maxRetries: 1
+- waitForAnimationToEnd
+- tapOn:
+    id: location-choose-area
+- waitForAnimationToEnd
+# A first press can land mid-transition. Press again only if the sheet is not
+# open: a conditional keeps a recovered press from leaving a failed assertion.
+- runFlow:
+    when:
+      notVisible: "Choose a neighborhood"
     commands:
-      - waitForAnimationToEnd
       - tapOn:
           id: location-choose-area
-      - extendedWaitUntil:
-          visible: "Choose a neighborhood"
-          timeout: 5000
+- extendedWaitUntil:
+    visible: "Choose a neighborhood"
+    timeout: 10000

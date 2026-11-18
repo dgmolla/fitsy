@@ -27,9 +27,16 @@ export async function nativeFingerprint(root) {
     source.hash && source.filePath && /^ios(?:\/|$)/.test(source.filePath)))
     throw new Error('Local iOS sources are omitted by Expo; ship and verify a binary before OTA');
   const app = JSON.parse(config.contents);
+  // The Sentry plugin takes its organization and project from the environment when app.config.ts is evaluated, and they change the
+  // fingerprint. Report them (public slugs, not secrets) so a later check can reproduce this exact fingerprint without the build's
+  // environment (#972).
+  const sentry = (app.plugins ?? []).find(plugin => Array.isArray(plugin) && plugin[0] === '@sentry/react-native/expo')?.[1] ?? {};
+  const env = {};
+  if (typeof sentry.organization === 'string') env.SENTRY_ORG = sentry.organization;
+  if (typeof sentry.project === 'string') env.SENTRY_PROJECT = sentry.project;
   return { fingerprint: { hash: result.hash, package_version: version },
     app: { bundle_id: app.ios?.bundleIdentifier, version: app.version, build_number: app.ios?.buildNumber,
-      runtime_version: app.ios?.runtimeVersion ?? app.runtimeVersion } };
+      runtime_version: app.ios?.runtimeVersion ?? app.runtimeVersion }, env };
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {

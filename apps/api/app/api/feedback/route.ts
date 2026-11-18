@@ -142,13 +142,25 @@ async function handleGET(
   const limit = limitRaw !== null ? Math.min(Number(limitRaw), 50) : 20;
 
   try {
+    // Hide posts the requester reported, and every post by an author they blocked.
+    const blocks = await prisma.userBlock.findMany({
+      where: { blockerId: auth.sub },
+      select: { blockedId: true },
+    });
+    const blockedIds = blocks.map((block) => block.blockedId);
+
     const posts = await prisma.feedback.findMany({
-      where: { status: "published" },
+      where: {
+        status: "published",
+        reports: { none: { reporterId: auth.sub } },
+        ...(blockedIds.length > 0 ? { userId: { notIn: blockedIds } } : {}),
+      },
       take: limit + 1,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       orderBy: [{ voteCount: "desc" }, { createdAt: "desc" }, { id: "desc" }],
       select: {
         id: true,
+        userId: true,
         displayName: true,
         message: true,
         voteCount: true,
@@ -168,6 +180,7 @@ async function handleGET(
       voteCount: post.voteCount,
       createdAt: post.createdAt.toISOString(),
       hasVoted: post.votes.length > 0,
+      isOwn: post.userId === auth.sub,
     }));
 
     return NextResponse.json(

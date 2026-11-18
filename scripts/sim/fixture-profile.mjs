@@ -15,7 +15,10 @@ export const baselineProfiles = {
 // means a purchase, grant or expiry from an earlier flow or session, which only its owner can undo.
 export const expectedVerdicts = { 'entitled-dev': 'active', 'unsubscribed-dev': 'never_subscribed', 'expired-subscription': 'expired' };
 
-const allowedOrigin = origin => origin === 'https://dev.fitsy.org' || /^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/.test(origin);
+// The dev backend, loopback, or this project's own Vercel preview (which also uses the dev database
+// and is what backend-identity.mjs expects for API changes), never production.
+export const allowedOrigin = origin => origin === 'https://dev.fitsy.org' || /^http:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/.test(origin) ||
+  /^https:\/\/fitsy-[a-z0-9-]+-dawits-projects-74b6e00f\.vercel\.app$/.test(origin);
 const complete = profile => Boolean(profile?.user?.goal && profile.user.heightCm && profile.user.weightKg && profile.macroTarget);
 
 // Credentials and the bearer token travel on curl's stdin, never in process arguments.
@@ -43,8 +46,15 @@ export function ensureBaselineProfile(fixture, http = curlJson) {
   if (login.status !== 200 || !login.json?.token) fail(`dev login failed (HTTP ${login.status}); cannot verify the profile`);
   const token = login.json.token;
   if (verdict) {
-    const status = http('GET', `${origin}/api/subscriptions/status`, { token });
+    let status = http('GET', `${origin}/api/subscriptions/status`, { token });
     if (status.status !== 200) fail(`subscription status read failed (HTTP ${status.status})`);
+    // The server reports 'unknown' for an account whose RevenueCat state has not been verified
+    // recently (idle account, or a long run); ask it to verify once instead of failing the fixture.
+    if (status.json?.verdict === 'unknown') {
+      http('POST', `${origin}/api/subscriptions/sync`, { token, body: { reason: 'manual' } });
+      status = http('GET', `${origin}/api/subscriptions/status`, { token });
+      if (status.status !== 200) fail(`subscription status read failed (HTTP ${status.status})`);
+    }
     if (status.json?.verdict !== verdict)
       fail(`subscription verdict is ${status.json?.verdict}, expected ${verdict}; an earlier flow or session left the shared account in the wrong state, so flows that depend on it would fail for reasons outside the change. Undo the purchase, grant or expiry and rerun`);
   }

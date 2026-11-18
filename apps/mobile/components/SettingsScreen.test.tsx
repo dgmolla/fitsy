@@ -21,6 +21,9 @@ it.each(['@fitsy/onboarding', '@fitsy/onboarding_unowned'])(
       'profile-privacy', 'profile-terms', 'profile-support']) {
       expect(screen.getByTestId(id)).toBeTruthy();
     }
+    // The store listing says estimates are not medical advice, so the app must say so too (#953).
+    expect(screen.getByText('Nutrition values are estimates and approximate planning information, not medical advice.')).toBeTruthy();
+    expect(screen.getByTestId('profile-disclaimer')).toBeTruthy();
     expect(await getOnboardingData()).toEqual({});
     expect(await AsyncStorage.getItem(legacyKey)).toBe(legacyFacts);
     expect(jest.mocked(global.fetch).mock.calls.some(([, init]) => init?.method === 'PATCH')).toBe(false);

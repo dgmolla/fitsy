@@ -174,6 +174,19 @@ test('a buildNumber-only local commit is integrated through its parent; other de
   assert.equal(integrationSource('c'.repeat(40), () => { throw new Error('unknown'); }), 'c'.repeat(40));
 });
 
+test('the baseline records an integrated source alongside the built commit (#972)', () => {
+  // The fixture's commit is unknown to local git, so the integrated source falls back to the built commit itself.
+  assert.equal(baseline().integrated_source_sha, baseline().source_sha);
+  assert.match(baseline().integrated_source_sha, /^[a-f0-9]{40}$/);
+});
+
+test('the baseline records the fingerprint environment only when the fingerprint reports one (#972)', () => {
+  const withEnv = baselineFor(build, { ...fingerprint, env: { SENTRY_ORG: 'fitsy-ui', SENTRY_PROJECT: 'fitsy-mobile' } }, artifact, processed, new Date('2026-10-31T22:00:00Z'));
+  assert.deepEqual(withEnv.fingerprint_env, { SENTRY_ORG: 'fitsy-ui', SENTRY_PROJECT: 'fitsy-mobile' });
+  assert.equal('fingerprint_env' in baseline(), false);
+  assert.equal('fingerprint_env' in baselineFor(build, { ...fingerprint, env: {} }, artifact, processed, new Date('2026-10-31T22:00:00Z')), false);
+});
+
 test('actual post-submit caller waits, confirms Internal membership, opens PR and is idempotent', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'fitsy-post-submit-'));
   const file = join(dir, 'fingerprint.json'); writeFileSync(file, JSON.stringify(fingerprint));

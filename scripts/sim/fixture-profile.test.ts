@@ -1,8 +1,8 @@
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
 import { resolve } from 'node:path';
 
-type State = { verdict: string; profile: { user: Record<string, unknown>; macroTarget: unknown }; loginStatus: number; patchStatus: number; patches: number };
+type State = { verdict: string; verifiedVerdict?: string; syncs?: number; profile: { user: Record<string, unknown>; macroTarget: unknown }; loginStatus: number; patchStatus: number; patches: number };
 const blank = () => ({ user: { goal: null, heightCm: null, weightKg: null }, macroTarget: null });
 const filled = () => ({ user: { goal: 'lose_fat', heightCm: 178, weightKg: 80 }, macroTarget: { calories: 595 } });
 
@@ -14,6 +14,7 @@ function startServer(state: State): Promise<{ server: Server; origin: string }> 
       const send = (status: number, json: unknown) => { response.writeHead(status, { 'content-type': 'application/json' }); response.end(JSON.stringify(json)); };
       if (request.url === '/api/auth/login') return state.loginStatus === 200 ? send(200, { token: 't-1' }) : send(state.loginStatus, { error: 'no' });
       if (request.headers.authorization !== 'Bearer t-1') return send(401, { error: 'unauthorized' });
+      if (request.url === '/api/subscriptions/sync') { state.syncs = (state.syncs ?? 0) + 1; state.verdict = state.verifiedVerdict ?? state.verdict; return send(200, { verdict: state.verdict }); }
       if (request.url === '/api/subscriptions/status') return send(200, { verdict: state.verdict, active: state.verdict === 'active' });
       if (request.method === 'PATCH') {
         state.patches += 1;
@@ -81,6 +82,19 @@ describe('entitled fixture baseline profile (#934)', () => {
     expect(state.patches).toBe(0);
   });
 
+  test.each([
+    ['https://dev.fitsy.org', true],
+    ['http://localhost:3000', true],
+    ['https://fitsy-hsmpsdj4u-dawits-projects-74b6e00f.vercel.app', true],
+    ['https://fitsy-hsmpsdj4u-someone-else.vercel.app', false],
+    ['https://fitsy.org', false],
+    ['https://api.example.com', false],
+  ])("origin %s is allowed: %s (the dev backend, loopback or this project's own preview, never production)", (candidate, allowed) => {
+    const script = `import { allowedOrigin } from ${JSON.stringify(resolve(__dirname, 'fixture-profile.mjs'))}; process.stdout.write(String(allowedOrigin(${JSON.stringify(candidate)})));`;
+    const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], { encoding: 'utf8' });
+    expect(result.stdout).toBe(String(allowed));
+  });
+
   test('fixtures without any expectation are not touched', async () => {
     expect(await ensure({ name: 'empty-store', env: credentials(origin) })).toBe('OK:not-applicable');
     expect(state.patches).toBe(0);
@@ -90,6 +104,27 @@ describe('entitled fixture baseline profile (#934)', () => {
     state.verdict = 'expired';
     expect(await ensure({ name: 'entitled-dev', env: credentials(origin) })).toContain('subscription verdict is expired, expected active');
     expect(state.patches).toBe(0);
+  });
+
+  test('an unknown (unverified) verdict triggers one sync and then passes when it verifies', async () => {
+    state.verdict = 'unknown';
+    state.verifiedVerdict = 'active';
+    state.profile = filled();
+    expect(await ensure({ name: 'entitled-dev', env: credentials(origin) })).toBe('OK:present');
+    expect(state.syncs).toBe(1);
+  });
+
+  test('an unknown verdict that stays unknown after the sync still fails', async () => {
+    state.verdict = 'unknown';
+    state.verifiedVerdict = 'unknown';
+    expect(await ensure({ name: 'entitled-dev', env: credentials(origin) })).toContain('subscription verdict is unknown, expected active');
+    expect(state.syncs).toBe(1);
+  });
+
+  test('a verdict that is already known never triggers a sync', async () => {
+    state.verdict = 'expired';
+    expect(await ensure({ name: 'entitled-dev', env: credentials(origin) })).toContain('subscription verdict is expired, expected active');
+    expect(state.syncs ?? 0).toBe(0);
   });
 
   test.each([['never_subscribed', 'OK:present'], ['active', 'subscription verdict is active, expected never_subscribed']])(
