@@ -89,8 +89,8 @@ export async function tick({ stateFile, slackEnv, repo, github = fetchGitHub, sl
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const home = process.env.HOME;
   const result = await tick({
-    stateFile: process.env.ONCALL_STATE || resolve(home, '.config/fitsy/oncall-state.json'),
-    slackEnv: process.env.FITSY_SLACK_ENV || resolve(home, '.config/fitsy/slack-bridge.env'),
+    stateFile: resolve(home, '.config/fitsy/oncall-state.json'),
+    slackEnv: resolve(home, '.config/fitsy/slack-bridge.env'),
   });
   if (result.items.length) process.stdout.write(`${JSON.stringify(result)}\n`);
   else if (result.errors.length) process.stderr.write(`${result.errors.join('\n')}\n`);
