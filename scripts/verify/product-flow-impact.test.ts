@@ -120,7 +120,10 @@ test('real Discovery entry changes select three journeys across CLI and publicat
   writeFileSync(map, originalMap + '\nexport const literal = `\n// before\n`;\n');
   git('add', '.'); git('commit', '-qm', 'template literal baseline'); git('update-ref', 'refs/remotes/origin/main', 'HEAD');
   writeFileSync(map, originalMap + '\nexport const literal = `\n// after\n`;\n');
-  expect(JSON.parse(cli('scripts/verify/product-flow.mjs').stdout).simulator.scope).toBe('full');
+  // #873: an executable change confined to the map component selects the map flows instead of the full suite.
+  const literalPlan = JSON.parse(cli('scripts/verify/product-flow.mjs').stdout).simulator;
+  expect(literalPlan.scope).toBe('flow');
+  expect(literalPlan.flows).toEqual(['map-search', 'map-search-location-denied']);
 });
 
 test.each([false, true])('bounded preview adaptation (entitlement startup retry: %s) reaches every consumer and rejects unknown changes', retryStartup => {
