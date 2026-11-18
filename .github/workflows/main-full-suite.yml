@@ -60,19 +60,23 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      # The scripts group is the long pole (about 25 min whole), so it runs as four jest partitions like verify.yml (#931).
+      # The scripts group is the long pole (about 25 min whole), so it runs as six jest partitions like verify.yml (#931).
       matrix:
         include:
           - group: api
           - group: mobile
           - group: scripts
-            partition: 1/4
+            partition: 1/6
           - group: scripts
-            partition: 2/4
+            partition: 2/6
           - group: scripts
-            partition: 3/4
+            partition: 3/6
           - group: scripts
-            partition: 4/4
+            partition: 4/6
+          - group: scripts
+            partition: 5/6
+          - group: scripts
+            partition: 6/6
     steps:
       - uses: actions/checkout@v4
         with:
