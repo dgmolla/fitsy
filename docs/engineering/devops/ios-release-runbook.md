@@ -74,6 +74,9 @@ Review the default dry run before an authorized `--apply`; never copy local DEV 
 Confirm the evaluated configuration and actual embedded IPA, including Google sign-in scheme, signing/team, bundle, version/build, SDK, runtime and production updates channel.
 Do not expose credentials when recording identities.
 Build 7 uses `runtimeVersion.policy = fingerprint`; build 5 keeps its embedded runtime `1.0.0`.
+Before every release or TestFlight `eas build`, run `node scripts/deploy/push-build-source.mjs` from the exact source checkout.
+It tags HEAD as `build/<version>-<buildNumber>`, pushes the tag, and refuses unless the remote tag resolves to HEAD, so the baseline source commit always exists on GitHub.
+Do not start the build if it fails; a version-only commit needs a tag, not a push to main.
 Record the actual build fingerprint and separate channel baseline using the [native compatibility and channel cutover contract](ios-ota-baseline.md).
 Verify both embedded startup and applicable update behavior; an OTA in the same project does not prove the installed store binary received it.
 
