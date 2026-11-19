@@ -30,10 +30,23 @@ test('every check reports a line, and a failing check is a warning, not a crash'
     return '[]';
   };
   const checks = runChecks({ now, run, exists: () => true, mtimeMs: () => now - 10 * 60000, home: '/h', hourPt: 12 });
-  assert.deepEqual(checks.map(check => check.name), ['docker', 'supervisors', 'slack-liveness', 'handoffs', 'needs-dawit', 'blocked']);
+  assert.deepEqual(checks.map(check => check.name), ['docker', 'supervisors', 'slack-liveness', 'handoffs', 'needs-dawit', 'blocked', 'external-config']);
   const byName = Object.fromEntries(checks.map(check => [check.name, check]));
   assert.equal(byName.docker.status, 'warn');
   assert.match(byName.supervisors.detail, /app/);
   assert.equal(byName['slack-liveness'].status, 'ok');
   assert.match(byName.handoffs.detail, /#9/);
+});
+
+test('external config drift is reported as a warning with the drift lines', () => {
+  const drift = Object.assign(new Error('failed'), { status: 1, stdout: 'supabase dev auth external.anonymous_users: expected ON, actual OFF\n' });
+  const run = (...args) => {
+    if (args[0] === 'node') throw drift;
+    if (args[0] === 'pgrep') return 'supervise.sh opusplan\nsupervise.sh app\n';
+    return args[0] === 'gh' ? '[]' : 'ok';
+  };
+  const checks = runChecks({ now, run, exists: () => true, mtimeMs: () => now, home: '/h', hourPt: 12 });
+  const config = checks.find(check => check.name === 'external-config');
+  assert.equal(config.status, 'warn');
+  assert.match(config.detail, /anonymous_users: expected ON, actual OFF/);
 });
