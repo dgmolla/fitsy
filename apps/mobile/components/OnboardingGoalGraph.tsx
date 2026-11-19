@@ -3,6 +3,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Line, Path, Circle } from 'react-native-svg';
 import { EDITORIAL, TEXT } from '@/lib/brand';
 import { onboardingGoalStory } from '@/lib/onboardingPersonalization';
+import { STUDIES, STUDY_NOTE } from '@/lib/studies';
+import { StudyNote } from './StudyNote';
 
 export function OnboardingGoalGraph({ goal }: { goal?: string }) {
   const story = onboardingGoalStory(goal);
@@ -22,6 +24,7 @@ export function OnboardingGoalGraph({ goal }: { goal?: string }) {
       <View style={s.axisLabels}><Text style={s.axis}>Starting point</Text><Text style={s.axis}>Over time</Text></View>
     </View>
     <View style={s.legend}><View style={s.legendItem}><View style={s.solid} /><Text style={s.legendText}>With Fitsy</Text></View><View style={s.legendItem}><View style={s.dashed} /><Text style={s.legendText}>Without Fitsy</Text></View></View>
+    <StudyNote text={STUDY_NOTE} sources={Object.values(STUDIES)} testID="study-note" />
     <Text style={s.disclaimer}>Conceptual paths, not measured results or a forecast.</Text>
   </View>;
 }
