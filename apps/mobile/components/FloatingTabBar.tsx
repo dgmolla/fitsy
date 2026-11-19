@@ -5,7 +5,7 @@ import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import Animated, { ReduceMotion, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS, EDITORIAL, RADII } from '@/lib/brand';
+import { COLORS, EDITORIAL, MAP_CONTROL_SHADOW, RADII } from '@/lib/brand';
 import { FLOATING_TAB_BAR_GAP, FLOATING_TAB_BAR_HEIGHT } from '@/lib/floatingNav';
 
 function ActiveTab({ focused }: { focused: boolean }) {
@@ -54,8 +54,7 @@ export function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarP
 
 const styles = StyleSheet.create({
   position: { position: 'absolute', left: 0, right: 0, alignItems: 'center', zIndex: 1 },
-  shadow: { borderRadius: RADII.pill, shadowColor: EDITORIAL.green,
-    shadowOpacity: 0.16, shadowRadius: 20, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
+  shadow: { borderRadius: RADII.pill, ...MAP_CONTROL_SHADOW },
   capsule: { height: FLOATING_TAB_BAR_HEIGHT, flexDirection: 'row', paddingHorizontal: 8, paddingVertical: 7,
     borderRadius: RADII.pill, overflow: 'hidden', borderWidth: 1, borderColor: `${COLORS.white}B3`,
     backgroundColor: `${EDITORIAL.cream}99` },

@@ -25,6 +25,11 @@ test('a DiscoveryMap-only change selects only the map flows', () => {
   expect(result.flows).toEqual(['map-search', 'map-search-location-denied']);
 });
 
+test('health-only API changes (deep health and its dependency probe) need no simulator', () => {
+  expect(select(['apps/api/lib/dependencyHealth.ts', 'apps/api/app/api/health/deep.test.ts']).scope).toBe('none');
+  expect(select(['apps/api/lib/rateLimit.ts']).scope).toBe('full');
+});
+
 test('other shared UI still requires the full suite', () => {
   expect(select(['apps/mobile/components/PaywallView.tsx']).scope).toBe('full');
 });

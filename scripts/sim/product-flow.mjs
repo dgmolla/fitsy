@@ -749,6 +749,12 @@ async function execute(udid, names, mode, { approvalId, environmentRetryAllowed 
     catch { throw new Error('ffprobe and ffmpeg are required to validate recorded product-flow video before running Maestro'); }
   }
   requireScreenRecognition();
+  // #874: surface external-config drift (for example anonymous sign-in turned off) up front instead of as a mysterious flow
+  // failure. Warning only: a run against a non-dev backend legitimately differs from the dev expected state.
+  try {
+    const drift = await (await import('../dev/check-external-config.mjs')).check({ env: process.env });
+    if (drift.length) process.stderr.write(`product-flow preflight: external config drift (see scripts/dev/check-external-config.mjs)\n${drift.join('\n')}\n`);
+  } catch (error) { process.stderr.write(`product-flow preflight: external config check skipped (${error.message})\n`); }
   const r = receipt(udid), identity = device(udid), server = backend();
   const embedded = embeddedBundleCompatibility(r, inputHash(root, 'js'), environment().configHash);
   assert(embedded.compatible,

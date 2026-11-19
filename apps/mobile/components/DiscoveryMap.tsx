@@ -179,6 +179,7 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
       onLayout={event => { setTopHeight(event.nativeEvent.layout.height); onTourLayoutChange?.(); }}>
       {previewHeader && <View style={s.previewHeader}>{previewHeader}</View>}
       <View style={s.searchRow}>
+        <View style={s.searchShadow}>
         <Pressable ref={active ? d.tourSearchRef : undefined} collapsable={false} style={s.searchEntry} testID="map-search-entry" onPress={onShowList}
           accessibilityRole="button" accessibilityLabel={d.query ? `Search: ${d.query}` : 'Search restaurants or dishes'}
           accessibilityHint="Open the list with search and macro editing">
@@ -186,6 +187,7 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
           <Ionicons name="search" size={19} color={EDITORIAL.green} />
           <Text style={s.searchText} numberOfLines={1}>{d.query || 'Search restaurants or dishes'}</Text>
         </Pressable>
+        </View>
       </View>
       <View style={s.topRow} pointerEvents="box-none" testID="map-toolbar">
         <Pressable ref={active ? d.tourLocationRef : undefined} collapsable={false} style={s.location} testID="discovery-location" onPress={d.handleOpenLocationPicker}
@@ -244,7 +246,7 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
             const result = cards[Math.min(cards.length - 1, Math.max(0, Math.round(event.nativeEvent.contentOffset.x / stride)))];
             if (result) select(result, false);
           }}>
-          {cards.map((result, position) => <View key={result.id} ref={position === 0 && active ? d.tourHeroRef : undefined} collapsable={false} testID={result.id === selectedId ? 'map-preview' : undefined}>
+          {cards.map((result, position) => <View key={result.id} style={s.cardShadow} ref={position === 0 && active ? d.tourHeroRef : undefined} collapsable={false} testID={result.id === selectedId ? 'map-preview' : undefined}>
             <DiscoveryMapCard result={result} locked={(d.locked === true && !d.isOnboardingPreview) || result.id === d.lockedTeaser?.id}
               onboardingPreview={d.isOnboardingPreview} hideDishName={d.isOnboardingPreview && position > 0}
               style={{ width: cardWidth, height: compact ? 174 : 210 }}

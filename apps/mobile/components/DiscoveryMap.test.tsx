@@ -16,7 +16,7 @@ import { saveDiscoveryMacroTargets } from '../lib/macroStorage';
 import { FALLBACK_LAT, FALLBACK_LNG, MANUAL_LOCATION_KEY } from '../lib/useLocation';
 import { __resetForTesting } from '../lib/analytics';
 import { FloatingNavClearanceContext } from '../lib/floatingNav';
-import { EDITORIAL } from '../lib/brand';
+import { EDITORIAL, MAP_CONTROL_SHADOW } from '../lib/brand';
 
 const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
 
@@ -137,6 +137,27 @@ it('removes the map action surface with Shuffle disabled and keeps the enabled a
   await act(async () => listeners.forEach(listener => listener()));
   expect(screen.queryByTestId('shuffle-button')).toBeNull();
   expect(screen.getByTestId('map-search-entry')).toBeTruthy();
+});
+
+it('gives every floating map control the one shared shadow (#973)', async () => {
+  flag = true;
+  shuffleFlag = true;
+  const screen = open('/search?mapDebug=1&query=meal');
+  await screen.findByTestId('map-pin-0');
+  // The search pill clips its own blur, so its shadow sits on the wrapper just outside it.
+  const shadowOf = (testId: string) => {
+    for (let node = screen.getByTestId(testId) as { props: { style?: StyleProp<ViewStyle> }; parent: unknown }; node; node = node.parent as typeof node) {
+      const style = StyleSheet.flatten(node.props?.style) as ViewStyle | undefined;
+      if (style?.shadowColor) return style;
+    }
+    return undefined;
+  };
+  const missing = ['map-search-entry', 'discovery-location', 'map-goals', 'shuffle-button'].filter(id => {
+    const style = shadowOf(id);
+    return !style || style.shadowColor !== MAP_CONTROL_SHADOW.shadowColor || style.shadowOpacity !== MAP_CONTROL_SHADOW.shadowOpacity
+      || style.shadowRadius !== MAP_CONTROL_SHADOW.shadowRadius;
+  });
+  expect(missing).toEqual([]);
 });
 
 it.each(['map', 'list'])('mapDebug keeps visible Shuffle in the %s controls with the remote flag off', async view => {
