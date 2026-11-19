@@ -96,3 +96,23 @@ test('reopening before a meal keeps its due time; past dates expire and toggles 
   }
   expect(planReminders({ ...input, preferences: { meals: false, trial: true } }).map(r => r.kind)).toEqual(['trial']);
 });
+
+test('non-subscribers get one generic nudge every 4 days at 11:30, counted from this session (#959)', () => {
+  const nudges = planReminders({ ...input, entitled: false, nudge: true, subscription: null });
+  expect(nudges.map(r => r.kind)).toEqual(['nudge', 'nudge', 'nudge']);
+  expect(nudges.map(r => r.date.getDate())).toEqual([11, 15, 19]);
+  for (const nudge of nudges) {
+    expect(nudge.date.getHours()).toBe(11); expect(nudge.date.getMinutes()).toBe(30);
+    expect(nudge.title).toBe('Fitsy'); expect(nudge.body).toBe('So many healthy food spots nearby… 👀');
+  }
+  expect(new Set(nudges.map(r => r.identifier)).size).toBe(3);
+  // Reopening pushes the next nudge out again: it is always 4 days after the latest session.
+  expect(planReminders({ ...input, now: new Date(2026, 8, 10, 9), entitled: false, nudge: true })[0].date.getDate()).toBe(14);
+});
+
+test('the nudge never reaches subscribers, signed-out users or an unresolved entitlement (#959)', () => {
+  const base = { ...input, entitled: false, nudge: true, subscription: null };
+  expect(planReminders({ ...base, userId: null })).toEqual([]);
+  expect(planReminders({ ...base, nudge: false })).toEqual([]);
+  expect(planReminders({ ...input, nudge: true }).some(r => r.kind === 'nudge')).toBe(false);
+});
