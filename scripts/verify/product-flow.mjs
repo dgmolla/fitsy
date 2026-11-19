@@ -205,10 +205,20 @@ export function changedPaths(base, cwd = root) {
   return paths;
 }
 
+// #999: code the native flows never run must not void an in-flight run when it merges to main: release, on-call, delivery,
+// GitHub and data-pipeline tooling. The sim harness, planner, fixtures and what they import (env-manifest, the external
+// config check) stay in the hash, so evidence is still bound to everything a run can depend on.
+export const unrelatedToolingPath = path =>
+  /^scripts\/(?:oncall|delivery|github|eval|eval-v2|pipeline-v2|maintenance|perf)\//.test(path)
+  || /^scripts\/deploy\/(?!env-manifest\.)/.test(path)
+  || /^scripts\/dev\/(?!check-external-config\.mjs$|write-local-env\.sh$)/.test(path)
+  || /^scripts\/[^/]+\.(?:ts|py)$/.test(path);
+
 export function inputHash(cwd = root, mobileOnly = false) {
   // Working contents matter; a report remains reusable after an evidence-only commit.
   const paths = git(['ls-files', '-z', '--cached', '--others', '--exclude-standard'], cwd).split('\0')
     .filter(p => p && p !== 'apps/mobile/eas.json' && !p.startsWith('.evidence/') && !p.endsWith('.md'))
+    .filter(p => mobileOnly === true || mobileOnly === 'js' || !unrelatedToolingPath(p))
     .filter(p => mobileOnly === true || !/(?:\.test\.|\.spec\.|__tests__\/|__mocks__\/|^scripts\/review\/)/.test(p))
     .filter(p => mobileOnly === 'js'
       ? /^(apps\/mobile\/(?!e2e\/|ios\/|android\/)|packages\/shared\/|package(-lock)?\.json$)/.test(p) && !/(?:\.test\.|\.spec\.|__tests__\/)/.test(p)
