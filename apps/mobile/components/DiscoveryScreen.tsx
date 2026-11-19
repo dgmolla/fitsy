@@ -54,11 +54,13 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
   const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: sheetY.value }] }));
   const discovery = useDiscoveryState({ onboardingPreview });
   const { navigation, isOnboardingPreview, tried, inputs, filterMode, query, setQuery, canSearch, hasQuery, location,
-    locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea,
+    locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea, nearbyDishCount,
     filterVisible, setFilterVisible, locationPickerVisible, setLocationPickerVisible, tourReady, tourVisible, startTour,
     tourEditRef, tourSearchRef, tourHeroRef, tourLocationRef, tourMoreRef, tourSteps, finishTour, tourStepShown, cancelTourTyping, handleClearQuery, handleApplyFilters,
     handleJoinWaitlist, handleOpenLocationPicker, handlePickLocation, handleUseCurrentLocation, unlockPreview,
     unlocking, resyncNow, onLockedTap, unlockTitle, unlockSubtitle, unlockLabel, handleRefresh, handleEndReached, canShuffle, handleShuffle } = discovery;
+  // Coverage confirmed (meals exist nearby) yet nothing passed the filters: the targets are the lever (#1004).
+  const macrosMismatch = !hasQuery && (nearbyDishCount ?? 0) > 0;
   const listRef = useRef<FlatList<(typeof results)[number]>>(null);
   const scrollOffset = useRef(0);
   const viewportRef = useRef<View>(null);
@@ -129,9 +131,11 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
       {canSearch && !outOfArea && !loading && !error && results.length === 0 && (
         <View style={s.inlineEmpty}>
           <Ionicons name="search-outline" size={32} color={EDITORIAL.creamDeep} />
-          <Text style={s.inlineEmptyText}>{hasQuery ? 'No matches for this search' : 'No meals with nutrition nearby'}</Text>
+          <Text style={s.inlineEmptyText}>{hasQuery ? 'No matches for this search' : macrosMismatch ? 'Nothing fits your targets here' : 'No meals with nutrition nearby'}</Text>
           <Text style={s.inlineEmptyHint}>
-            {hasQuery ? 'Try another dish or restaurant, or search in a different area. Your meal targets stay saved.' : 'Try another area to find meals with nutrition information.'}
+            {hasQuery ? 'Try another dish or restaurant, or search in a different area. Your meal targets stay saved.'
+              : macrosMismatch ? 'There are meals nearby, but none match your current meal targets. Loosen them to see more.'
+                : 'Try another area to find meals with nutrition information.'}
           </Text>
           <Pressable testID="discovery-empty-edit" accessibilityRole="button" style={s.waitlistBtn} onPress={() => setFilterVisible(true)}><Text style={s.waitlistBtnText}>Adjust meal targets</Text></Pressable>
           {hasQuery && <Pressable testID="discovery-empty-clear" accessibilityRole="button" style={s.waitlistBtn} onPress={handleClearQuery}><Text style={s.waitlistBtnText}>Clear search</Text></Pressable>}

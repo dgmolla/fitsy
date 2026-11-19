@@ -1005,3 +1005,55 @@ it('does not re-arm a deselected pin\'s native tracking, bounding concurrent sna
   expect(screen.getByTestId('map-pin-2').props.tracksViewChanges).toBe(true);
   await waitFor(() => expect(screen.getByTestId('map-pin-2').props.tracksViewChanges).toBe(false));
 });
+
+// #1004: the empty map card names the real cause.
+// The preview client caches coverage per account and place, so each case uses its own place.
+async function withCoverage(nearbyDishCount: number, lat: number) {
+  await SecureStore.setItemAsync(MANUAL_LOCATION_KEY, JSON.stringify({ name: 'Elsewhere', lat, lng: -118.24 }));
+  rows = [];
+  const base = global.fetch as jest.Mock;
+  global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input));
+    if (url.pathname === '/api/restaurants/preview') {
+      requests.push(url);
+      return response({ data: [], meta: { nearbyDishCount, radiusMiles: 3, limit: 20, total: 0, locked: true, nextCursor: null } });
+    }
+    return base(input, init);
+  }) as unknown as typeof fetch;
+}
+
+it('an empty map where no meals exist nearby says we are not in this area yet, with the waitlist action (#1004)', async () => {
+  await withCoverage(0, 33.31);
+  const screen = open('/search?mapDebug=1');
+  await screen.findByText("We're not in your area yet");
+  expect(screen.getByText('Fitsy is launching in Los Angeles first - your city is next on the list.')).toBeTruthy();
+  expect(screen.getByTestId('discovery-join-waitlist')).toBeTruthy();
+  expect(screen.queryByTestId('discovery-empty-edit')).toBeNull();
+  expect(searchRequests().length).toBeGreaterThan(0);
+  expect(requests.some(url => url.pathname === '/api/restaurants/preview')).toBe(true);
+});
+
+it('an empty map where meals exist nearby points at the meal targets instead (#1004)', async () => {
+  await withCoverage(12, 33.32);
+  const screen = open('/search?mapDebug=1');
+  await screen.findByText('Nothing fits your targets here');
+  expect(screen.getByText('There are meals nearby, but none match your current meal targets. Loosen them to see more.')).toBeTruthy();
+  expect(screen.getByTestId('discovery-empty-edit')).toBeTruthy();
+  expect(screen.queryByTestId('discovery-join-waitlist')).toBeNull();
+  expect(screen.queryByText("We're not in your area yet")).toBeNull();
+});
+
+it('a craving with no match in a covered area keeps its own message and its clear action (#1004)', async () => {
+  await withCoverage(12, 33.33);
+  const screen = open('/search?mapDebug=1&query=zzzz');
+  await screen.findByText('No matches for this search');
+  expect(screen.getByTestId('discovery-empty-clear')).toBeTruthy();
+  expect(screen.queryByText("We're not in your area yet")).toBeNull();
+  expect(screen.queryByText('Nothing fits your targets here')).toBeNull();
+});
+
+it('the place is the problem wherever no meals exist, even with a craving typed (#1004)', async () => {
+  await withCoverage(0, 33.34);
+  const screen = open('/search?mapDebug=1&query=zzzz');
+  await screen.findByText("We're not in your area yet");
+});

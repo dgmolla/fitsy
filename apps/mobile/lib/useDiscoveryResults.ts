@@ -82,6 +82,8 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
       setError(null);
       setNearbyDishCount(undefined);
       setOutOfArea(false);
+      // Coverage is re-read for every fresh search; only the preview sets it from its own response.
+      if (!isOnboardingPreview && !shuffle) setNearbyDishCount(undefined);
       if (!shuffle) pagesLoadedRef.current = 0;
       isLoadingMoreRef.current = false;
       setLoadingMore(false);
@@ -133,6 +135,21 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
           setResults([]);
           setNextCursor(null);
           return;
+        }
+        // Empty main search: tell "nobody serves this place" from "nothing fits your targets" with the
+        // same coverage signal the onboarding preview already uses (#1004). Best effort: on failure the
+        // generic empty card stays.
+        if (!isOnboardingPreview && !shuffle && data.length === 0 && cursor === null) {
+          const coverage = await fetchGuidedPreview({ lat, lng }, '', null, { signal: controller.signal, refresh: isRefresh })
+            .then(response => response.meta.nearbyDishCount, () => undefined);
+          if (!isCurrent()) return;
+          if (coverage === 0) {
+            setOutOfArea(true);
+            setResults([]);
+            setNextCursor(null);
+            return;
+          }
+          setNearbyDishCount(coverage);
         }
         setResults(data);
         activeShuffle.current = shuffle;

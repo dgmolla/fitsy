@@ -288,3 +288,54 @@ it.each([true, false])('ends a stalled request and can retry without accepting t
   expect(result.current.error).toBeNull();
   expect(result.current.loading).toBe(false);
 });
+
+// #1004: an empty main search asks the preview coverage endpoint why, with no craving and no targets.
+const emptyMain = { ok: true, status: 200, json: async () => ({ data: [], meta: { radiusMiles: 3, limit: 20, total: 0, locked: false, nextCursor: null } }) } as Response;
+const coverage = (nearbyDishCount: number) => ({ ok: true, status: 200,
+  json: async () => ({ data: [], meta: { radiusMiles: 3, nearbyDishCount, limit: 20, total: 0, locked: true, nextCursor: null } }) } as Response);
+const renderEmptySearch = () => renderHook(() => useDiscoveryResults({ inputs, query: '', location, canSearch: true,
+  targetsLoaded: true, previewReady: true, isOnboardingPreview: false }));
+
+it('an empty search where no meals exist at all reads as out of range, using the preview coverage count (#1004)', async () => {
+  const { result } = renderEmptySearch();
+  await act(async () => {});
+  await act(async () => requests[0].resolve(emptyMain));
+  await act(async () => {});
+  const coverageUrl = new URL(requests[1].url);
+  expect(coverageUrl.pathname).toBe('/api/restaurants/preview');
+  expect(Object.fromEntries(coverageUrl.searchParams)).toMatchObject({ guided: '1', q: '' });
+  for (const key of ['calories', 'protein', 'carbs', 'fat']) expect(coverageUrl.searchParams.has(key)).toBe(false);
+  await act(async () => requests[1].resolve(coverage(0)));
+  expect(result.current.outOfArea).toBe(true);
+  expect(result.current.results).toEqual([]);
+});
+
+it('an empty search where meals exist nearby keeps the area and points at the targets (#1004)', async () => {
+  const { result } = renderEmptySearch();
+  await act(async () => {});
+  await act(async () => requests[0].resolve(emptyMain));
+  await act(async () => {});
+  await act(async () => requests[1].resolve(coverage(12)));
+  expect(result.current.outOfArea).toBe(false);
+  expect(result.current.nearbyDishCount).toBe(12);
+  expect(result.current.results).toEqual([]);
+});
+
+it('a failed coverage read keeps the generic empty card instead of guessing a cause (#1004)', async () => {
+  const { result } = renderEmptySearch();
+  await act(async () => {});
+  await act(async () => requests[0].resolve(emptyMain));
+  await act(async () => {});
+  await act(async () => requests[1].resolve({ ok: false, status: 503, json: async () => ({ error: 'down' }) } as Response));
+  expect(result.current.outOfArea).toBe(false);
+  expect(result.current.nearbyDishCount).toBeUndefined();
+  expect(result.current.error).toBeNull();
+});
+
+it('a search with results never asks for coverage (#1004)', async () => {
+  renderEmptySearch();
+  await act(async () => {});
+  await act(async () => respond(0, 'covered-place', { locked: false }));
+  await act(async () => {});
+  expect(requests).toHaveLength(1);
+});
