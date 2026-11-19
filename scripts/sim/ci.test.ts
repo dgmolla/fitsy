@@ -176,28 +176,17 @@ test('floating navigation clears only the observed Debug toast before proving Sa
   ]);
 });
 
-test('widget return dismisses the non-accessible Debug overlay and retains the named action and Search assertion', () => {
-  const [, commands] = loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e/flows/widget-setup.yaml'), 'utf8')) as [unknown, {
-    tapOn?: { id?: string; point?: string };
-    runFlow?: { when: { visible: string }; commands: object[] };
-    scrollUntilVisible?: object;
-  }[]];
-  const tap = commands.findIndex(step => step.tapOn?.id === 'widget-search');
-  expect(tap).toBeGreaterThan(-1);
-  expect(commands[tap - 2]).toEqual({ scrollUntilVisible: {
-    element: { id: 'widget-search' }, direction: 'DOWN',
-  } });
-  const dismiss = commands.findIndex(step => step.tapOn?.point === '93%,93%');
-  expect(dismiss).toBeGreaterThan(-1);
-  expect(commands[dismiss + 1]).toEqual({ runFlow: {
-    when: { visible: 'Search restaurants or dishes' }, commands: [
-      { openLink: 'com.fitsy.mobile://widget' }, { tapOn: { text: '^Open$', optional: true } },
-    ],
-  } });
-  expect(commands[dismiss + 2]).toEqual({ extendedWaitUntil: { visible: { id: 'widget-step-1' }, timeout: 15000 } });
-  expect(commands[tap + 1]).toEqual({ extendedWaitUntil: {
-    visible: 'Search restaurants or dishes', timeout: 15000,
-  } });
+test('an empty widget tap lands on Discovery and never on the setup steps, while the locked link keeps its hand-off (#1006)', () => {
+  const [, commands] = loadAll(readFileSync(resolve(__dirname, '../../apps/mobile/e2e/flows/widget-setup.yaml'), 'utf8')) as [unknown, Record<string, unknown>[]];
+  const open = commands.findIndex(step => step.openLink === 'com.fitsy.mobile://widget');
+  expect(open).toBeGreaterThan(-1);
+  expect(commands[open + 1]).toEqual({ tapOn: { text: '^Open$', optional: true } });
+  expect(commands[open + 2]).toEqual({ extendedWaitUntil: { visible: 'Search restaurants or dishes', timeout: 15000 } });
+  expect(commands[open + 3]).toEqual({ assertNotVisible: { id: 'widget-step-1' } });
+  expect(commands[open + 4]).toEqual({ assertNotVisible: 'Your next meal, at a glance.' });
+  expect(commands.some(step => step.openLink === 'com.fitsy.mobile://widget?upgrade=1')).toBe(true);
+  // The old setup-screen assertions must be gone: nothing on this journey expects the steps to show.
+  expect(JSON.stringify(commands)).not.toContain('widget-search');
 });
 
 test.each([false, true].flatMap(available => ['0', '1'].map(enabled => ({ available, enabled }))))(
