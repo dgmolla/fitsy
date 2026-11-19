@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+const repository = resolve(new URL('../..', import.meta.url).pathname);
 const minutes = ms => Math.round(ms / 60000);
 const result = (name, ok, detail) => ({ name, status: ok ? 'ok' : 'warn', detail });
 
@@ -52,6 +53,13 @@ export function runChecks({ now = Date.now(), run = (...args) => execFileSync(ar
   attempt('blocked', () => {
     const issues = JSON.parse(run('gh', 'issue', 'list', '--repo', 'dgmolla/fitsy', '--label', 'blocked', '--state', 'open', '--json', 'number', '--limit', '50'));
     return result('blocked', issues.length === 0, issues.length ? `open: ${issues.map(issue => `#${issue.number}`).join(' ')}` : 'none open');
+  });
+  // #874: dev Supabase auth settings and local env names the tests depend on; drift is reported in plain words, never values.
+  attempt('external-config', () => {
+    let output = '', code = 0;
+    try { output = run('node', resolve(repository, 'scripts/dev/check-external-config.mjs')); } catch (error) { code = error.status ?? 1; output = String(error.stdout ?? error.message); }
+    const lines = output.trim().split('\n').filter(Boolean);
+    return result('external-config', code === 0, code === 0 ? 'no drift' : lines.slice(0, 3).join('; '));
   });
   return checks;
 }
