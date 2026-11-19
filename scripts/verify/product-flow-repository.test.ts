@@ -46,6 +46,23 @@ test('a test-only split retains product acceptance while a flow edit invalidates
   expect(afterJs.acceptance).not.toBe(afterFlow.acceptance);
 });
 
+test('tooling the native flows never run does not void acceptance, while the sim harness still does', () => {
+  fixtureGit(['init', '-q', dir]);
+  for (const path of ['apps/mobile/lib/paywall.tsx', 'scripts/sim/product-flow.mjs', 'scripts/oncall/trigger.mjs', 'scripts/deploy/ota.sh',
+    'scripts/dev/cleanup-worktrees.mjs', 'scripts/dev/check-external-config.mjs', 'scripts/deploy/env-manifest.mjs', 'scripts/phase1-run.ts']) {
+    mkdirSync(join(dir, path, '..'), { recursive: true }); writeFileSync(join(dir, path), 'v1');
+  }
+  fixtureGit(['-C', dir, 'add', '.']);
+  const hash = () => evaluate(`gate.inputHash(${JSON.stringify(dir)})`).stdout;
+  const base = hash();
+  for (const path of ['scripts/oncall/trigger.mjs', 'scripts/deploy/ota.sh', 'scripts/dev/cleanup-worktrees.mjs', 'scripts/phase1-run.ts']) {
+    writeFileSync(join(dir, path), 'v2'); expect(hash()).toBe(base);
+  }
+  for (const path of ['scripts/sim/product-flow.mjs', 'scripts/dev/check-external-config.mjs', 'scripts/deploy/env-manifest.mjs', 'apps/mobile/lib/paywall.tsx']) {
+    const before = hash(); writeFileSync(join(dir, path), 'v2'); expect(hash()).not.toBe(before);
+  }
+});
+
 test('the canonical product-flow check blocks missing evidence but permits explicit non-product applicability', () => {
   const verify = join(dir, 'scripts/verify'); mkdirSync(verify, { recursive: true });
   // Reuse the complete CLI fixture, including the screenshot guard's imports.
