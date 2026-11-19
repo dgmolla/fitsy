@@ -12,6 +12,7 @@ import { trackRestaurantTapped } from '@/lib/analytics';
 import { FrostedSearchSurface } from './DiscoveryChrome';
 import { openRestaurantOrPaywall } from './DiscoveryCards';
 import { DiscoveryMapCard } from './DiscoveryMapCard';
+import { EmptyStateBadge } from './EmptyStateBadge';
 import { ShuffleButton } from './ShuffleButton';
 import { s } from './DiscoveryMap.styles';
 import { useFloatingNavClearance } from '@/lib/floatingNav';
@@ -224,19 +225,25 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
           </View> : d.error ? <>
             <Text style={s.body} accessibilityRole="alert">{d.error}</Text>
             <Pressable style={s.action} onPress={() => { void d.handleRefresh(); }} testID="preview-retry" accessibilityRole="button"><Text style={s.link}>Try again</Text></Pressable>
-          </> : d.outOfArea ? <>
-            <Text style={s.heading}>We're not in your area yet</Text>
-            <Text style={s.body}>Fitsy is launching in Los Angeles first - your city is next on the list.</Text>
-            <Pressable style={s.action} onPress={d.handleJoinWaitlist} testID="discovery-join-waitlist" accessibilityRole="button">
-              <Text style={s.link}>Keep me posted</Text>
-            </Pressable>
-          </> : <>
-            <Text style={s.heading}>{macrosMismatch ? 'Nothing fits your targets here' : emptyTitle}</Text>
-            <Text style={s.body}>{macrosMismatch ? 'There are meals nearby, but none match your current meal targets. Loosen them to see more.'
-              : 'Try another dish or area, or adjust your meal targets.'}</Text>
-            <Pressable style={s.action} onPress={() => d.setFilterVisible(true)} testID="discovery-empty-edit" accessibilityRole="button"><Text style={s.link}>Adjust meal targets</Text></Pressable>
-            {d.hasQuery && <Pressable style={s.action} onPress={d.handleClearQuery} testID="discovery-empty-clear" accessibilityRole="button"><Text style={s.link}>Clear search</Text></Pressable>}
-          </>}
+          </> : d.outOfArea ? <View style={s.emptyRow}>
+            <EmptyStateBadge kind="range" />
+            <View style={s.emptyCopy}>
+              <Text style={s.heading}>We're not in your area yet</Text>
+              <Text style={s.body}>Fitsy is launching in Los Angeles first - your city is next on the list.</Text>
+              <Pressable style={s.action} onPress={d.handleJoinWaitlist} testID="discovery-join-waitlist" accessibilityRole="button">
+                <Text style={s.link}>Keep me posted</Text>
+              </Pressable>
+            </View>
+          </View> : <View style={s.emptyRow}>
+            {macrosMismatch && <EmptyStateBadge kind="macros" />}
+            <View style={s.emptyCopy}>
+              <Text style={s.heading}>{macrosMismatch ? 'Nothing fits your targets here' : emptyTitle}</Text>
+              <Text style={s.body}>{macrosMismatch ? 'There are meals nearby, but none match your current meal targets. Loosen them to see more.'
+                : 'Try another dish or area, or adjust your meal targets.'}</Text>
+              <Pressable style={s.action} onPress={() => d.setFilterVisible(true)} testID="discovery-empty-edit" accessibilityRole="button"><Text style={s.link}>Adjust meal targets</Text></Pressable>
+              {d.hasQuery && <Pressable style={s.action} onPress={d.handleClearQuery} testID="discovery-empty-clear" accessibilityRole="button"><Text style={s.link}>Clear search</Text></Pressable>}
+            </View>
+          </View>}
         </ScrollView>}
         {showRestaurants && <ScrollView ref={carousel} horizontal testID="map-carousel" style={{ height: compact ? 174 : 210, flexGrow: 0 }}
           showsHorizontalScrollIndicator={false} snapToInterval={stride} decelerationRate="fast" disableIntervalMomentum
