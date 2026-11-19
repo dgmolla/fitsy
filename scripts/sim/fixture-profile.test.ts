@@ -139,3 +139,36 @@ describe('entitled fixture baseline profile (#934)', () => {
     expect(await ensure({ name: 'expired-subscription', env: credentials(origin) })).toContain(expected);
   });
 });
+
+// #995: one login per account per run; a 401 triggers exactly one fresh login, and a failing login is not retried.
+describe('login reuse', () => {
+  const run = (body: string): string => spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import { ensureBaselineProfile } from ${JSON.stringify(resolve(__dirname, 'fixture-profile.mjs'))};\n${body}`], { encoding: 'utf8' }).stdout;
+  const fixture = `{ name: 'unsubscribed-dev', env: { EXPO_PUBLIC_API_URL: 'http://localhost:1', EXPO_PUBLIC_DEV_LOGIN_EMAIL: 'a@example.test', EXPO_PUBLIC_DEV_LOGIN_PASSWORD: 'pw' } }`;
+
+  test('two journeys on one account log in once', () => {
+    const out = run(`let logins = 0;
+      const http = (method, url) => url.endsWith('/api/auth/login') ? (logins += 1, { status: 200, json: { token: 't' } }) : { status: 200, json: { verdict: 'never_subscribed' } };
+      ensureBaselineProfile(${fixture}, http); ensureBaselineProfile(${fixture}, http); process.stdout.write('logins=' + logins);`);
+    expect(out).toBe('logins=1');
+  });
+
+  test('a 401 on the cached token logs in once more and then succeeds', () => {
+    const out = run(`let logins = 0, rejected = false;
+      const http = (method, url, options = {}) => {
+        if (url.endsWith('/api/auth/login')) { logins += 1; return { status: 200, json: { token: 't' + logins } }; }
+        if (options.token === 't1' && rejected === false) { rejected = true; return { status: 401, json: null }; }
+        return { status: 200, json: { verdict: 'never_subscribed' } };
+      };
+      ensureBaselineProfile(${fixture}, http); process.stdout.write('logins=' + logins);`);
+    expect(out).toBe('logins=2');
+  });
+
+  test('a failing login is reported once without retrying', () => {
+    const out = run(`let logins = 0;
+      const http = () => (logins += 1, { status: 503, json: null });
+      try { ensureBaselineProfile(${fixture}, http); } catch (error) { process.stdout.write(error.message + ' logins=' + logins); }`);
+    expect(out).toContain('dev login failed (HTTP 503)');
+    expect(out).toContain('logins=1');
+  });
+});
