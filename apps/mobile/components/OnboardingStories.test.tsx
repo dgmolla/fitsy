@@ -5,7 +5,7 @@ import { fireEvent, render, within } from '@testing-library/react-native';
 import { OnboardingApproachStory } from './OnboardingApproachStory';
 import { OnboardingGoalGraph } from './OnboardingGoalGraph';
 import { onboardingGoalPayoff, TRIED_OPTIONS } from '@/lib/onboardingPersonalization';
-import { STUDIES } from '@/lib/studies';
+import { STUDIES, STUDY_NOTE } from '@/lib/studies';
 
 it.each([
   ['meal_prep', ['🥘', '🍕', 'Meals at home', 'Dinner out']],
@@ -37,21 +37,18 @@ it('labels the graph as conceptual in visible and accessible text', () => {
   expect(screen.getByLabelText(/Illustrative consistency with your muscle-building plan/)).toBeTruthy();
 });
 
-it('links the graph to the studies behind it with one short line each (#970)', () => {
+it('links the graph to the three studies behind it with one short line (#970)', () => {
   const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
   const screen = render(<OnboardingGoalGraph goal="lose_fat" />);
-  expect(screen.getByText(/about 100 kcal a day/, { exact: false })).toBeTruthy();
-  expect(screen.getByText(/not all-or-nothing/, { exact: false })).toBeTruthy();
-  fireEvent.press(screen.getByTestId('study-small-changes-source'));
-  expect(open).toHaveBeenLastCalledWith('https://pubmed.ncbi.nlm.nih.gov/12574618/');
-  fireEvent.press(screen.getByTestId('study-flexible-eating-source'));
-  expect(open).toHaveBeenLastCalledWith('https://pubmed.ncbi.nlm.nih.gov/10349584/');
-  expect(screen.getByText(/food choices are especially responsive/, { exact: false })).toBeTruthy();
-  fireEvent.press(screen.getByTestId('study-choice-design-source'));
-  expect(open).toHaveBeenLastCalledWith('https://pubmed.ncbi.nlm.nih.gov/34983836/');
-  for (const study of Object.values(STUDIES)) {
-    expect(study.text.length).toBeLessThan(130);
-    expect(study.url).toMatch(/^https:\/\/pubmed\.ncbi\.nlm\.nih\.gov\/\d+\/$/);
-  }
+  expect(screen.getByText(/Based on research on small, steady changes/, { exact: false })).toBeTruthy();
+  expect(screen.getByText('Conceptual paths, not measured results or a forecast.')).toBeTruthy();
+  const urls = Object.values(STUDIES).map(study => study.url);
+  urls.forEach((url, index) => {
+    fireEvent.press(screen.getByTestId(`study-note-${index}`));
+    expect(open).toHaveBeenLastCalledWith(url);
+  });
+  expect(urls).toEqual(['https://pubmed.ncbi.nlm.nih.gov/12574618/', 'https://pubmed.ncbi.nlm.nih.gov/10349584/', 'https://pubmed.ncbi.nlm.nih.gov/34983836/']);
+  expect(STUDY_NOTE.length).toBeLessThan(100);
+  for (const url of urls) expect(url).toMatch(/^https:\/\/pubmed\.ncbi\.nlm\.nih\.gov\/\d+\/$/);
   open.mockRestore();
 });
