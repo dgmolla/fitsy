@@ -126,7 +126,7 @@ export async function readScheduledReminders(userId: string | null) {
   return (await Notifications.getAllScheduledNotificationsAsync()).flatMap(request => {
     const data = request.content.data;
     if (!request.identifier.startsWith(REMINDER_PREFIX) || data?.userId !== userId ||
-      !['meal', 'trial'].includes(String(data.kind)) || typeof data.scheduledFor !== 'string' || !Number.isFinite(Date.parse(data.scheduledFor))) return [];
+      !['meal', 'trial', 'nudge'].includes(String(data.kind)) || typeof data.scheduledFor !== 'string' || !Number.isFinite(Date.parse(data.scheduledFor))) return [];
     return [{ kind: String(data.kind), date: data.scheduledFor }];
   }).sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
 }
@@ -134,7 +134,8 @@ export async function readScheduledReminders(userId: string | null) {
 /** Notification content never supplies an arbitrary URL to the router. */
 export function reminderDestination(data: Record<string, unknown>, userId: string | null) {
   if (!userId || data.userId !== userId) return null;
-  if (data.kind === 'meal') return '/(tabs)/search' as const;
+  // The generic nudge opens the map: search is map-first, and non-subscribers reach the paywall from a dish.
+  if (data.kind === 'meal' || data.kind === 'nudge') return '/(tabs)/search' as const;
   if (data.kind === 'trial') return '/(tabs)/profile' as const;
   return null;
 }

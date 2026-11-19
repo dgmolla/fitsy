@@ -18,6 +18,22 @@ function select(files: string[] | null, options: object = {}) {
   return JSON.parse(result.stdout);
 }
 
+// #873: a map-only change (the #834 shape) selects only the map-search flows, not the full suite.
+test('a DiscoveryMap-only change selects only the map flows', () => {
+  const result = select(['apps/mobile/components/DiscoveryMap.tsx']);
+  expect(result.scope).toBe('flow');
+  expect(result.flows).toEqual(['map-search', 'map-search-location-denied']);
+});
+
+test('health-only API changes (deep health and its dependency probe) need no simulator', () => {
+  expect(select(['apps/api/lib/dependencyHealth.ts', 'apps/api/app/api/health/deep.test.ts']).scope).toBe('none');
+  expect(select(['apps/api/lib/rateLimit.ts']).scope).toBe('full');
+});
+
+test('other shared UI still requires the full suite', () => {
+  expect(select(['apps/mobile/components/PaywallView.tsx']).scope).toBe('full');
+});
+
 test.each([
   ['docs/guide.md'], ['AGENTS.md'], ['apps/mobile/README.md'],
   ['scripts/verify/run.mjs'],

@@ -14,7 +14,7 @@ export function isMain(url) {
 }
 // This service-only observability endpoint has no mobile caller or journey.
 // Any other API, shared, or mobile path still requires native proof.
-export const serviceHealthPath = path => /^apps\/api\/app\/api\/health\/route(?:\.test)?\.ts$/.test(path);
+export const serviceHealthPath = path => /^apps\/api\/(?:app\/api\/health\/(?:route|deep)(?:\.test)?\.ts|lib\/dependencyHealth\.ts)$/.test(path);
 // Operator-triggered routes (cron/ops/diagnostics, CRON_SECRET-gated); the
 // mobile client never calls apps/api/app/api/internal/** so they carry no
 // simulator-mapped journey and shouldn't force full coverage on every edit.
@@ -145,6 +145,7 @@ const simulatorSource = path => !documentationPath(path) && !staticLegalPage(pat
   !/(?:\.test\.|\.spec\.|\.d\.ts$|__tests__\/|__mocks__\/|(?:^|\/)(?:__fixtures__|test-fixtures)\/)/.test(path);
 const uiPath = path => /\.(?:[jt]sx?|mdx|css|scss|sass|less|svg|png|jpe?g|webp|gif|avif|ico|ttf|otf|woff2?)$/.test(path) &&
   /^(?:apps\/mobile\/(?:app|components|assets|styles|theme|tokens)\/|apps\/(?:web|landing|api)\/(?:src\/)?(?:app\/(?!api\/)|pages\/(?!api\/)|components\/|styles\/|public\/|assets\/)|(?:(?:web|src)\/)?(?:app\/(?!api\/)|pages\/(?!api\/)|components\/|styles\/|public\/|assets\/))/.test(path);
+const mapOnlyComponent = /^apps\/mobile\/components\/(?:DiscoveryMap|DiscoveryViewToggle)\.[A-Za-z]+$/;
 const sharedUIPath = path => /^apps\/mobile\/(?:components\/|assets\/|(?:styles|theme|tokens)\/|lib\/(?:theme|colors|typography)\.)/.test(path) ||
   (uiPath(path) && /(?:^|\/)(?:components|styles|theme)\/|(?:^|\/)(?:layout|_app|global)\./.test(path));
 const mobileContract = path => /^(apps\/mobile\/|packages\/shared\/|prisma\/|package(?:-lock)?\.json$|apps\/api\/(app\/api\/|lib\/|services\/|[^/]+$))/.test(path);
@@ -579,7 +580,9 @@ export function simulatorSelection(files, { cwd = repository, env = process.env,
         : 'Only Discovery comments changed; executable product inputs are unchanged', reviewTier), acceptanceCategories: entry.acceptanceCategories };
   }
   if (configKeys.length) return full(`Public native configuration changed: ${configKeys.join(', ')}`);
-  const sharedUI = source.find(sharedUIPath);
+  // #873: the map-only components are owned by the map-search flows (mapped in screenFlows), so a map-only change selects
+  // those flows instead of the full suite. Every other shared UI path still requires full coverage.
+  const sharedUI = source.find(path => sharedUIPath(path) && !mapOnlyComponent.test(path));
   if (sharedUI) return full(`Shared UI or app shell requires the full smoke suite: ${sharedUI}`);
   const contracts = source.filter(path => mobileContract(path) && !serviceHealthPath(path) && !internalOpsPath(path));
   const mobile = contracts.filter(path => path.startsWith('apps/mobile/'));
