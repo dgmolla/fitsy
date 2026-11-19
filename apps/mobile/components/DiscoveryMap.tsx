@@ -131,6 +131,8 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
     }), d.onLockedTap);
   }
   const showRestaurants = cards.length > 0 && !d.loading && !d.refreshing && !d.location.loading && !d.error && !d.outOfArea;
+  // Coverage confirmed (meals exist nearby) yet nothing passed the filters: the targets are the lever (#1004).
+  const macrosMismatch = !d.hasQuery && (d.nearbyDishCount ?? 0) > 0;
   const emptyTitle = !d.canSearch ? 'Find your next meal' : d.hasQuery ? 'No matches for this search' : 'No meals with nutrition nearby';
   const more = d.nextCursor && !d.locked && !d.isOnboardingPreview && !d.loading && <Pressable style={s.more} disabled={d.loadingMore || d.refreshing}
     onPress={() => { void d.handleEndReached(); }} testID="map-load-more" accessibilityRole="button"
@@ -229,8 +231,9 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
               <Text style={s.link}>Keep me posted</Text>
             </Pressable>
           </> : <>
-            <Text style={s.heading}>{emptyTitle}</Text>
-            <Text style={s.body}>Try another dish or area, or adjust your meal targets.</Text>
+            <Text style={s.heading}>{macrosMismatch ? 'Nothing fits your targets here' : emptyTitle}</Text>
+            <Text style={s.body}>{macrosMismatch ? 'There are meals nearby, but none match your current meal targets. Loosen them to see more.'
+              : 'Try another dish or area, or adjust your meal targets.'}</Text>
             <Pressable style={s.action} onPress={() => d.setFilterVisible(true)} testID="discovery-empty-edit" accessibilityRole="button"><Text style={s.link}>Adjust meal targets</Text></Pressable>
             {d.hasQuery && <Pressable style={s.action} onPress={d.handleClearQuery} testID="discovery-empty-clear" accessibilityRole="button"><Text style={s.link}>Clear search</Text></Pressable>}
           </>}
