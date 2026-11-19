@@ -68,6 +68,13 @@ export const EDITORIAL = {
   whiteTintLow:    'rgba(255,255,255,0.12)' as string, // white @ 12% — button on dark sort bar
 } as const;
 
+// One subtle elevation shared by every floating map control, Google Maps level:
+// search bar, chips, shuffle, "Search this area", the meal cards and the tab bar (#973).
+export const MAP_CONTROL_SHADOW = {
+  shadowColor: '#0F1F15', shadowOpacity: 0.16, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 3,
+} as const;
+export const MAP_CONTROL_HAIRLINE = 'rgba(15,31,21,0.08)';
+
 export const RADII = {
   pill: 999,
 } as const;
