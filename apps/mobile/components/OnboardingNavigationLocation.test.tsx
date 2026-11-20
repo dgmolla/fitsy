@@ -225,10 +225,10 @@ it.each([
   const first = renderJourney('/welcome/location-permission');
   await waitFor(() => expect(first.getByTestId('location-use-current').props.accessibilityState?.disabled).not.toBe(true));
   await act(async () => { fireEvent.press(first.getByTestId('location-use-current')); });
-  await first.findByTestId('waitlist-join');
+  await first.findByTestId('out-of-area-screen');
   first.unmount();
   const screen = renderJourney('/');
-  await screen.findByTestId('waitlist-join');
+  await screen.findByTestId('out-of-area-screen');
   expect(screen.queryByTestId('signup-apple')).toBeNull();
 
   const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
@@ -298,7 +298,7 @@ it.each([
     expect(screen.getPathname()).toBe('/welcome/location-permission');
     expect((await getOnboardingData()).area?.source).toBe('gps');
     expect((global.fetch as jest.Mock).mock.calls.filter(([url]) => String(url).includes('/api/restaurants/preview'))).toHaveLength(1);
-    expect((global.fetch as jest.Mock).mock.calls.filter(([url]) => String(url).includes('/api/waitlist'))).toHaveLength(0);
+    expect((global.fetch as jest.Mock).mock.calls.filter(([url]) => String(url).includes('/api/waitlist')).length).toBeGreaterThan(0);
     return;
   }
   await recovery;
@@ -306,7 +306,10 @@ it.each([
   expect(chooserTouches).toBe(cancelledTouches + 1);
   expect(screen.getPathname()).toBe('/welcome/goal');
   expect((await getOnboardingData()).area).toEqual({ lat: 34.0407, lng: -118.2468, name: 'DTLA', source: 'manual' });
-  expect((global.fetch as jest.Mock).mock.calls.filter(([url]) => String(url).includes('/api/waitlist'))).toEqual([]);
+  // A signed-in visitor is saved to the waitlist automatically each time the out-of-area screen opens; the server upserts (#1012).
+  const waitlistCalls = (global.fetch as jest.Mock).mock.calls.filter(([url]) => String(url).includes('/api/waitlist'));
+  expect(waitlistCalls.length).toBeGreaterThan(0);
+  for (const [, options] of waitlistCalls) expect(JSON.parse(options.body)).toEqual({ lat: 40.7128, lng: -74.006 });
   const coverageCalls = (global.fetch as jest.Mock).mock.calls.filter(([url]) => String(url).includes('/api/restaurants/preview'));
   expect(coverageCalls).toHaveLength(2);
   for (const [, options] of coverageCalls) expect(options.headers).toEqual({ Authorization: 'Bearer test-token' });

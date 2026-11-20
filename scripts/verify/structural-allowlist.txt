@@ -60,7 +60,6 @@ direct-api apps/mobile/mockups/search-v3c.tsx
 direct-api apps/mobile/mockups/search-v3d.tsx
 direct-api apps/mobile/app/restaurant/[id].tsx
 direct-api apps/mobile/app/welcome/notification-permission.tsx
-direct-api apps/mobile/app/welcome/out-of-area.tsx
 direct-api apps/mobile/app/welcome/problem.tsx
 direct-api apps/mobile/mockups/search-v2-categories.tsx
 inline-style apps/api/app/restaurants/[slug]/[itemSlug]/page.tsx

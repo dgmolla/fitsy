@@ -277,7 +277,7 @@ test.each(['chain-menu-serving', 'cold-start-welcome', 'log-meal', 'meal-target-
 });
 
 test.each([
-  ['flows/onboarding-out-of-area', 'waitlist-join', 0],
+  ['flows/onboarding-out-of-area', 'out-of-area-screen', 0],
   ['flows/onboarding-out-of-area', 'goal-performance', 1],
   ['helpers/mixed-trial-visual', 'welcome-start', 0],
   ['helpers/active-entitlement', 'welcome-login', 0],
