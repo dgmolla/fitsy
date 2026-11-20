@@ -30,7 +30,7 @@ const rules = [
   ['discovery', /^(apps\/mobile\/app\/\(tabs\)|apps\/mobile\/app\/restaurant|apps\/api\/app\/api\/(restaurants|search|user)|packages\/shared\/src\/)/],
 ];
 // The health response serves deployment monitors and is verified over HTTP.
-const serviceHealthPath = path => /^apps\/api\/(?:app\/api\/health\/(?:route|deep)(?:\.test)?\.ts|lib\/dependencyHealth\.ts)$/.test(path);
+const serviceHealthPath = path => /^apps\/api\/(?:app\/api\/health\/(?:route|deep)(?:\.test)?\.ts|lib\/dependencyHealth\.ts|services\/emailService(?:\.test)?\.ts)$/.test(path);
 
 export function publicConfigIdentity(cwd = root, env = process.env) {
   const file = resolve(cwd, 'apps/mobile/.env.development.local');

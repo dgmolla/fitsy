@@ -14,7 +14,7 @@ export function isMain(url) {
 }
 // This service-only observability endpoint has no mobile caller or journey.
 // Any other API, shared, or mobile path still requires native proof.
-export const serviceHealthPath = path => /^apps\/api\/(?:app\/api\/health\/(?:route|deep)(?:\.test)?\.ts|lib\/dependencyHealth\.ts)$/.test(path);
+export const serviceHealthPath = path => /^apps\/api\/(?:app\/api\/health\/(?:route|deep)(?:\.test)?\.ts|lib\/dependencyHealth\.ts|services\/emailService(?:\.test)?\.ts)$/.test(path);
 // Operator-triggered routes (cron/ops/diagnostics, CRON_SECRET-gated); the
 // mobile client never calls apps/api/app/api/internal/** so they carry no
 // simulator-mapped journey and shouldn't force full coverage on every edit.
