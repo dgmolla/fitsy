@@ -9,6 +9,7 @@ import { appleSignIn, completeGoogleSignIn, devLogin } from '@/lib/authClient';
 import { rememberAccountOnboarding } from '@/lib/accountHistory';
 import { requireProfileFromServer } from '@/lib/profileSync';
 import { claimAnonymousOnboardingData } from '@/lib/onboardingStorage';
+import { joinSavedAreaWaitlist } from '@/lib/waitlist';
 import { WelcomeScreen } from '@/components/WelcomeScreen';
 import { OnboardingAccountSummary } from '@/components/OnboardingAccountSummary';
 import { WelcomeAuthActions } from '@/components/WelcomeAuthActions';
@@ -81,7 +82,9 @@ export default function SignInScreen() {
     if (outOfArea === '1') {
       await clearPaymentSignInContinuation();
       await clearPendingMealClaim();
-      if (isCurrent()) router.dismissTo('/welcome/out-of-area');
+      // Signing in was the only step missing: save the area to the waitlist now (#1012).
+      const joined = await joinSavedAreaWaitlist();
+      if (isCurrent()) router.dismissTo({ pathname: '/welcome/out-of-area', params: joined ? { joined: '1' } : {} });
       return;
     }
     if (ownedCheckout !== null) {

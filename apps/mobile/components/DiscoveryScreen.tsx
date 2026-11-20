@@ -18,7 +18,6 @@ import { useDiscoveryState } from '@/lib/useDiscoveryState';
 import { s } from './DiscoveryScreen.styles';
 import { Masthead, MacroStrip, SearchBar, DiscoveryToolbar } from './DiscoveryChrome';
 import { EmptyStateBadge } from './EmptyStateBadge';
-import { waitlistLabel } from '@/lib/waitlist';
 import { HeroCard, PreviewTourButton, RestaurantSection } from './DiscoveryCards';
 import { useMapSearchFlag } from '@/lib/useMapSearchFlag';
 import { useFloatingNavClearance } from '@/lib/floatingNav';
@@ -59,7 +58,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
     locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea, nearbyDishCount,
     filterVisible, setFilterVisible, locationPickerVisible, setLocationPickerVisible, tourReady, tourVisible, startTour,
     tourEditRef, tourSearchRef, tourHeroRef, tourLocationRef, tourMoreRef, tourSteps, finishTour, tourStepShown, cancelTourTyping, handleClearQuery, handleApplyFilters,
-    handleJoinWaitlist, waitlist, handleOpenLocationPicker, handlePickLocation, handleUseCurrentLocation, unlockPreview,
+    handleJoinWaitlist, handleOpenLocationPicker, handlePickLocation, handleUseCurrentLocation, unlockPreview,
     unlocking, resyncNow, onLockedTap, unlockTitle, unlockSubtitle, unlockLabel, handleRefresh, handleEndReached, canShuffle, handleShuffle } = discovery;
   // Coverage confirmed (meals exist nearby) yet nothing passed the filters: the targets are the lever (#1004).
   const macrosMismatch = !hasQuery && (nearbyDishCount ?? 0) > 0;
@@ -119,15 +118,14 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
           <Text style={s.inlineEmptyHint}>
             Fitsy is launching in Los Angeles first - your city is next on the list.
           </Text>
-          <Pressable
+          {isOnboardingPreview ? <Pressable
             style={({ pressed }) => [s.waitlistBtn, pressed && s.waitlistBtnPressed]}
             testID="discovery-join-waitlist"
-            onPress={() => { void handleJoinWaitlist(); }}
-            disabled={waitlist === 'joining' || waitlist === 'joined'}
+            onPress={handleJoinWaitlist}
             accessibilityRole="button"
           >
-            <Text style={s.waitlistBtnText}>{waitlistLabel(waitlist)}</Text>
-          </Pressable>
+            <Text style={s.waitlistBtnText}>Keep me posted</Text>
+          </Pressable> : <Text style={s.inlineEmptyHint} testID="discovery-waitlist-note">We'll let you know</Text>}
         </View>
       )}
       {canSearch && !outOfArea && !loading && !error && results.length === 0 && (

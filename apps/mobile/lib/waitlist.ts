@@ -1,7 +1,12 @@
-export type WaitlistState = 'idle' | 'joining' | 'joined' | 'error';
+import { api } from './api';
+import { getOnboardingData } from './onboardingStorage';
 
-const LABELS: Record<WaitlistState, string> = {
-  idle: 'Keep me posted', joining: 'Adding you…', joined: "You're on the list", error: "Couldn't add you. Tap to try again",
-};
-/** Discovery's "Keep me posted" action as a signed-in user joins in place (#1010); a failure reads on the button itself. */
-export const waitlistLabel = (state: WaitlistState) => LABELS[state];
+/** Saves the area chosen in onboarding to the launch waitlist for the signed-in account. Never throws; false means not joined (#1012). */
+export async function joinSavedAreaWaitlist(): Promise<boolean> {
+  try {
+    const { area } = await getOnboardingData();
+    if (!area) return false;
+    await api.post('/api/waitlist', { lat: area.lat, lng: area.lng }, true);
+    return true;
+  } catch { return false; }
+}

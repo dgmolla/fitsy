@@ -10,9 +10,6 @@ import { previewTourReady } from './previewTourReady';
 import { usePreviewSearchDemo } from './usePreviewSearchDemo';
 import { useDiscoveryResults } from './useDiscoveryResults';
 import { useDiscoveryLocation } from './useDiscoveryLocation';
-import { api } from './api';
-import { isRealAccountSession, supabase } from './supabase';
-import type { WaitlistState } from './waitlist';
 import { useEntitlementMismatch } from './useEntitlementMismatch';
 import { usePurchases } from './usePurchases';
 import { saveWidgetLocation } from './widgetSync';
@@ -175,25 +172,8 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
     });
   }
   const handleClearQuery = useCallback(() => editQuery(''), [editQuery]);
-  // Signed in after onboarding: one tap joins the waitlist for the searched area in place, with no sign-in
-  // detour and no clearing of payment or paywall state (#1010). The onboarding preview keeps its own screen.
-  const [waitlist, setWaitlist] = useState<WaitlistState>('idle');
-  const { lat: areaLat, lng: areaLng } = location;
-  useEffect(() => { setWaitlist('idle'); }, [areaLat, areaLng]);
-  const handleJoinWaitlist = useCallback(async () => {
-    if (isOnboardingPreview) { router.push('/welcome/out-of-area'); return; }
-    if (waitlist === 'joining' || waitlist === 'joined') return;
-    setWaitlist('joining');
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      // An anonymous session cannot carry the authenticated request; it needs the real sign-in.
-      if (!isRealAccountSession(session)) { setWaitlist('idle'); router.push('/welcome/signin?outOfArea=1'); return; }
-      await api.post('/api/waitlist', { lat: areaLat, lng: areaLng }, true);
-      setWaitlist('joined');
-    } catch {
-      setWaitlist('error');
-    }
-  }, [isOnboardingPreview, waitlist, areaLat, areaLng]);
+  // The onboarding preview keeps its own out-of-area screen; elsewhere the card is plain text (#1012).
+  const handleJoinWaitlist = useCallback(() => { router.push('/welcome/out-of-area'); }, []);
   const locationLabel = location.loading
     ? 'Locating...'
     : isOnboardingPreview && location.name ? location.name : location.source === 'gps'
@@ -236,6 +216,6 @@ export function useDiscoveryState({ onboardingPreview = false }: { onboardingPre
     locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea, nearbyDishCount, lockedTeaser,
     filterVisible, setFilterVisible, locationPickerVisible, setLocationPickerVisible, tourReady, tourVisible: tour.visible, startTour: tour.start,
     tourEditRef, tourSearchRef, tourHeroRef, tourLocationRef, tourMoreRef, tourSteps, finishTour, tourStepShown: demo.showStep, cancelTourTyping: demo.cancel, handleClearQuery, handleApplyFilters,
-    handleJoinWaitlist, waitlist, handleOpenLocationPicker, handlePickLocation, handleUseCurrentLocation, unlockPreview,
+    handleJoinWaitlist, handleOpenLocationPicker, handlePickLocation, handleUseCurrentLocation, unlockPreview,
     unlocking, resyncNow, onLockedTap, unlockTitle, unlockSubtitle, unlockLabel, handleRefresh, handleEndReached, canShuffle, handleShuffle };
 }
