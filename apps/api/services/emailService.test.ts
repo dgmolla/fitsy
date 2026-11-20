@@ -4,11 +4,15 @@ const mockFetch = jest.fn();
 global.fetch = mockFetch as unknown as typeof fetch;
 
 import { sendWelcomeEmail } from "./emailService";
+import { reportServerError } from "@/lib/errorAlert";
+
+jest.mock("@/lib/errorAlert", () => ({ reportServerError: jest.fn() }));
 
 const ORIGINAL_ENV = process.env;
 
 beforeEach(() => {
   mockFetch.mockReset();
+  (reportServerError as jest.Mock).mockClear();
   process.env = {
     ...ORIGINAL_ENV,
     RESEND_API_KEY: "re_test_key",
@@ -36,7 +40,7 @@ describe("sendWelcomeEmail", () => {
 
     const body = JSON.parse(options.body);
     expect(body.to).toBe("alice@example.com");
-    expect(body.from).toBe("Fitsy <hello@fitsy.app>");
+    expect(body.from).toBe("Fitsy <hello@fitsy.org>");
     expect(body.html).toContain("Hi Alice,");
     expect(body.text).toContain("Hi Alice,");
     expect(body.html).toContain("/setup-macros");
@@ -73,6 +77,20 @@ describe("sendWelcomeEmail", () => {
     expect(consoleSpy).toHaveBeenCalledWith(
       '[emailService] delivery_rejected', { status: 422 },
     );
+    consoleSpy.mockRestore();
+  });
+
+  it("alerts a human with only the status when the provider refuses a send (domain_unverified)", async () => {
+    const consoleSpy = jest.spyOn(console, "error").mockImplementation();
+    mockFetch.mockResolvedValue({ ok: false, status: 403, text: jest.fn().mockResolvedValue("domain_unverified for bad@example.com") });
+
+    await sendWelcomeEmail("bad@example.com");
+
+    expect(reportServerError).toHaveBeenCalledTimes(1);
+    const [context, error] = (reportServerError as jest.Mock).mock.calls[0];
+    expect(context).toBe("emailService.delivery_rejected");
+    expect(String(error.message)).toBe("Resend rejected a send (HTTP 403)");
+    expect(String(error.message)).not.toContain("bad@example.com");
     consoleSpy.mockRestore();
   });
 

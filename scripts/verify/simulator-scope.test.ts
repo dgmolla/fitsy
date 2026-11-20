@@ -27,6 +27,8 @@ test('a DiscoveryMap-only change selects only the map flows', () => {
 
 test('health-only API changes (deep health and its dependency probe) need no simulator', () => {
   expect(select(['apps/api/lib/dependencyHealth.ts', 'apps/api/app/api/health/deep.test.ts']).scope).toBe('none');
+  // #1009: outbound email transport only talks to Resend; the app consumes no response from it.
+  expect(select(['apps/api/services/emailService.ts', 'apps/api/services/emailService.test.ts']).scope).toBe('none');
   expect(select(['apps/api/lib/rateLimit.ts']).scope).toBe('full');
 });
 

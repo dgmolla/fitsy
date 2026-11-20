@@ -1,7 +1,9 @@
 // Email delivery via Resend (https://resend.com)
 // Requires RESEND_API_KEY env var. If absent, email is silently skipped.
 
-const APP_URL = process.env.APP_URL ?? "https://fitsy.app";
+import { reportServerError } from "@/lib/errorAlert";
+
+const APP_URL = process.env.APP_URL ?? "https://fitsy.org";
 
 interface ResendEmailPayload {
   from: string;
@@ -27,6 +29,9 @@ async function sendEmail(payload: ResendEmailPayload): Promise<void> {
 
     if (!res.ok) {
       console.error('[emailService] delivery_rejected', { status: res.status });
+      // #1009: a provider refusal such as domain_unverified must reach a human; the message carries only the status,
+      // never the body, recipient or key. reportServerError dedupes per context so signups cannot flood the channel.
+      reportServerError('emailService.delivery_rejected', new Error(`Resend rejected a send (HTTP ${res.status})`));
     }
   } catch {
     console.error('[emailService] delivery_unavailable');
@@ -41,7 +46,7 @@ export async function sendWelcomeEmail(
   const ctaUrl = `${APP_URL}/setup-macros`;
 
   await sendEmail({
-    from: "Fitsy <hello@fitsy.app>",
+    from: "Fitsy <hello@fitsy.org>",
     to,
     subject: "Welcome to Fitsy \uD83E\uDD57 — let's find food that fits",
     html: `
