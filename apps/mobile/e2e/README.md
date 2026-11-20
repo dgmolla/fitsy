@@ -328,11 +328,7 @@ Run the canonical `node scripts/sim/ci.mjs --scope=full --udid=<owned-UDID>` on 
 Syntax checks and component tests do not establish a passing native journey or deployed 401s.
 
 `widget-setup` checks that Settings omits older profile-facts recovery, Notifications and Home Screen widget rows, then captures `settings-after`.
-It opens `/widget` directly, matching WidgetKit's retained empty-state route, and verifies setup guidance plus return to search.
-Before the bottom action, it dismisses the observed Debug LogBox banner at its native close point, then scrolls the named action into view.
-The banner can be absent from XCTest's hierarchy while covering the action.
-If the banner is already absent, that point can open Search; the flow returns to widget setup before its screenshot and named-control test.
-The setup checkpoint and final return-to-Search assertion remain mandatory.
+It opens `/widget` directly, matching WidgetKit's retained empty-state route, and verifies the tap lands on Discovery (search) and never on the setup steps (#1006); the locked `?upgrade=1` link still goes through the widget screen.
 The `entitled-dev` fixture and native Home Screen checks in `plugins/widget/README.md` still apply; Settings no longer links to setup.
 
 ## Mixed-duration trial reminders
