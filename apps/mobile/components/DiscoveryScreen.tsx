@@ -18,6 +18,7 @@ import { useDiscoveryState } from '@/lib/useDiscoveryState';
 import { s } from './DiscoveryScreen.styles';
 import { Masthead, MacroStrip, SearchBar, DiscoveryToolbar } from './DiscoveryChrome';
 import { EmptyStateBadge } from './EmptyStateBadge';
+import { waitlistLabel } from '@/lib/waitlist';
 import { HeroCard, PreviewTourButton, RestaurantSection } from './DiscoveryCards';
 import { useMapSearchFlag } from '@/lib/useMapSearchFlag';
 import { useFloatingNavClearance } from '@/lib/floatingNav';
@@ -58,7 +59,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
     locationLabel, results, heroResult, listResults, nextCursor, loading, loadingMore, refreshing, error, locked, outOfArea, nearbyDishCount,
     filterVisible, setFilterVisible, locationPickerVisible, setLocationPickerVisible, tourReady, tourVisible, startTour,
     tourEditRef, tourSearchRef, tourHeroRef, tourLocationRef, tourMoreRef, tourSteps, finishTour, tourStepShown, cancelTourTyping, handleClearQuery, handleApplyFilters,
-    handleJoinWaitlist, handleOpenLocationPicker, handlePickLocation, handleUseCurrentLocation, unlockPreview,
+    handleJoinWaitlist, waitlist, handleOpenLocationPicker, handlePickLocation, handleUseCurrentLocation, unlockPreview,
     unlocking, resyncNow, onLockedTap, unlockTitle, unlockSubtitle, unlockLabel, handleRefresh, handleEndReached, canShuffle, handleShuffle } = discovery;
   // Coverage confirmed (meals exist nearby) yet nothing passed the filters: the targets are the lever (#1004).
   const macrosMismatch = !hasQuery && (nearbyDishCount ?? 0) > 0;
@@ -121,11 +122,11 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
           <Pressable
             style={({ pressed }) => [s.waitlistBtn, pressed && s.waitlistBtnPressed]}
             testID="discovery-join-waitlist"
-            onPress={handleJoinWaitlist}
+            onPress={() => { void handleJoinWaitlist(); }}
+            disabled={waitlist === 'joining' || waitlist === 'joined'}
             accessibilityRole="button"
-            accessibilityLabel="Keep me posted"
           >
-            <Text style={s.waitlistBtnText}>Keep me posted</Text>
+            <Text style={s.waitlistBtnText}>{waitlistLabel(waitlist)}</Text>
           </Pressable>
         </View>
       )}
