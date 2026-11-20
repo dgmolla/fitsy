@@ -17,6 +17,7 @@ import { trackOnboardingScreenView } from '@/lib/analytics';
 import { useDiscoveryState } from '@/lib/useDiscoveryState';
 import { s } from './DiscoveryScreen.styles';
 import { Masthead, MacroStrip, SearchBar, DiscoveryToolbar } from './DiscoveryChrome';
+import { EmptyStateBadge } from './EmptyStateBadge';
 import { HeroCard, PreviewTourButton, RestaurantSection } from './DiscoveryCards';
 import { useMapSearchFlag } from '@/lib/useMapSearchFlag';
 import { useFloatingNavClearance } from '@/lib/floatingNav';
@@ -112,7 +113,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
       {loading && <DiscoveryLoading />}
       {canSearch && !loading && outOfArea && (
         <View style={s.inlineEmpty}>
-          <Ionicons name="leaf-outline" size={32} color={EDITORIAL.greenAccent} />
+          <EmptyStateBadge kind="range" size={64} />
           <Text style={s.inlineEmptyText}>We're not in your area yet</Text>
           <Text style={s.inlineEmptyHint}>
             Fitsy is launching in Los Angeles first - your city is next on the list.
@@ -130,7 +131,7 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
       )}
       {canSearch && !outOfArea && !loading && !error && results.length === 0 && (
         <View style={s.inlineEmpty}>
-          <Ionicons name="search-outline" size={32} color={EDITORIAL.creamDeep} />
+          {macrosMismatch ? <EmptyStateBadge kind="macros" size={64} /> : <Ionicons name="search-outline" size={32} color={EDITORIAL.creamDeep} />}
           <Text style={s.inlineEmptyText}>{hasQuery ? 'No matches for this search' : macrosMismatch ? 'Nothing fits your targets here' : 'No meals with nutrition nearby'}</Text>
           <Text style={s.inlineEmptyHint}>
             {hasQuery ? 'Try another dish or restaurant, or search in a different area. Your meal targets stay saved.'

@@ -1028,6 +1028,8 @@ it('an empty map where no meals exist nearby says we are not in this area yet, w
   await screen.findByText("We're not in your area yet");
   expect(screen.getByText('Fitsy is launching in Los Angeles first - your city is next on the list.')).toBeTruthy();
   expect(screen.getByTestId('discovery-join-waitlist')).toBeTruthy();
+  expect(screen.getByTestId('empty-badge-range')).toBeTruthy();
+  expect(screen.queryByTestId('empty-badge-macros')).toBeNull();
   expect(screen.queryByTestId('discovery-empty-edit')).toBeNull();
   expect(searchRequests().length).toBeGreaterThan(0);
   expect(requests.some(url => url.pathname === '/api/restaurants/preview')).toBe(true);
@@ -1039,6 +1041,8 @@ it('an empty map where meals exist nearby points at the meal targets instead (#1
   await screen.findByText('Nothing fits your targets here');
   expect(screen.getByText('There are meals nearby, but none match your current meal targets. Loosen them to see more.')).toBeTruthy();
   expect(screen.getByTestId('discovery-empty-edit')).toBeTruthy();
+  expect(screen.getByTestId('empty-badge-macros')).toBeTruthy();
+  expect(screen.queryByTestId('empty-badge-range')).toBeNull();
   expect(screen.queryByTestId('discovery-join-waitlist')).toBeNull();
   expect(screen.queryByText("We're not in your area yet")).toBeNull();
 });
@@ -1048,6 +1052,8 @@ it('a craving with no match in a covered area keeps its own message and its clea
   const screen = open('/search?mapDebug=1&query=zzzz');
   await screen.findByText('No matches for this search');
   expect(screen.getByTestId('discovery-empty-clear')).toBeTruthy();
+  expect(screen.queryByTestId('empty-badge-range')).toBeNull();
+  expect(screen.queryByTestId('empty-badge-macros')).toBeNull();
   expect(screen.queryByText("We're not in your area yet")).toBeNull();
   expect(screen.queryByText('Nothing fits your targets here')).toBeNull();
 });
