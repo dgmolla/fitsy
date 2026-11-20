@@ -31,6 +31,8 @@ export const s = StyleSheet.create({
   spacer: { flex: 1 },
   tray: { paddingTop: 8, paddingBottom: 8, gap: 8 },
   status: { padding: 16, marginHorizontal: 16, borderRadius: 20, backgroundColor: EDITORIAL.cream, gap: 8 },
+  emptyRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
+  emptyCopy: { flex: 1, gap: 8 },
   heading: { ...TEXT.title, color: EDITORIAL.green },
   body: { ...TEXT.caption, color: EDITORIAL.textMid },
   link: { ...TEXT.bodySmall, color: EDITORIAL.greenAccent, paddingVertical: 6 },
