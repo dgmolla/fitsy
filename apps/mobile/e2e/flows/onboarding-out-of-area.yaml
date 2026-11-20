@@ -48,12 +48,12 @@ env:
     id: location-use-current
 - extendedWaitUntil:
     visible:
-      id: waitlist-join
+      id: out-of-area-screen
     timeout: 30000
 - assertVisible: "More menus are.*"
 - assertNotVisible:
     id: paywall-plan-yearly
-# Restart before opting in: neither authentication nor a coverage lookup joins the list.
+# Restart: a signed-in visitor is saved to the list automatically, an anonymous one only gets the sign-in button.
 - stopApp
 - launchApp
 # XCTest can read during the launch transition, before the app's AX tree exists.
@@ -65,7 +65,7 @@ env:
           timeout: 10000
       - extendedWaitUntil:
           visible:
-            id: waitlist-join
+            id: out-of-area-screen
           timeout: 30000
 - assertNotVisible: "Continue with Apple"
 - tapOn:

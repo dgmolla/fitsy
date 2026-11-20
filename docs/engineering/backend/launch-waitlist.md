@@ -2,13 +2,13 @@
 
 One launch email list (`LaunchWaitlist`), fed by two surfaces:
 
-1. **Onboarding** - out-of-area users who tap "Notify me at launch" (account email + coarse, city-level location).
+1. **Onboarding** - out-of-area users with an account are added automatically, and visitors without one sign in through "Get notified" (account email + coarse, city-level location).
 2. **Website** - visitors who enter their email in the "Join the waitlist" form on fitsy.org (email only; no account, no location).
 
 Rows are keyed by normalized email, so the same person joining from both surfaces is one row.
 An onboarding join onto an existing website row links the account and adds the location.
 Both push and email are sent at notify time; email is the durable channel.
-Opt-in only - no data stored until the user taps "Notify me at launch" or submits the form.
+No data is stored until the user has an account or submits the form.
 
 ## Flow
 
@@ -26,7 +26,7 @@ sequenceDiagram
     API-->>App: empty result - out of area
     App->>App: show out-of-area screen
 
-    Note over App: user taps "Notify me at launch" (explicit opt-in)
+    Note over App: signed-in user reaches the out-of-area screen (automatic)
     App->>API: POST /api/waitlist { lat, lng }  (authed)
     API->>DB: upsert LaunchWaitlist by email { userId, source: onboarding, coarse lat/lng }
     Note over API,DB: coords rounded to ~1 decimal place (city precision) before storage

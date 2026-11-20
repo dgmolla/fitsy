@@ -1,23 +1,23 @@
 import { useOnboardingStep } from '@/lib/onboardingResume';
-import React, { useEffect, useState } from 'react';
-import { Alert, Linking, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Linking, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { AnimatedPress } from '@/components/AnimatedPress';
 import { trackOnboardingScreenView } from '@/lib/analytics';
-import { api } from '@/lib/api';
-import { getOnboardingData } from '@/lib/onboardingStorage';
+import { joinSavedAreaWaitlist } from '@/lib/waitlist';
 import { isRealAccountSession, supabase } from '@/lib/supabase';
 
 const FITSY_INSTAGRAM = 'https://instagram.com/fitsy.lyfe';
 
 /**
  * Shown when the location preview comes back empty — the user is outside
- * Fitsy's serviceable area (LA-only at launch). Explicit opt-in: tapping "Notify
- * me" joins the launch waitlist (POST /api/waitlist), which stores the account
- * email + a COARSE, city-level location. At launch the server notifies them by
+ * Fitsy's serviceable area (LA-only at launch). A signed-in user is
+ * saved to the launch waitlist automatically (POST /api/waitlist, #1012), which
+ * stores the account email + a COARSE, city-level location; a visitor without
+ * an account gets one "Get notified" sign-in button. At launch the server notifies them by
  * BOTH push and email; email is the durable channel if the app was deleted.
  * Every marketing email includes an unsubscribe link. Instagram is a secondary
  * channel. See docs/engineering/backend/launch-waitlist.md.
@@ -25,35 +25,27 @@ const FITSY_INSTAGRAM = 'https://instagram.com/fitsy.lyfe';
 export default function OutOfAreaScreen() {
   useOnboardingStep('out-of-area');
   const { joined: joinedOnSignIn } = useLocalSearchParams<{ joined?: string }>();
-  const [joined, setJoined] = useState(joinedOnSignIn === '1');
-  const [joining, setJoining] = useState(false);
+  // 'checking' until the session is read; signed-in users are saved to the waitlist automatically (#1012).
+  const [status, setStatus] = useState<'checking' | 'joined' | 'signin' | 'retry'>(joinedOnSignIn === '1' ? 'joined' : 'checking');
 
   useEffect(() => {
     trackOnboardingScreenView('out_of_area');
   }, []);
 
-  async function joinWaitlist() {
-    if (joining || joined) return;
-    setJoining(true);
+  const autoJoin = useCallback(async () => {
+    setStatus('checking');
     try {
-      const { area } = await getOnboardingData();
-      if (!area) { Alert.alert('Choose your area first', 'We need your selected area to register your interest.'); return; }
       const { data: { session } } = await supabase.auth.getSession();
-      // An anonymous session (#801) can't carry the waitlist's authenticated
-      // request - it needs the same real sign-in as a brand-new visitor.
-      if (!isRealAccountSession(session)) { router.push('/welcome/signin?outOfArea=1'); return; }
-      await api.post('/api/waitlist', { lat: area.lat, lng: area.lng }, true);
-      setJoined(true);
-    } catch {
-      Alert.alert('Could not join the waitlist', 'You have not been added. Please try again.');
-    } finally {
-      setJoining(false);
-    }
-  }
+      // An anonymous session (#801) has no email to notify: it needs the real sign-in.
+      if (!isRealAccountSession(session)) { setStatus('signin'); return; }
+      setStatus(await joinSavedAreaWaitlist() ? 'joined' : 'retry');
+    } catch { setStatus('retry'); }
+  }, []);
+  useEffect(() => { if (status === 'checking') void autoJoin(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <SafeAreaView style={s.safe}>
-      <View style={s.content}>
+      <View style={s.content} testID="out-of-area-screen">
         <View style={s.center}>
           <Animated.View entering={FadeIn.duration(500)} style={s.emoji}>
             <Text style={s.emojiTxt}>🌱</Text>
@@ -69,24 +61,17 @@ export default function OutOfAreaScreen() {
         </View>
 
         <Animated.View entering={FadeIn.duration(400).delay(360)} style={s.ctas}>
-          <AnimatedPress
-            style={[s.notify, joined && s.notifyDone]}
-            onPress={joinWaitlist}
-            disabled={joining || joined}
+          {status === 'joined' && <Text style={s.notifyNote} testID="waitlist-joined">We'll let you know when Fitsy launches nearby.</Text>}
+          {(status === 'signin' || status === 'retry') && <AnimatedPress
+            style={s.notify}
+            onPress={status === 'signin' ? () => router.push('/welcome/signin?outOfArea=1') : () => { void autoJoin(); }}
             haptic
             accessibilityRole="button"
-            accessibilityLabel={joined ? "You're on the list" : joining ? 'Adding you to the waitlist' : 'Notify me when Fitsy launches nearby'}
             testID="waitlist-join"
           >
-            <Ionicons
-              name={joined ? 'checkmark-circle' : 'notifications-outline'}
-              size={18}
-              color={EDITORIAL.cream}
-            />
-            <Text style={s.notifyTxt}>
-              {joined ? "You're on the list" : joining ? 'Adding you…' : 'Notify me at launch'}
-            </Text>
-          </AnimatedPress>
+            <Ionicons name="notifications-outline" size={18} color={EDITORIAL.cream} />
+            <Text style={s.notifyTxt}>{status === 'signin' ? 'Get notified' : "Couldn't add you. Tap to try again"}</Text>
+          </AnimatedPress>}
 
           <AnimatedPress
             style={s.ig}
@@ -135,7 +120,7 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
     backgroundColor: EDITORIAL.green, borderRadius: 32, paddingVertical: 18,
   },
-  notifyDone: { backgroundColor: EDITORIAL.greenAccent },
+  notifyNote: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 16, fontWeight: '600', color: EDITORIAL.greenAccent, textAlign: 'center', paddingVertical: 14 },
   notifyTxt: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 16, fontWeight: '600', color: EDITORIAL.cream },
   ig: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
