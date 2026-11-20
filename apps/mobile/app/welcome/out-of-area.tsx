@@ -2,7 +2,7 @@ import { useOnboardingStep } from '@/lib/onboardingResume';
 import React, { useEffect, useState } from 'react';
 import { Alert, Linking, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { AnimatedPress } from '@/components/AnimatedPress';
@@ -24,7 +24,8 @@ const FITSY_INSTAGRAM = 'https://instagram.com/fitsy.lyfe';
  */
 export default function OutOfAreaScreen() {
   useOnboardingStep('out-of-area');
-  const [joined, setJoined] = useState(false);
+  const { joined: joinedOnSignIn } = useLocalSearchParams<{ joined?: string }>();
+  const [joined, setJoined] = useState(joinedOnSignIn === '1');
   const [joining, setJoining] = useState(false);
 
   useEffect(() => {

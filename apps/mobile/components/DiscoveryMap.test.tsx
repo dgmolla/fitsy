@@ -17,7 +17,6 @@ import { FALLBACK_LAT, FALLBACK_LNG, MANUAL_LOCATION_KEY } from '../lib/useLocat
 import { __resetForTesting } from '../lib/analytics';
 import { FloatingNavClearanceContext } from '../lib/floatingNav';
 import { EDITORIAL, MAP_CONTROL_SHADOW } from '../lib/brand';
-import { waitlistLabel } from '../lib/waitlist';
 
 const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
 
@@ -1023,12 +1022,12 @@ async function withCoverage(nearbyDishCount: number, lat: number) {
   }) as unknown as typeof fetch;
 }
 
-it('an empty map where no meals exist nearby says we are not in this area yet, with the waitlist action (#1004)', async () => {
+it('an empty map where no meals exist nearby says we are not in this area yet, with plain let-you-know copy (#1004)', async () => {
   await withCoverage(0, 33.31);
   const screen = open('/search?mapDebug=1');
   await screen.findByText("We're not in your area yet");
   expect(screen.getByText('Fitsy is launching in Los Angeles first - your city is next on the list.')).toBeTruthy();
-  expect(screen.getByTestId('discovery-join-waitlist')).toBeTruthy();
+  expect(screen.getByTestId('discovery-waitlist-note')).toBeTruthy();
   expect(screen.getByTestId('empty-badge-range')).toBeTruthy();
   expect(screen.queryByTestId('empty-badge-macros')).toBeNull();
   expect(screen.queryByTestId('discovery-empty-edit')).toBeNull();
@@ -1065,45 +1064,13 @@ it('the place is the problem wherever no meals exist, even with a craving typed 
   await screen.findByText("We're not in your area yet");
 });
 
-// #1010: a signed-in user joins the waitlist in place from the out-of-area card.
-let waitlistCalls: { lat: number; lng: number }[];
-async function withWaitlist(lat: number, outcomes: boolean[]) {
-  await withCoverage(0, lat);
-  waitlistCalls = [];
-  const base = global.fetch as jest.Mock;
-  global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = new URL(String(input));
-    if (url.pathname === '/api/waitlist') {
-      waitlistCalls.push(JSON.parse(String(init?.body)));
-      return outcomes.shift() === false ? { ...response({ error: 'down' }), ok: false, status: 503 } as Response : response({ data: { joined: true } });
-    }
-    return base(input, init);
-  }) as unknown as typeof fetch;
-}
-
-it('one tap joins the waitlist for the searched area in place, with no sign-in detour and a joined state (#1010)', async () => {
-  await withWaitlist(33.41, [true]);
+// #1012: the out-of-area card is plain text; sign-up saves the area, so Discovery offers no button and makes no join call.
+it('the out-of-area card says we will let them know, with no button and no waitlist request (#1012)', async () => {
+  await withCoverage(0, 33.41);
   const screen = open('/search?mapDebug=1');
   await screen.findByText("We're not in your area yet");
-  await act(async () => fireEvent.press(screen.getByTestId('discovery-join-waitlist')));
-  await screen.findByText("You're on the list");
-  expect(waitlistCalls).toEqual([{ lat: 33.41, lng: -118.24 }]);
-  expect(screen.getPathname()).toBe('/search');
-  // Joined is final for this area: the button is disabled and cannot post again.
-  await act(async () => fireEvent.press(screen.getByTestId('discovery-join-waitlist')));
-  expect(waitlistCalls).toHaveLength(1);
-  expect(screen.getByTestId('discovery-join-waitlist').props.accessibilityState?.disabled ?? screen.getByTestId('discovery-join-waitlist').props.disabled).toBeTruthy();
-});
-
-it('a failed join says so on the button itself and the same button retries successfully (#1010)', async () => {
-  await withWaitlist(33.42, [false, true]);
-  const screen = open('/search?mapDebug=1');
-  await screen.findByText("We're not in your area yet");
-  await act(async () => fireEvent.press(screen.getByTestId('discovery-join-waitlist')));
-  await screen.findByText(waitlistLabel('error'));
-  expect(screen.getPathname()).toBe('/search');
-  await act(async () => fireEvent.press(screen.getByTestId('discovery-join-waitlist')));
-  await screen.findByText("You're on the list");
-  expect(waitlistCalls).toHaveLength(2);
-  expect(screen.queryByText(waitlistLabel('error'))).toBeNull();
+  expect(screen.getByText("We'll let you know")).toBeTruthy();
+  expect(screen.queryByTestId('discovery-join-waitlist')).toBeNull();
+  expect(screen.queryByText('Keep me posted')).toBeNull();
+  expect(requests.some(url => url.pathname === '/api/waitlist')).toBe(false);
 });
