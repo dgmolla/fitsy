@@ -125,11 +125,9 @@ export function DiscoveryScreen({ onboardingPreview = false, onPreviewBack }: { 
             onPress={() => { void handleJoinWaitlist(); }}
             disabled={waitlist === 'joining' || waitlist === 'joined'}
             accessibilityRole="button"
-            accessibilityLabel={waitlistLabel(waitlist)}
           >
             <Text style={s.waitlistBtnText}>{waitlistLabel(waitlist)}</Text>
           </Pressable>
-          {waitlist === 'error' && <Text style={s.inlineEmptyHint} accessibilityRole="alert">We couldn't add you. Please try again.</Text>}
         </View>
       )}
       {canSearch && !outOfArea && !loading && !error && results.length === 0 && (

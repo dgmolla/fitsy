@@ -11,7 +11,7 @@ const TRACK = '#CDDED3';
 
 export function EmptyStateBadge({ kind, size = 56 }: { kind: 'range' | 'macros'; size?: number }) {
   return <View testID={`empty-badge-${kind}`} style={{ width: size, height: size }}>
-    <Svg width={size} height={size} viewBox="0 0 56 56" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+    <Svg width={size} height={size} viewBox="0 0 56 56">
       <Circle cx="28" cy="28" r="28" fill={TINT} />
       {kind === 'range' ? <>
         <Circle cx="28" cy="29" r="18" fill="none" stroke={EDITORIAL.greenAccent} strokeWidth="1.5" />

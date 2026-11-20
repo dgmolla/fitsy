@@ -9,7 +9,6 @@ export const s = StyleSheet.create({
   previewIntro: { flexDirection: 'row', alignItems: 'center', paddingLeft: 20, paddingRight: 12, paddingTop: 4, paddingBottom: 8, gap: 4 },
   previewHint: { flex: 1, fontFamily: FONTS.nunitoSans, fontSize: 13, lineHeight: 19, color: EDITORIAL.textMid },
   previewLink: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 13, lineHeight: 20, color: EDITORIAL.green },
-  previewBack: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44, paddingHorizontal: 18 },
   previewMapBack: { width: 32, height: 44, marginLeft: -12, alignItems: 'center', justifyContent: 'center' },
   masthead: {
     backgroundColor: EDITORIAL.cream,
@@ -93,7 +92,6 @@ export const s = StyleSheet.create({
   searchIco: { fontFamily: FONTS.nunitoSans, fontSize: 16, color: EDITORIAL.textSoft },
   searchInput: { fontFamily: FONTS.nunitoSans, flex: 1, fontSize: 13.5, lineHeight: 20, minHeight: 24, color: EDITORIAL.text, padding: 0, textAlignVertical: 'center' },
   searchClear: { fontFamily: FONTS.nunitoSans, fontSize: 18, color: EDITORIAL.textSoft, paddingHorizontal: 4 },
-  mapShuffle: { width: 44, height: 44, borderRadius: 22 },
 
   restSection: { marginTop: 22 },
   sectionHeader: {
@@ -136,7 +134,6 @@ export const s = StyleSheet.create({
   waitlistBtnPressed: { opacity: 0.85 },
   waitlistBtnText: { fontFamily: FONTS.nunitoSansSemiBold, fontSize: 15, fontWeight: '700', color: EDITORIAL.cream },
   footerSpinner: { paddingVertical: 24, alignItems: 'center', justifyContent: 'center' },
-  loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   errorBanner: {
     marginHorizontal: 16, marginTop: 16, borderRadius: 8, padding: 12,
     backgroundColor: '#FEF2F2',

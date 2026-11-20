@@ -232,10 +232,9 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
               <Text style={s.heading}>We're not in your area yet</Text>
               <Text style={s.body}>Fitsy is launching in Los Angeles first - your city is next on the list.</Text>
               <Pressable style={s.action} onPress={() => { void d.handleJoinWaitlist(); }} disabled={d.waitlist === 'joining' || d.waitlist === 'joined'}
-                testID="discovery-join-waitlist" accessibilityRole="button" accessibilityLabel={waitlistLabel(d.waitlist)}>
+                testID="discovery-join-waitlist" accessibilityRole="button">
                 <Text style={s.link}>{waitlistLabel(d.waitlist)}</Text>
               </Pressable>
-              {d.waitlist === 'error' && <Text style={s.body} accessibilityRole="alert">We couldn't add you. Please try again.</Text>}
             </View>
           </View> : <View style={s.emptyRow}>
             {macrosMismatch && <EmptyStateBadge kind="macros" />}

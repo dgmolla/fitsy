@@ -17,6 +17,7 @@ import { FALLBACK_LAT, FALLBACK_LNG, MANUAL_LOCATION_KEY } from '../lib/useLocat
 import { __resetForTesting } from '../lib/analytics';
 import { FloatingNavClearanceContext } from '../lib/floatingNav';
 import { EDITORIAL, MAP_CONTROL_SHADOW } from '../lib/brand';
+import { waitlistLabel } from '../lib/waitlist';
 
 const { loadAll } = require('js-yaml') as { loadAll(source: string): unknown[] };
 
@@ -1094,16 +1095,15 @@ it('one tap joins the waitlist for the searched area in place, with no sign-in d
   expect(screen.getByTestId('discovery-join-waitlist').props.accessibilityState?.disabled ?? screen.getByTestId('discovery-join-waitlist').props.disabled).toBeTruthy();
 });
 
-it('a failed join shows an inline error and the same button retries successfully (#1010)', async () => {
+it('a failed join says so on the button itself and the same button retries successfully (#1010)', async () => {
   await withWaitlist(33.42, [false, true]);
   const screen = open('/search?mapDebug=1');
   await screen.findByText("We're not in your area yet");
   await act(async () => fireEvent.press(screen.getByTestId('discovery-join-waitlist')));
-  await screen.findByText("We couldn't add you. Please try again.");
-  expect(screen.getByText('Try again')).toBeTruthy();
+  await screen.findByText(waitlistLabel('error'));
   expect(screen.getPathname()).toBe('/search');
   await act(async () => fireEvent.press(screen.getByTestId('discovery-join-waitlist')));
   await screen.findByText("You're on the list");
   expect(waitlistCalls).toHaveLength(2);
-  expect(screen.queryByText("We couldn't add you. Please try again.")).toBeNull();
+  expect(screen.queryByText(waitlistLabel('error'))).toBeNull();
 });
