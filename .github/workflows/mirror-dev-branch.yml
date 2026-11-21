@@ -9,6 +9,8 @@
 # account permissions beyond "build this branch".
 name: Mirror main to dev
 on:
+  # #995: lets an environment change on the dev project (for example the nonprod Redis) rebuild dev without a fake commit.
+  workflow_dispatch:
   push:
     branches: [main]
     # Only API-relevant changes need a dev rebuild; docs/mobile/gtm pushes were
