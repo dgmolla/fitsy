@@ -54,6 +54,12 @@ export function runChecks({ now = Date.now(), run = (...args) => execFileSync(ar
     const issues = JSON.parse(run('gh', 'issue', 'list', '--repo', 'dgmolla/fitsy', '--label', 'blocked', '--state', 'open', '--json', 'number', '--limit', '50'));
     return result('blocked', issues.length === 0, issues.length ? `open: ${issues.map(issue => `#${issue.number}`).join(' ')}` : 'none open');
   });
+  // #1020: a lane that ended a run with questions only in its output gets an auto-filed needs-fitsy issue; surface any still open.
+  attempt('idle-with-questions', () => {
+    const issues = JSON.parse(run('gh', 'issue', 'list', '--repo', 'dgmolla/fitsy', '--label', 'needs-fitsy', '--state', 'open', '--json', 'number,title', '--limit', '50'))
+      .filter(issue => /open questions from run/.test(issue.title));
+    return result('idle-with-questions', issues.length === 0, issues.length ? `open: ${issues.map(issue => `#${issue.number}`).join(' ')}` : 'none open');
+  });
   // #874: dev Supabase auth settings and local env names the tests depend on; drift is reported in plain words, never values.
   attempt('external-config', () => {
     let output = '', code = 0;

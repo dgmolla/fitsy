@@ -30,7 +30,7 @@ test('every check reports a line, and a failing check is a warning, not a crash'
     return '[]';
   };
   const checks = runChecks({ now, run, exists: () => true, mtimeMs: () => now - 10 * 60000, home: '/h', hourPt: 12 });
-  assert.deepEqual(checks.map(check => check.name), ['docker', 'supervisors', 'slack-liveness', 'handoffs', 'needs-dawit', 'blocked', 'external-config']);
+  assert.deepEqual(checks.map(check => check.name), ['docker', 'supervisors', 'slack-liveness', 'handoffs', 'needs-dawit', 'blocked', 'idle-with-questions', 'external-config']);
   const byName = Object.fromEntries(checks.map(check => [check.name, check]));
   assert.equal(byName.docker.status, 'warn');
   assert.match(byName.supervisors.detail, /app/);
