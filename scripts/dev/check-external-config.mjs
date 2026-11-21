@@ -47,7 +47,7 @@ function vercelReader(cwd, run) {
 }
 
 export async function check({ cwd = root, env = process.env, fetchImpl = fetch,
-  runCommand = (file, args, directory) => execFileSync(file, args, { cwd: directory, encoding: 'utf8', timeout: 60000 }) } = {}) {
+  runCommand = (file, args, directory) => execFileSync(file, args, { cwd: directory, encoding: 'utf8', timeout: 60000, stdio: ['ignore', 'pipe', 'pipe'] }) } = {}) {
   const expected = JSON.parse(readFileSync(resolve(cwd, 'scripts/dev/expected-external-config.json'), 'utf8'));
   const readNames = file => (existsSync(resolve(cwd, file)) ? envNames(readFileSync(resolve(cwd, file), 'utf8')) : null);
   const drift = diffEnvNames(expected.env_names, readNames);
