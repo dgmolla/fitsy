@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { diffSettings, diffEnvNames, envNames, check } from './check-external-config.mjs';
+import { diffSettings, diffEnvNames, envNames, check, vercelEnvNames, diffVercelEnv } from './check-external-config.mjs';
 
 test('reports drift in plain words without values', () => {
   const expected = { 'external.anonymous_users': true, disable_signup: false };
@@ -32,4 +32,13 @@ test('an unreachable project is reported as drift, not a crash', async () => {
   const drift = await check({ env: { EXPO_PUBLIC_SUPABASE_URL: 'https://x.test', EXPO_PUBLIC_SUPABASE_ANON_KEY: 'k' },
     fetchImpl: async () => { throw new Error('network down'); } });
   assert.ok(drift.some(line => line.includes('could not read (network down)')));
+});
+
+test('vercel env names are parsed from the table and compared per environment without values', () => {
+  const table = ' name   value   environments   created\n SENTRY_PROJECT   Encrypted   Production   8d\n UPSTASH_REDIS_REST_URL   Encrypted   Preview   8d\n';
+  assert.deepEqual([...vercelEnvNames(table)].sort(), ['SENTRY_PROJECT', 'UPSTASH_REDIS_REST_URL']);
+  const required = { production: ['SENTRY_PROJECT', 'CRON_SECRET'], preview: ['UPSTASH_REDIS_REST_URL'] };
+  const read = environment => vercelEnvNames(table);
+  assert.deepEqual(diffVercelEnv(required, read), ['vercel production CRON_SECRET: expected present, actual missing']);
+  assert.deepEqual(diffVercelEnv(required, () => null), []);
 });
