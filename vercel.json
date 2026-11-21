@@ -27,10 +27,6 @@
     {
       "path": "/api/internal/weekly-scoreboard",
       "schedule": "0 14 * * 1"
-    },
-    {
-      "path": "/api/internal/waitlist/launch-day",
-      "schedule": "30 16 * * *"
     }
   ],
   "git": {

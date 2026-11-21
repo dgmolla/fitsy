@@ -34,7 +34,6 @@
     "/api/internal/feedback-digest": 49,
     "/api/internal/watch-review": 9,
     "/api/internal/marketing/weekly": 337,
-    "/api/internal/weekly-scoreboard": 337,
-    "/api/internal/waitlist/launch-day": 49
+    "/api/internal/weekly-scoreboard": 337
   }
 }
