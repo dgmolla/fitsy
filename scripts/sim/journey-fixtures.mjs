@@ -107,7 +107,7 @@ export async function withFixtureEnvironment(fixture, action) {
   }
 }
 
-export function prepareJourney(fixture, flow, udid) {
+export function prepareJourney(fixture, flow, udid, verifyProfile = ensureBaselineProfile) {
   if (!fixture.prepare) return;
   const [binary, ...args] = fixture.prepare;
   // The local adapter owns preparation's lease. It must finish/release before
@@ -116,7 +116,7 @@ export function prepareJourney(fixture, flow, udid) {
   // Debug billing runs independently verify history and sign in after Metro starts.
   execFileSync(binary, [...args, flow, udid], { cwd: repository, env: gitEnv(), stdio: 'inherit', timeout: 60000 });
   // #934: a blank profile on the shared account sends entitled flows to onboarding; verify it and restore the baseline.
-  if (ensureBaselineProfile(fixture) === 'restored') console.error(`fixture ${fixture.name}: restored the blank baseline profile`);
+  if (verifyProfile(fixture) === 'restored') console.error(`fixture ${fixture.name}: restored the blank baseline profile`);
 }
 
 export function assertJourneyStore(fixture, built) {
