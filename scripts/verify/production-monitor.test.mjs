@@ -622,3 +622,25 @@ test('the scheduled entrypoint preserves incidents until provider or workflow re
   assert.ok(denied.some(item => item.key === 'workflow:Deploy'), 'denied job evidence must preserve the prior release incident');
   assert.match(denied.find(item => item.key === 'observer:workflow:Deploy').summary, /HTTP 403/);
 });
+
+test('#1016: a transient PostHog failure is retried once, a persistent one names its local cause, and nothing else leaks', async () => {
+  const { mobileMetrics, observerFailureDetail } = await import('./production-providers.mjs');
+  const env = { POSTHOG_PERSONAL_API_KEY: 'phx_secret_value', POSTHOG_PROJECT_ID: '123', POSTHOG_HOST: 'https://us.posthog.com' };
+  const good = { results: [[10, 0, 100, 1, 0]] };
+  let calls = 0;
+  const flaky = async () => { calls += 1; if (calls === 1) throw new TypeError('fetch failed'); return new Response(JSON.stringify(good), { status: 200 }); };
+  await mobileMetrics({ env, fetchImpl: flaky, now: Date.now() });
+  assert.equal(calls, 2);
+  calls = 0;
+  const broken = async () => { calls += 1; return new Response(JSON.stringify({ error: 'boom with secret details', results: [] }), { status: 200 }); };
+  await assert.rejects(mobileMetrics({ env, fetchImpl: broken, now: Date.now() }), /Incomplete PostHog response/);
+  assert.equal(calls, 2);
+  calls = 0;
+  await assert.rejects(mobileMetrics({ env: { ...env, POSTHOG_HOST: 'https://evil.example' }, fetchImpl: broken, now: Date.now() }), /Unsupported PostHog host/);
+  assert.equal(calls, 0, 'configuration errors are never retried');
+  assert.equal(observerFailureDetail(new Error('Incomplete PostHog response')), 'Incomplete PostHog response');
+  assert.equal(observerFailureDetail(Object.assign(new Error('x'), { httpStatus: 503 })), 'HTTP 503');
+  assert.equal(observerFailureDetail(Object.assign(new Error('secret phx_secret_value'), { name: 'TimeoutError' })), 'provider request timed out');
+  assert.equal(observerFailureDetail(new TypeError('fetch failed for https://secret')), 'provider request failed before a response');
+  assert.equal(observerFailureDetail(new Error('arbitrary text with phx_secret_value')), 'request or configuration error');
+});

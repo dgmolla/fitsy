@@ -84,6 +84,18 @@ export async function cronMetrics(context) {
   return evaluateCrons(rows, context.now, context.state.cronMonitoringStartedAt);
 }
 
+// Only local schema labels, an HTTP status or a coarse failure kind may leave the provider boundary.
+const LOCAL_LABELS = ['Incomplete Axiom query', 'Malformed Axiom table', 'Invalid Axiom timestamp', 'Invalid API metric schema',
+  'Incomplete PostHog response', 'PostHog query configuration missing', 'Unsupported PostHog host'];
+export function observerFailureDetail(reason) {
+  const status = reason?.httpStatus;
+  if (Number.isInteger(status) && status >= 100 && status <= 599) return `HTTP ${status}`;
+  if (LOCAL_LABELS.includes(reason?.message)) return reason.message;
+  if (reason?.name === 'TimeoutError' || reason?.name === 'AbortError') return 'provider request timed out';
+  if (reason instanceof TypeError) return 'provider request failed before a response';
+  return 'request or configuration error';
+}
+
 export async function mobileMetrics({ env, fetchImpl, now }) {
   if (!env.POSTHOG_PERSONAL_API_KEY || !/^\d+$/.test(env.POSTHOG_PROJECT_ID ?? '')) throw new Error('PostHog query configuration missing');
   const cutoff = new Date(now - policy.windowMinutes * 60_000).toISOString();
@@ -98,11 +110,18 @@ export async function mobileMetrics({ env, fetchImpl, now }) {
     AND event IN ('subscription_check', 'client_error')`;
   const host = env.POSTHOG_HOST || 'https://us.posthog.com';
   if (!['https://us.posthog.com', 'https://eu.posthog.com'].includes(host)) throw new Error('Unsupported PostHog host');
-  const body = await requestJson(`${host}/api/projects/${env.POSTHOG_PROJECT_ID}/query/`, {
-    method: 'POST', headers: { authorization: `Bearer ${env.POSTHOG_PERSONAL_API_KEY}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ query: { kind: 'HogQLQuery', query: sql } }),
-  }, fetchImpl);
-  if (body.error || body.hasMore || body.results?.length !== 1 || body.results[0].length !== 5) throw new Error('Incomplete PostHog response');
+  // #1016: PostHog query errors and timeouts were the only observer:mobile P2 recurrences while production was healthy, so
+  // a single transient failure gets one immediate retry; configuration problems above never retry.
+  const query = async () => {
+    const body = await requestJson(`${host}/api/projects/${env.POSTHOG_PROJECT_ID}/query/`, {
+      method: 'POST', headers: { authorization: `Bearer ${env.POSTHOG_PERSONAL_API_KEY}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ query: { kind: 'HogQLQuery', query: sql } }),
+    }, fetchImpl);
+    if (body.error || body.hasMore || body.results?.length !== 1 || body.results[0].length !== 5) throw new Error('Incomplete PostHog response');
+    return body;
+  };
+  let body;
+  try { body = await query(); } catch { body = await query(); }
   return evaluateMobile(body.results[0]);
 }
 
@@ -252,10 +271,7 @@ export async function collectObservations({ env, fetchImpl, now, state }) {
     else {
       // Only local schema labels or an HTTP status may leave the provider
       // boundary. Never copy arbitrary exception text, response bodies or URLs.
-      const status = result.reason?.httpStatus;
-      const detail = Number.isInteger(status) && status >= 100 && status <= 599 ? `HTTP ${status}`
-        : ['Incomplete Axiom query', 'Malformed Axiom table', 'Invalid Axiom timestamp', 'Invalid API metric schema'].includes(result.reason?.message)
-          ? result.reason.message : 'request or configuration error';
+      const detail = observerFailureDetail(result.reason);
       observerAlerts.push(alert(`observer:${scope}`, 'observer', 'P2', `${scope} monitoring failed (${detail}); inspect the monitoring setup contract.`));
     }
   });
