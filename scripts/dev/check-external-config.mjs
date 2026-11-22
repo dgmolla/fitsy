@@ -29,6 +29,40 @@ export function diffEnvNames(expected, readNames) {
   });
 }
 
+// #874: RevenueCat offerings and entitlements the app and the tests depend on. The read-only key comes from the process
+// environment or ~/.config/fitsy/revenuecat.env (Dawit approved this read, Nov 22); it is used only for GET requests,
+// never printed, and only identifiers (lookup keys) are read or compared.
+export function revenueCatKey({ env = process.env, file = resolve(process.env.HOME ?? '', '.config/fitsy/revenuecat.env') } = {}) {
+  // The v2 read key is preferred; the older secret key in the same file may lack v2 read scope (HTTP 403).
+  const names = ['REVENUECAT_V2_READ_KEY', 'REVENUECAT_SECRET_KEY'];
+  for (const name of names) if (env[name]) return env[name];
+  if (!existsSync(file)) return null;
+  const text = readFileSync(file, 'utf8');
+  for (const name of names) {
+    const value = new RegExp(`^${name}=(.*)$`, 'm').exec(text)?.[1]?.trim().replace(/^["']|["']$/g, '');
+    if (value) return value;
+  }
+  return null;
+}
+
+export async function fetchRevenueCat(key, fetchImpl = fetch) {
+  const get = async path => {
+    const response = await fetchImpl(`https://api.revenuecat.com/v2${path}`, { headers: { authorization: `Bearer ${key}` }, redirect: 'error' });
+    if (!response.ok) throw new Error(`revenuecat read failed (HTTP ${response.status})`);
+    return response.json();
+  };
+  const projects = (await get('/projects')).items ?? [];
+  if (projects.length !== 1) throw new Error(`revenuecat read failed (expected one project, found ${projects.length})`);
+  const id = projects[0].id;
+  const [offerings, entitlements] = await Promise.all([get(`/projects/${id}/offerings`), get(`/projects/${id}/entitlements`)]);
+  return { offerings: (offerings.items ?? []).map(item => item.lookup_key).sort(), entitlements: (entitlements.items ?? []).map(item => item.lookup_key).sort() };
+}
+
+export function diffRevenueCat(expected, actual) {
+  return ['offerings', 'entitlements'].flatMap(kind => (expected?.[kind] ?? []).filter(name => !actual[kind].includes(name))
+    .map(name => `revenuecat ${kind.slice(0, -1)} ${name}: expected present, actual missing`));
+}
+
 // #874: the Vercel environment variables the manifest requires must exist for each environment (names only, never values).
 export function vercelEnvNames(output) {
   return new Set(output.split('\n').map(line => /^\s([A-Z][A-Z0-9_]+)\s/.exec(line)?.[1]).filter(Boolean));
@@ -53,6 +87,14 @@ export async function check({ cwd = root, env = process.env, fetchImpl = fetch,
   const drift = diffEnvNames(expected.env_names, readNames);
   const manifest = JSON.parse(readFileSync(resolve(cwd, 'scripts/deploy/env-manifest.json'), 'utf8'));
   drift.push(...diffVercelEnv(Object.fromEntries(['development', 'preview', 'production'].map(name => [name, manifest.required?.[name] ?? []])), vercelReader(cwd, runCommand)));
+  if (expected.revenuecat) {
+    const key = revenueCatKey({ env });
+    if (!key) drift.push('revenuecat: could not read (no REVENUECAT_SECRET_KEY)');
+    else {
+      try { drift.push(...diffRevenueCat(expected.revenuecat, await fetchRevenueCat(key, fetchImpl))); }
+      catch (error) { drift.push(String(error.message).replaceAll(key, '<redacted>').split('\n')[0]); }
+    }
+  }
   const url = env.EXPO_PUBLIC_SUPABASE_URL, key = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) drift.push('supabase dev auth: could not read (EXPO_PUBLIC_SUPABASE_URL / ANON_KEY not set)');
   else {
@@ -71,6 +113,12 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   if (existsSync(file)) for (const line of readFileSync(file, 'utf8').split('\n')) {
     const match = /^(EXPO_PUBLIC_SUPABASE_(?:URL|ANON_KEY))=(.*)$/.exec(line);
     if (match && !env[match[1]]) env[match[1]] = match[2].replace(/^["']|["']$/g, '');
+  }
+  if (process.argv.includes('--record-revenuecat')) {
+    const key = revenueCatKey({ env });
+    if (!key) { process.stderr.write('no REVENUECAT_SECRET_KEY\n'); process.exit(2); }
+    process.stdout.write(`${JSON.stringify(await fetchRevenueCat(key))}\n`);
+    process.exit(0);
   }
   const drift = await check({ env });
   process.stdout.write(drift.length ? `${drift.join('\n')}\n` : 'external config: no drift\n');
