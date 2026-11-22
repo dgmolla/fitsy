@@ -13,8 +13,8 @@ test('public website documents carry anti-clickjacking, nosniff and CSP headers,
   expect(headerValue(rule, 'X-Content-Type-Options')).toBe('nosniff');
   expect(headerValue(rule, 'Content-Security-Policy')).toBe("frame-ancestors 'none'");
   expect(headerValue(rule, 'Content-Security-Policy-Report-Only')).toContain("object-src 'none'");
-  expect(new RegExp(`^${rule.source}$`).test('api/health')).toBe(false);
-  expect(new RegExp(`^${rule.source}$`).test('support')).toBe(true);
+  expect(new RegExp(`^${rule.source}$`).test('/api/health')).toBe(false);
+  expect(new RegExp(`^${rule.source}$`).test('/support')).toBe(true);
 });
 
 test('robots.txt hides the API and links the sitemap', () => {
