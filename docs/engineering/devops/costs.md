@@ -94,3 +94,14 @@ graph LR
 - **RevenueCat:** automatic tier changes tied to MRR; no action needed until revenue starts
 - **Firecrawl:** removed from the current pipeline (UE-first uses UE JSON-LD directly); no active cost line
 - **Google Places:** confirm `GOOGLE_PLACES_API_KEY` is present in prod environment; if not needed for photo fallback, removing it eliminates this cost line entirely
+
+---
+
+## Inventory and Upstash (Nov 2026, #994)
+
+The machine-readable list of every paid or metered service, with its plan, official pricing page, the quota to watch and its monitor, is [cost-inventory.json](cost-inventory.json).
+A test ties it to `scripts/deploy/env-manifest.json`, so a new provider cannot be added without an inventory entry.
+
+Upstash Redis is no longer free for production: `fitsy-ratelimit-dev` (the production database despite its name) moved to pay-as-you-go at $0.20 per 100K commands after the free 500K monthly quota was exhausted on Nov 18 (#990).
+Preview and Development now use their own free-tier database `fitsy-ratelimit-nonprod` (#995).
+No budget cap is set, because Upstash enforces a cap as a hard stop that halts the database and production; set one only as a deliberate decision.
