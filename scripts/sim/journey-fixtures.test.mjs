@@ -16,7 +16,6 @@ const expected = {
   'onboarding-guided-preview': ['unsubscribed-dev', ['test-store']],
   'onboarding-returning-preview': ['unsubscribed-dev', ['test-store']],
   'paywall-live-terms': ['unsubscribed-dev', ['test-store']],
-  reminders: ['unsubscribed-dev', ['test-store']],
   'subscription-expired-routing': ['expired-subscription', ['test-store', 'apple-simulator']],
   'subscription-restore-empty': ['empty-store', ['test-store', 'apple-simulator']],
   'subscription-restore-expired': ['apple-history', ['apple-simulator']],
@@ -52,7 +51,8 @@ test('full selection invokes every required account/store adapter without inheri
       await withFixtureEnvironment(fixture, async () => {
         // This is adapter selection proof, not native authentication proof.
         // The billing caller separately verifies history and runs ci-signin.
-        prepareJourney(fixture, flow, '54503F5C-8A3C-4699-8401-2E1D32890A24');
+        // The profile and verdict check talks to the dev backend; it has its own tests (fixture-profile.test.ts).
+        prepareJourney(fixture, flow, '54503F5C-8A3C-4699-8401-2E1D32890A24', () => 'not-applicable');
         if (expected[flow]) {
           const last = JSON.parse(readFileSync(trace, 'utf8').trim().split('\n').at(-1));
           assert.equal(last.flow, flow); assert.equal(last.fixture, expected[flow][0]);
