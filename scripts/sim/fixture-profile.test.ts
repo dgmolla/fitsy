@@ -172,3 +172,29 @@ describe('login reuse', () => {
     expect(out).toContain('logins=1');
   });
 });
+
+// #1034: fixture env files without an origin follow the run's selected API origin, including a PR preview, and the
+// allow-list still rejects any other origin.
+describe('run origin', () => {
+  const run = (origin: string, fixtureEnv: string): string => spawnSync(process.execPath, ['--input-type=module', '-e',
+    `import { ensureBaselineProfile } from ${JSON.stringify(resolve(__dirname, 'fixture-profile.mjs'))};
+     const seen = [];
+     const http = (method, url) => { seen.push(new URL(url).origin); return url.endsWith('/api/auth/login') ? { status: 200, json: { token: 't' } } : { status: 200, json: { verdict: 'never_subscribed' } }; };
+     try { ensureBaselineProfile({ name: 'unsubscribed-dev', env: ${fixtureEnv} }, http); process.stdout.write('OK ' + [...new Set(seen)].join(',')); }
+     catch (error) { process.stdout.write('ERR ' + error.message); }`],
+  { encoding: 'utf8', env: { ...process.env, EXPO_PUBLIC_API_URL: origin } }).stdout;
+  const login = "EXPO_PUBLIC_DEV_LOGIN_EMAIL: 'a@example.test', EXPO_PUBLIC_DEV_LOGIN_PASSWORD: 'pw'";
+  const preview = 'https://fitsy-abc123-dawits-projects-74b6e00f.vercel.app';
+
+  test('a fixture without an origin uses the run preview origin', () => {
+    expect(run(preview, `{ ${login} }`)).toBe(`OK ${preview}`);
+  });
+
+  test('an origin that is neither dev nor this project preview is refused even from the run environment', () => {
+    expect(run('https://example.com', `{ ${login} }`)).toContain('ERR Fixture unsubscribed-dev: refusing');
+  });
+
+  test('a missing origin everywhere is reported', () => {
+    expect(run('', `{ ${login} }`)).toContain('needs EXPO_PUBLIC_API_URL');
+  });
+});
