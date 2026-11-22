@@ -17,6 +17,8 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // #1029: do not advertise the framework in an X-Powered-By header.
+  poweredByHeader: false,
   // Transpile shared package from monorepo
   transpilePackages: ["@fitsy/shared"],
 
