@@ -40,7 +40,10 @@ export function ensureBaselineProfile(fixture, http = curlJson) {
   const baseline = baselineProfiles[fixture?.name];
   const verdict = expectedVerdicts[fixture?.name];
   if (!baseline && !verdict) return 'not-applicable';
-  const { EXPO_PUBLIC_API_URL: origin, EXPO_PUBLIC_DEV_LOGIN_EMAIL: email, EXPO_PUBLIC_DEV_LOGIN_PASSWORD: password } = fixture.env ?? {};
+  // #1034: a fixture env file may leave the origin out so the account follows the run's selected API origin (dev or this
+  // project's PR preview); the origin allow-list below still applies to whichever origin is used.
+  const { EXPO_PUBLIC_DEV_LOGIN_EMAIL: email, EXPO_PUBLIC_DEV_LOGIN_PASSWORD: password } = fixture.env ?? {};
+  const origin = fixture.env?.EXPO_PUBLIC_API_URL ?? process.env.EXPO_PUBLIC_API_URL;
   const fail = reason => { throw new Error(`Fixture ${fixture.name}: ${reason}`); };
   if (!origin || !email || !password) fail('needs EXPO_PUBLIC_API_URL and its own dev login credentials to verify the profile');
   if (!allowedOrigin(origin)) fail('refusing to verify or restore a profile on a backend that is not the dev backend');
