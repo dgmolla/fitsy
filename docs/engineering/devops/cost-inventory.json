@@ -1,0 +1,24 @@
+{
+  "note": "In-repo inventory of every paid or metered service (#994). Facts marked confirm must be read from the provider console; no secrets and no spend figures live here. Refresh by hand or with the provider usage helpers named in monitor.",
+  "billingOwner": "Dawit (account holder)",
+  "services": [
+    { "name": "Vercel", "envPrefixes": ["VERCEL"], "plan": "confirm in console", "pricing": "https://vercel.com/pricing", "watch": "deploys per day, function duration, bandwidth", "monitor": "none yet" },
+    { "name": "Supabase", "envPrefixes": ["SUPABASE", "POSTGRES", "PROD", "PIPELINE"], "plan": "confirm in console", "pricing": "https://supabase.com/pricing", "watch": "database size, monthly active users, connection pool", "monitor": "none yet" },
+    { "name": "Upstash Redis", "envPrefixes": ["UPSTASH"], "plan": "fitsy-ratelimit-dev (production) is pay-as-you-go at $0.20 per 100K commands; fitsy-ratelimit-nonprod (Preview and Development) is free tier", "pricing": "https://upstash.com/pricing/redis", "watch": "daily commands; production monitor reads usage with UPSTASH_API_KEY, UPSTASH_DATABASE_ID and UPSTASH_DAILY_COMMAND_LIMIT", "monitor": "scripts/verify/production-monitor.mjs", "note": "No budget cap is set; a cap is a hard stop that halts the database and production." },
+    { "name": "RevenueCat", "envPrefixes": ["REVENUECAT"], "plan": "confirm in console", "pricing": "https://www.revenuecat.com/pricing/", "watch": "monthly tracked revenue", "monitor": "none yet" },
+    { "name": "PostHog", "envPrefixes": ["POSTHOG"], "plan": "confirm in console", "pricing": "https://posthog.com/pricing", "watch": "events and recordings per month", "monitor": "production monitor queries PostHog for mobile health" },
+    { "name": "Sentry", "envPrefixes": ["SENTRY"], "plan": "confirm in console", "pricing": "https://sentry.io/pricing/", "watch": "error and transaction quota", "monitor": "none yet" },
+    { "name": "Axiom", "envPrefixes": ["AXIOM"], "plan": "confirm in console", "pricing": "https://axiom.co/pricing", "watch": "ingest per month", "monitor": "none yet" },
+    { "name": "Resend", "envPrefixes": ["RESEND"], "plan": "confirm in console", "pricing": "https://resend.com/pricing", "watch": "emails per month; domain fitsy.org must stay verified", "monitor": "failed sends alert #fitsy-alerts (emailService, marketing cron)" },
+    { "name": "Anthropic API", "envPrefixes": ["ANTHROPIC"], "plan": "usage based", "pricing": "https://www.anthropic.com/pricing", "watch": "pipeline and CI token spend", "monitor": "none yet" },
+    { "name": "Jina", "envPrefixes": ["JINA"], "plan": "confirm in console", "pricing": "https://jina.ai/api-dashboard/", "watch": "tokens per month", "monitor": "none yet" },
+    { "name": "Firecrawl", "envPrefixes": ["FIRECRAWL"], "plan": "confirm in console", "pricing": "https://www.firecrawl.dev/pricing", "watch": "credits per month", "monitor": "none yet" },
+    { "name": "Brave Search API", "envPrefixes": ["BRAVE"], "plan": "confirm in console", "pricing": "https://brave.com/search/api/", "watch": "queries per month", "monitor": "none yet" },
+    { "name": "Google Places", "envPrefixes": ["GOOGLE"], "plan": "usage based", "pricing": "https://mapsplatform.google.com/pricing/", "watch": "requests per month", "monitor": "none yet" },
+    { "name": "Slack", "envPrefixes": ["SLACK"], "plan": "confirm in console", "pricing": "https://slack.com/pricing", "watch": "message history", "monitor": "none" },
+    { "name": "App Store Connect and Apple Developer", "envPrefixes": ["ASC"], "plan": "annual developer program", "pricing": "https://developer.apple.com/programs/", "watch": "renewal date", "monitor": "none yet" },
+    { "name": "GitHub Actions", "envPrefixes": ["GITHUB"], "plan": "confirm in console", "pricing": "https://github.com/pricing", "watch": "Actions minutes", "monitor": "none yet" },
+    { "name": "Expo EAS", "envPrefixes": ["EXPO"], "plan": "confirm in console", "pricing": "https://expo.dev/pricing", "watch": "builds and update bandwidth", "monitor": "none yet" }
+  ],
+  "notServices": ["ALLOW", "APP", "CI", "CLOUD", "CRON", "DEMO", "FITSY", "GOAL", "HOME", "JAVA", "MAESTRO", "NEXT", "NODE", "OVERTURE", "PATH", "PRELOAD", "RUNNER", "SEARCH", "SIM", "SOURCE", "TMPDIR", "TYPESAFE", "UE", "UNSUBSCRIBE", "V2", "dev", "jev", "npm"]
+}
