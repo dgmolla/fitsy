@@ -22,15 +22,31 @@ export function slackStale(lastSlackMs, now, hourPt) {
   return hourPt >= 9 && hourPt < 22 && minutes(now - lastSlackMs) > 150;
 }
 
+// Pure: supervisor.log lines like "[2026-11-22 15:06:11 PST] [opusplan] ..." that report BLOCKED or a network/API backoff recently.
+export function recentSupervisorProblems(logText, now, windowMs = 3 * 3600_000) {
+  return logText.split('\n').filter(line => /BLOCKED|network\/API error/.test(line)).filter(line => {
+    const match = /^\[(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}) (PST|PDT)\]/.exec(line);
+    if (!match) return false;
+    const at = Date.parse(`${match[1]}T${match[2]}${match[3] === 'PDT' ? '-07:00' : '-08:00'}`);
+    return Number.isFinite(at) && now - at <= windowMs;
+  });
+}
+
+// Pure: open blocker issues nobody has touched for an hour.
+export function stalledBlockers(issues, now, limitMinutes = 60) {
+  return issues.filter(issue => minutes(now - Date.parse(issue.updatedAt)) >= limitMinutes).map(issue => issue.number);
+}
+
 export function runChecks({ now = Date.now(), run = (...args) => execFileSync(args[0], args.slice(1), { encoding: 'utf8' }),
-  exists = existsSync, mtimeMs = file => statSync(file).mtimeMs, home = process.env.HOME,
+  exists = existsSync, readText = file => readFileSync(file, 'utf8'), mtimeMs = file => statSync(file).mtimeMs, home = process.env.HOME,
   hourPt = Number(new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone: 'America/Los_Angeles' }).format(new Date(now))) % 24 } = {}) {
   const checks = [];
   const attempt = (name, body) => { try { checks.push(body()); } catch (error) { checks.push(result(name, false, `check failed: ${error.message.split('\n')[0]}`)); } };
 
   attempt('docker', () => { run('docker', 'info', '--format', '{{.ServerVersion}}'); return result('docker', true, 'responding'); });
   attempt('supervisors', () => {
-    const out = (() => { try { return run('pgrep', '-fl', 'supervise[.]sh'); } catch { return ''; } })();
+    // ps, not pgrep -f: pgrep missed a re-exec'd supervisor on macOS.
+    const out = (() => { try { return run('ps', '-axo', 'pid=,command='); } catch { return ''; } })();
     const missing = ['opusplan', 'app'].filter(lane => !new RegExp(`supervise\\.sh ${lane}`).test(out));
     return result('supervisors', missing.length === 0, missing.length ? `not running: ${missing.join(', ')}` : 'opusplan and app alive');
   });
@@ -53,6 +69,22 @@ export function runChecks({ now = Date.now(), run = (...args) => execFileSync(ar
   attempt('blocked', () => {
     const issues = JSON.parse(run('gh', 'issue', 'list', '--repo', 'dgmolla/fitsy', '--label', 'blocked', '--state', 'open', '--json', 'number', '--limit', '50'));
     return result('blocked', issues.length === 0, issues.length ? `open: ${issues.map(issue => `#${issue.number}`).join(' ')}` : 'none open');
+  });
+  attempt('supervisor-log', () => {
+    const file = resolve(home, 'fitsy-codex-loopv2/claude-queue/supervisor.log');
+    if (!exists(file)) return result('supervisor-log', false, 'supervisor.log missing');
+    const problems = recentSupervisorProblems(readText(file).split('\n').slice(-400).join('\n'), now);
+    return result('supervisor-log', problems.length === 0, problems.length ? `${problems.length} BLOCKED or network lines in the last 3 hours` : 'no BLOCKED or network lines in 3 hours');
+  });
+  attempt('token-snapshot', () => {
+    let output = '';
+    try { output = run('/bin/zsh', resolve(home, 'fitsy-codex-loopv2/claude-queue/token-snapshot.sh')); } catch (error) { output = String(error.stdout ?? ''); }
+    return result('token-snapshot', !/\bWARN\b/.test(output), /\bWARN\b/.test(output) ? output.split('\n').find(line => /\bWARN\b/.test(line)).slice(0, 160) : 'no warnings');
+  });
+  attempt('stalled-blockers', () => {
+    const issues = JSON.parse(run('gh', 'issue', 'list', '--repo', 'dgmolla/fitsy', '--label', 'blocker', '--state', 'open', '--json', 'number,updatedAt', '--limit', '50'));
+    const stalled = stalledBlockers(issues, now);
+    return result('stalled-blockers', stalled.length === 0, stalled.length ? `no update for 60+ min: ${stalled.map(number => `#${number}`).join(' ')}` : 'blockers are moving');
   });
   // #1020: a lane that ended a run with questions only in its output gets an auto-filed needs-fitsy issue; surface any still open.
   attempt('idle-with-questions', () => {
