@@ -58,6 +58,23 @@ export function anthropicReader({ key, fetchImpl = fetch, now = () => new Date()
   };
 }
 
+// Supabase: the Management API exposes no billing or org usage (probed: organizations 403, billing/usage 404), so this reader gives
+// the live signal only: recent API requests across the account's projects, plus project health. Spend stays a hand-entered figure.
+export function supabaseReader({ key, fetchImpl = fetch, host = 'https://api.supabase.com' }) {
+  const get = async path => {
+    const response = await fetchImpl(`${host}${path}`, { headers: { authorization: `Bearer ${key}` }, redirect: 'error' });
+    if (!response.ok) throw new Error(`supabase read failed (HTTP ${response.status})`);
+    return response.json();
+  };
+  return async () => {
+    const projects = await get('/v1/projects');
+    let requests = 0;
+    for (const project of projects) requests += Number((await get(`/v1/projects/${project.ref}/analytics/endpoints/usage.api-requests-count`)).result?.[0]?.count) || 0;
+    const unhealthy = projects.filter(project => project.status !== 'ACTIVE_HEALTHY').map(project => project.name);
+    return { used: requests, limit: null, unit: 'API requests (recent)', spendUsd: null, projectedSpendUsd: null, note: unhealthy.length ? `not healthy: ${unhealthy.join(', ')}` : `${projects.length} projects healthy` };
+  };
+}
+
 export function defaultReaders({ home = process.env.HOME, fetchImpl = fetch } = {}) {
   const dir = resolve(home, '.config/fitsy');
   const readers = {};
@@ -65,5 +82,7 @@ export function defaultReaders({ home = process.env.HOME, fetchImpl = fetch } = 
   if (posthogKey) readers.PostHog = posthogReader({ key: posthogKey, fetchImpl });
   const anthropicKey = keyFromEnvFile(resolve(dir, 'anthropic.env'), 'ANTHROPIC_ADMIN_KEY');
   if (anthropicKey) readers['Anthropic API'] = anthropicReader({ key: anthropicKey, fetchImpl });
+  const supabaseKey = keyFromEnvFile(resolve(dir, 'supabase.env'), 'SUPABASE_ACCESS_TOKEN');
+  if (supabaseKey) readers.Supabase = supabaseReader({ key: supabaseKey, fetchImpl });
   return readers;
 }

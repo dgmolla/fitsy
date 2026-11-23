@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { anthropicReader, defaultReaders, keyFromEnvFile, posthogReader } from './readers.mjs';
+import { anthropicReader, defaultReaders, keyFromEnvFile, posthogReader, supabaseReader } from './readers.mjs';
 
 const billing = {
   billing_plan: 'paid', current_total_amount_usd_after_discount: '12.50', projected_total_amount_usd_after_discount: '30.00',
@@ -62,4 +62,23 @@ test('an Anthropic read failure reports only the status, and the reader register
     writeFileSync(join(home, '.config/fitsy/anthropic.env'), 'ANTHROPIC_ADMIN_KEY=sk-ant-x\n');
     assert.deepEqual(Object.keys(defaultReaders({ home })), ['Anthropic API']);
   } finally { rmSync(home, { recursive: true, force: true }); }
+});
+
+test('the Supabase reader sums recent API requests across projects and flags unhealthy ones, without a spend figure', async () => {
+  const seen = [];
+  const fetchImpl = async (url, init) => {
+    seen.push(url);
+    assert.equal(init.headers.authorization, 'Bearer sbp_secret');
+    const body = url.endsWith('/v1/projects')
+      ? [{ ref: 'a', name: 'fitsy', status: 'ACTIVE_HEALTHY' }, { ref: 'b', name: 'fitsy-dev', status: 'INACTIVE' }]
+      : { result: [{ count: url.includes('/a/') ? 50 : 2 }] };
+    return { ok: true, status: 200, json: async () => body };
+  };
+  const reading = await supabaseReader({ key: 'sbp_secret', fetchImpl })();
+  assert.equal(reading.used, 52);
+  assert.equal(reading.spendUsd, null);
+  assert.equal(reading.note, 'not healthy: fitsy-dev');
+  assert.equal(seen.length, 3);
+  assert.equal(JSON.stringify(reading).includes('sbp_secret'), false);
+  await assert.rejects(supabaseReader({ key: 'sbp_secret', fetchImpl: async () => ({ ok: false, status: 403 }) })(), /HTTP 403/);
 });
