@@ -4,6 +4,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { defaultReaders } from './readers.mjs';
 import { buildSnapshot, evaluateAlerts, loadInventory, renderPage } from './snapshot.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -28,7 +29,8 @@ export async function collect({ home = process.env.HOME, now = new Date(), extra
   const dir = resolve(home, '.config/fitsy');
   const snapshotFile = resolve(dir, 'cost-snapshot.json');
   const previous = existsSync(snapshotFile) ? JSON.parse(readFileSync(snapshotFile, 'utf8')) : null;
-  const readers = { ...manualReaders(resolve(dir, 'cost-manual.json')), ...extraReaders };
+  // Provider readers (registered only when their key file exists) win over hand-entered figures for the same service.
+  const readers = { ...manualReaders(resolve(dir, 'cost-manual.json')), ...defaultReaders({ home }), ...extraReaders };
   const snapshot = await buildSnapshot({ services: loadInventory(root), readers, now });
   const alerts = evaluateAlerts(snapshot, previous);
   atomicWrite(snapshotFile, `${JSON.stringify(snapshot)}\n`);
