@@ -17,6 +17,11 @@ export function unackedHandoffs(issues, now) {
   }).map(issue => issue.number);
 }
 
+// Pure: #1054 weekly maintenance is due when no receipt comment ("Weekly receipt") landed in the last 8 days.
+export function weeklyMaintenanceDue(comments, now, windowMs = 8 * 86400_000) {
+  return !(comments ?? []).some(comment => /Weekly receipt/i.test(comment.body ?? '') && now - Date.parse(comment.createdAt) <= windowMs);
+}
+
 // Pure: the app lane posts to Slack, so a stale last_slack.txt during the day means the poster is down.
 export function slackStale(lastSlackMs, now, hourPt) {
   return hourPt >= 9 && hourPt < 22 && minutes(now - lastSlackMs) > 150;
@@ -104,6 +109,12 @@ export function runChecks({ now = Date.now(), run = (...args) => execFileSync(ar
     try { output = run('node', resolve(repository, 'scripts/dev/check-external-config.mjs')); } catch (error) { code = error.status ?? 1; output = String(error.stdout ?? error.message); }
     const lines = output.trim().split('\n').filter(Boolean);
     return result('external-config', code === 0, code === 0 ? 'no drift' : lines.slice(0, 3).join('; '));
+  });
+  // #1054: the tooling lane owes one receipt comment a week; this warning is what wakes it up (no new sender or schedule).
+  attempt('weekly-maintenance', () => {
+    const issue = JSON.parse(run('gh', 'issue', 'view', '1054', '--repo', 'dgmolla/fitsy', '--json', 'comments'));
+    const due = weeklyMaintenanceDue(issue.comments, now);
+    return result('weekly-maintenance', !due, due ? 'no "Weekly receipt" on #1054 in 8 days: tooling lane runs the weekly pass' : 'receipt posted this week');
   });
   return checks;
 }
