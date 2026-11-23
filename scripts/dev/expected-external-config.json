@@ -5,6 +5,18 @@
     "disable_signup": false
   },
   "env_names": {
-    "apps/mobile/.env.development.local": ["EXPO_PUBLIC_API_URL", "EXPO_PUBLIC_SUPABASE_URL", "EXPO_PUBLIC_SUPABASE_ANON_KEY"]
+    "apps/mobile/.env.development.local": [
+      "EXPO_PUBLIC_API_URL",
+      "EXPO_PUBLIC_SUPABASE_URL",
+      "EXPO_PUBLIC_SUPABASE_ANON_KEY"
+    ]
+  },
+  "revenuecat": {
+    "offerings": [
+      "default"
+    ],
+    "entitlements": [
+      "pro"
+    ]
   }
 }
