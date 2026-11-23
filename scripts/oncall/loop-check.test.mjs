@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { recentSupervisorProblems, runChecks, slackStale, stalledBlockers, unackedHandoffs } from './loop-check.mjs';
+import { recentSupervisorProblems, runChecks, slackStale, stalledBlockers, unackedHandoffs, weeklyMaintenanceDue } from './loop-check.mjs';
 
 const now = Date.parse('2026-11-18T22:00:00Z');
 const ago = minutes => new Date(now - minutes * 60000).toISOString();
@@ -30,7 +30,7 @@ test('every check reports a line, and a failing check is a warning, not a crash'
     return '[]';
   };
   const checks = runChecks({ now, run, exists: () => true, mtimeMs: () => now - 10 * 60000, home: '/h', hourPt: 12 });
-  assert.deepEqual(checks.map(check => check.name), ['docker', 'supervisors', 'slack-liveness', 'handoffs', 'needs-dawit', 'blocked', 'supervisor-log', 'token-snapshot', 'stalled-blockers', 'cost-snapshot', 'idle-with-questions', 'external-config']);
+  assert.deepEqual(checks.map(check => check.name), ['docker', 'supervisors', 'slack-liveness', 'handoffs', 'needs-dawit', 'blocked', 'supervisor-log', 'token-snapshot', 'stalled-blockers', 'cost-snapshot', 'idle-with-questions', 'external-config', 'weekly-maintenance']);
   const byName = Object.fromEntries(checks.map(check => [check.name, check]));
   assert.equal(byName.docker.status, 'warn');
   assert.match(byName.supervisors.detail, /app/);
@@ -81,4 +81,13 @@ test('cost alerts from the collector are surfaced as a warning and a quiet snaps
   assert.match(warn.detail, /Upstash Redis is at 86%/);
   const quiet = runChecks({ ...base, run: make('cost snapshot: 0 of 17 services with data, projected $0\n') }).find(check => check.name === 'cost-snapshot');
   assert.equal(quiet.status, 'ok');
+});
+
+test('weekly maintenance is due until a Weekly receipt comment lands within 8 days', () => {
+  const receipt = days => ({ body: '**TL;DR:** Weekly receipt: guards shipped', createdAt: new Date(now - days * 86400000).toISOString() });
+  assert.equal(weeklyMaintenanceDue([], now), true);
+  assert.equal(weeklyMaintenanceDue(undefined, now), true);
+  assert.equal(weeklyMaintenanceDue([{ body: 'ack', createdAt: ago(10) }], now), true);
+  assert.equal(weeklyMaintenanceDue([receipt(9)], now), true);
+  assert.equal(weeklyMaintenanceDue([receipt(3)], now), false);
 });
