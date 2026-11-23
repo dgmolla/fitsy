@@ -96,7 +96,9 @@ export function observerFailureDetail(reason) {
   return 'request or configuration error';
 }
 
-export async function mobileMetrics({ env, fetchImpl, now }) {
+const POSTHOG_TIMEOUT_MS = 30_000;
+
+export async function mobileMetrics({ env, fetchImpl, now, sleep = ms => new Promise(resolveSleep => setTimeout(resolveSleep, ms)) }) {
   if (!env.POSTHOG_PERSONAL_API_KEY || !/^\d+$/.test(env.POSTHOG_PROJECT_ID ?? '')) throw new Error('PostHog query configuration missing');
   const cutoff = new Date(now - policy.windowMinutes * 60_000).toISOString();
   const start = new Date(now - policy.baselineMinutes * 60_000).toISOString();
@@ -116,12 +118,14 @@ export async function mobileMetrics({ env, fetchImpl, now }) {
     const body = await requestJson(`${host}/api/projects/${env.POSTHOG_PROJECT_ID}/query/`, {
       method: 'POST', headers: { authorization: `Bearer ${env.POSTHOG_PERSONAL_API_KEY}`, 'content-type': 'application/json' },
       body: JSON.stringify({ query: { kind: 'HogQLQuery', query: sql } }),
-    }, fetchImpl);
+    }, fetchImpl, POSTHOG_TIMEOUT_MS);
     if (body.error || body.hasMore || body.results?.length !== 1 || body.results[0].length !== 5) throw new Error('Incomplete PostHog response');
     return body;
   };
   let body;
-  try { body = await query(); } catch { body = await query(); }
+  // The third observer:mobile recurrence (Nov 23) was 'provider request timed out' even after the retry: the HogQL query
+  // is occasionally slower than the default 10 s, so it gets 30 s and a short pause before the one retry.
+  try { body = await query(); } catch { await sleep(2_000); body = await query(); }
   return evaluateMobile(body.results[0]);
 }
 

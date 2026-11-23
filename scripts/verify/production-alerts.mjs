@@ -3,8 +3,8 @@ import { createHash } from 'node:crypto';
 const marker = '<!-- fitsy-production-monitor-state:v1 -->';
 
 /** Only external HTTP is injected. All evaluation, transitions and delivery are real. */
-export async function requestJson(url, init = {}, fetchImpl = fetch) {
-  const response = await fetchImpl(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(10_000) });
+export async function requestJson(url, init = {}, fetchImpl = fetch, timeoutMs = 10_000) {
+  const response = await fetchImpl(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(timeoutMs) });
   if (!response.ok) throw Object.assign(new Error('Monitoring provider request failed'), { httpStatus: response.status });
   return response.json();
 }
