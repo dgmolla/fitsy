@@ -30,7 +30,7 @@ test('every check reports a line, and a failing check is a warning, not a crash'
     return '[]';
   };
   const checks = runChecks({ now, run, exists: () => true, mtimeMs: () => now - 10 * 60000, home: '/h', hourPt: 12 });
-  assert.deepEqual(checks.map(check => check.name), ['docker', 'supervisors', 'slack-liveness', 'handoffs', 'needs-dawit', 'blocked', 'supervisor-log', 'token-snapshot', 'stalled-blockers', 'idle-with-questions', 'external-config']);
+  assert.deepEqual(checks.map(check => check.name), ['docker', 'supervisors', 'slack-liveness', 'handoffs', 'needs-dawit', 'blocked', 'supervisor-log', 'token-snapshot', 'stalled-blockers', 'cost-snapshot', 'idle-with-questions', 'external-config']);
   const byName = Object.fromEntries(checks.map(check => [check.name, check]));
   assert.equal(byName.docker.status, 'warn');
   assert.match(byName.supervisors.detail, /app/);
@@ -67,4 +67,18 @@ test('blocker issues untouched for an hour are reported', () => {
   const now = Date.parse('2026-11-22T23:30:00Z');
   const ago = minutesAgo => new Date(now - minutesAgo * 60000).toISOString();
   assert.deepEqual(stalledBlockers([{ number: 1, updatedAt: ago(90) }, { number: 2, updatedAt: ago(20) }], now), [1]);
+});
+
+test('cost alerts from the collector are surfaced as a warning and a quiet snapshot is ok', () => {
+  const make = collectorOutput => (...args) => {
+    if (args[0] === 'node' && String(args[1]).endsWith('collect.mjs')) return collectorOutput;
+    if (args[0] === 'ps') return 'supervise.sh opusplan\nsupervise.sh app\n';
+    return args[0] === 'gh' ? '[]' : 'ok';
+  };
+  const base = { now, exists: () => true, mtimeMs: () => now, home: '/h', hourPt: 12, readText: () => '' };
+  const warn = runChecks({ ...base, run: make('cost snapshot: 1 of 17 services with data, projected $3\nALERT Upstash Redis is at 86% of its commands limit\n') }).find(check => check.name === 'cost-snapshot');
+  assert.equal(warn.status, 'warn');
+  assert.match(warn.detail, /Upstash Redis is at 86%/);
+  const quiet = runChecks({ ...base, run: make('cost snapshot: 0 of 17 services with data, projected $0\n') }).find(check => check.name === 'cost-snapshot');
+  assert.equal(quiet.status, 'ok');
 });

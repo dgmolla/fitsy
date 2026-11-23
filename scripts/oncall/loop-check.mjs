@@ -86,6 +86,12 @@ export function runChecks({ now = Date.now(), run = (...args) => execFileSync(ar
     const stalled = stalledBlockers(issues, now);
     return result('stalled-blockers', stalled.length === 0, stalled.length ? `no update for 60+ min: ${stalled.map(number => `#${number}`).join(' ')}` : 'blockers are moving');
   });
+  // #994: the hourly pass also refreshes the cost snapshot; any ALERT line (80 percent quota, 50 percent projected jump) is a warning.
+  attempt('cost-snapshot', () => {
+    const output = run('node', resolve(repository, 'scripts/cost/collect.mjs'));
+    const alerts = output.split('\n').filter(line => line.startsWith('ALERT '));
+    return result('cost-snapshot', alerts.length === 0, alerts.length ? alerts.map(line => line.slice(6)).join('; ').slice(0, 300) : output.split('\n')[0].slice(0, 120));
+  });
   // #1020: a lane that ended a run with questions only in its output gets an auto-filed needs-fitsy issue; surface any still open.
   attempt('idle-with-questions', () => {
     const issues = JSON.parse(run('gh', 'issue', 'list', '--repo', 'dgmolla/fitsy', '--label', 'needs-fitsy', '--state', 'open', '--json', 'number,title', '--limit', '50'))
