@@ -17,6 +17,12 @@ export function unackedHandoffs(issues, now) {
   }).map(issue => issue.number);
 }
 
+// Pure: the newest finished push run per post-merge workflow on main; a red one with nothing newer green is a red main (#1061).
+export function redMainRuns(runs, names = ['Verify', 'Main full suite']) {
+  return names.map(name => (runs ?? []).find(run => run.workflowName === name && ['success', 'failure'].includes(run.conclusion)))
+    .filter(run => run?.conclusion === 'failure');
+}
+
 // Pure: #1054 weekly maintenance is due when no receipt comment ("Weekly receipt") landed in the last 8 days.
 export function weeklyMaintenanceDue(comments, now, windowMs = 8 * 86400_000) {
   return !(comments ?? []).some(comment => /Weekly receipt/i.test(comment.body ?? '') && now - Date.parse(comment.createdAt) <= windowMs);
@@ -109,6 +115,12 @@ export function runChecks({ now = Date.now(), run = (...args) => execFileSync(ar
     try { output = run('node', resolve(repository, 'scripts/dev/check-external-config.mjs')); } catch (error) { code = error.status ?? 1; output = String(error.stdout ?? error.message); }
     const lines = output.trim().split('\n').filter(Boolean);
     return result('external-config', code === 0, code === 0 ? 'no drift' : lines.slice(0, 3).join('; '));
+  });
+  // #1061: a failed post-merge Verify or Main full suite run on main stays a warning until a newer run of it is green, so a lane reruns or files it.
+  attempt('red-main', () => {
+    const runs = JSON.parse(run('gh', 'run', 'list', '--repo', 'dgmolla/fitsy', '--branch', 'main', '--event', 'push', '--limit', '20', '--json', 'workflowName,conclusion,databaseId,headSha'));
+    const red = redMainRuns(runs);
+    return result('red-main', red.length === 0, red.length ? red.map(item => `${item.workflowName} red on ${String(item.headSha).slice(0, 8)} (run ${item.databaseId}): rerun or file within the hour`).join('; ') : 'latest main runs are green');
   });
   // #1054: the tooling lane owes one receipt comment a week; this warning is what wakes it up (no new sender or schedule).
   attempt('weekly-maintenance', () => {
