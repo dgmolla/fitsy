@@ -339,3 +339,71 @@ it('a search with results never asks for coverage (#1004)', async () => {
   await act(async () => {});
   expect(requests).toHaveLength(1);
 });
+
+it('reuses the on-screen page when Search regains focus with unchanged inputs, but still refetches for a new shuffle or changed inputs (#1065)', async () => {
+  const props = (targetsLoaded: boolean, query: string) => ({ inputs, query, location, canSearch: true, targetsLoaded, previewReady: true, isOnboardingPreview: false });
+  const { result, rerender } = renderHook((p: ReturnType<typeof props>) => useDiscoveryResults(p), { initialProps: props(true, 'focus-cache') });
+  await act(async () => {});
+  await act(async () => respond(0, ['one', 'two'], { locked: false }));
+  expect(requests).toHaveLength(1);
+  // Focus reload of saved targets: targetsLoaded flips false then true.
+  rerender(props(false, 'focus-cache'));
+  expect(result.current.loading).toBe(false);
+  rerender(props(true, 'focus-cache'));
+  await act(async () => jest.advanceTimersByTime(2000));
+  expect(requests).toHaveLength(1);
+  expect(result.current.loading).toBe(false);
+  expect(result.current.results.map(r => r.id)).toEqual(['one', 'two']);
+  // New shuffle: one more call, with a seed.
+  act(() => result.current.handleShuffle());
+  await act(async () => {});
+  expect(requests).toHaveLength(2);
+  expect(Object.fromEntries(new URL(requests[1].url).searchParams).seed).toBeTruthy();
+  await act(async () => respond(1, ['three'], { locked: false }));
+  // Returning again keeps the shuffled rows and makes no third call.
+  rerender(props(false, 'focus-cache'));
+  rerender(props(true, 'focus-cache'));
+  await act(async () => jest.advanceTimersByTime(2000));
+  expect(requests).toHaveLength(2);
+  expect(result.current.results.map(r => r.id)).toEqual(['three']);
+  // Changed query: a new unshuffled call.
+  rerender(props(true, 'other'));
+  await act(async () => jest.advanceTimersByTime(600));
+  expect(requests).toHaveLength(3);
+  expect(new URL(requests[2].url).searchParams.has('seed')).toBe(false);
+});
+
+it('keeps an out-of-range result on a focus reload and lets a shuffle survive one (#1065)', async () => {
+  const props = (targetsLoaded: boolean) => ({ inputs, query: '', location, canSearch: true, targetsLoaded, previewReady: true, isOnboardingPreview: false });
+  const { result, rerender } = renderHook((p: ReturnType<typeof props>) => useDiscoveryResults(p), { initialProps: props(true) });
+  await act(async () => {});
+  await act(async () => requests[0].resolve(emptyMain));
+  await act(async () => {});
+  await act(async () => requests[1].resolve(coverage(0)));
+  expect(result.current.outOfArea).toBe(true);
+  rerender(props(false));
+  rerender(props(true));
+  await act(async () => jest.advanceTimersByTime(2000));
+  expect(requests).toHaveLength(2);
+  expect(result.current.loading).toBe(false);
+  expect(result.current.outOfArea).toBe(true);
+});
+
+it('does not abort a running shuffle when the tab regains focus (#1065)', async () => {
+  const props = (targetsLoaded: boolean) => ({ inputs, query: 'shuffle-focus', location, canSearch: true, targetsLoaded, previewReady: true, isOnboardingPreview: false });
+  const { result, rerender } = renderHook((p: ReturnType<typeof props>) => useDiscoveryResults(p), { initialProps: props(true) });
+  await act(async () => {});
+  await act(async () => respond(0, ['one', 'two'], { locked: false }));
+  act(() => result.current.handleShuffle());
+  await act(async () => {});
+  expect(requests).toHaveLength(2);
+  rerender(props(false));
+  rerender(props(true));
+  await act(async () => jest.advanceTimersByTime(2000));
+  expect(requests[1].signal?.aborted).toBe(false);
+  await act(async () => respond(1, ['three'], { locked: false }));
+  expect(result.current.results.map(r => r.id)).toEqual(['three']);
+  expect(result.current.refreshing).toBe(false);
+  expect(result.current.canShuffle).toBe(true);
+  expect(requests).toHaveLength(2);
+});
