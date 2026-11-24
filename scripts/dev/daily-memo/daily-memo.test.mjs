@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -28,10 +29,15 @@ test('the prompt heredoc renders without running any command and keeps the dash-
   const start = script.indexOf('cat > "$PROMPT_FILE" <<EOF');
   const end = script.indexOf('\nEOF\n', start);
   assert.ok(start > 0 && end > start, 'prompt heredoc found');
-  const result = spawnSync('bash', ['-c', `LAST_RUN=a NOW=b CLAUDE_FILES_LIST=/x CURSOR_DUMP=/y PROMPT_FILE=/dev/stdout\n${script.slice(start, end + 4)}`], { encoding: 'utf8' });
-  assert.equal(result.stderr, '', 'no "command not found" from unescaped backticks');
-  assert.match(result.stdout, /a `-` bulleted list/);
-  assert.match(result.stdout, /<memo>\.\.\.<\/memo>/);
+  const dir = mkdtempSync(resolve(tmpdir(), 'daily-memo-'));
+  const promptFile = resolve(dir, 'prompt.txt');
+  try {
+    const result = spawnSync('bash', ['-c', `LAST_RUN=a NOW=b CLAUDE_FILES_LIST=/x CURSOR_DUMP=/y PROMPT_FILE=${promptFile}\n${script.slice(start, end + 4)}`], { encoding: 'utf8' });
+    assert.equal(result.stderr, '', 'no "command not found" from unescaped backticks');
+    const prompt = readFileSync(promptFile, 'utf8');
+    assert.match(prompt, /a `-` bulleted list/);
+    assert.match(prompt, /<memo>\.\.\.<\/memo>/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('the summarizer output is read as json and passed through the extractor', () => {
