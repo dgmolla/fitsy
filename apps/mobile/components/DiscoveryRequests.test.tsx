@@ -372,3 +372,38 @@ it('reuses the on-screen page when Search regains focus with unchanged inputs, b
   expect(requests).toHaveLength(3);
   expect(new URL(requests[2].url).searchParams.has('seed')).toBe(false);
 });
+
+it('keeps an out-of-range result on a focus reload and lets a shuffle survive one (#1065)', async () => {
+  const props = (targetsLoaded: boolean) => ({ inputs, query: '', location, canSearch: true, targetsLoaded, previewReady: true, isOnboardingPreview: false });
+  const { result, rerender } = renderHook((p: ReturnType<typeof props>) => useDiscoveryResults(p), { initialProps: props(true) });
+  await act(async () => {});
+  await act(async () => requests[0].resolve(emptyMain));
+  await act(async () => {});
+  await act(async () => requests[1].resolve(coverage(0)));
+  expect(result.current.outOfArea).toBe(true);
+  rerender(props(false));
+  rerender(props(true));
+  await act(async () => jest.advanceTimersByTime(2000));
+  expect(requests).toHaveLength(2);
+  expect(result.current.loading).toBe(false);
+  expect(result.current.outOfArea).toBe(true);
+});
+
+it('does not abort a running shuffle when the tab regains focus (#1065)', async () => {
+  const props = (targetsLoaded: boolean) => ({ inputs, query: 'shuffle-focus', location, canSearch: true, targetsLoaded, previewReady: true, isOnboardingPreview: false });
+  const { result, rerender } = renderHook((p: ReturnType<typeof props>) => useDiscoveryResults(p), { initialProps: props(true) });
+  await act(async () => {});
+  await act(async () => respond(0, ['one', 'two'], { locked: false }));
+  act(() => result.current.handleShuffle());
+  await act(async () => {});
+  expect(requests).toHaveLength(2);
+  rerender(props(false));
+  rerender(props(true));
+  await act(async () => jest.advanceTimersByTime(2000));
+  expect(requests[1].signal?.aborted).toBe(false);
+  await act(async () => respond(1, ['three'], { locked: false }));
+  expect(result.current.results.map(r => r.id)).toEqual(['three']);
+  expect(result.current.refreshing).toBe(false);
+  expect(result.current.canShuffle).toBe(true);
+  expect(requests).toHaveLength(2);
+});

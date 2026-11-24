@@ -138,6 +138,7 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
           setOutOfArea(true);
           setResults([]);
           setNextCursor(null);
+          loadedContext.current = requestContext;
           return;
         }
         // Empty main search: tell "nobody serves this place" from "nothing fits your targets" with the
@@ -151,6 +152,7 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
             setOutOfArea(true);
             setResults([]);
             setNextCursor(null);
+            loadedContext.current = requestContext;
             return;
           }
           setNearbyDishCount(coverage);
@@ -329,7 +331,9 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
     debounceRef.current = setTimeout(() => {
       doFetch(inputs, location.lat, location.lng, query, locSource);
     }, DEBOUNCE_MS);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); requestController.current?.abort(); };
+    // Requests are cancelled by the invalidation above and on unmount, not here: a focus reload that reuses the
+    // loaded context must not abort a running shuffle or refresh.
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [inputs, location.lat, location.lng, location.loading, location.source, query, canSearch, doFetch, targetsLoaded, previewReady]);
   useEffect(() => () => { requestController.current?.abort(); pageController.current?.abort(); fetchGeneration.current++; }, []);
   const pending = canSearch && completedContext !== contextKey;
