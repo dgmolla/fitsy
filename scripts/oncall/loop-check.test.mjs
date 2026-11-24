@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { recentSupervisorProblems, runChecks, slackStale, stalledBlockers, unackedHandoffs, weeklyMaintenanceDue } from './loop-check.mjs';
+import { recentSupervisorProblems, runChecks, redMainRuns, slackStale, stalledBlockers, unackedHandoffs, weeklyMaintenanceDue } from './loop-check.mjs';
 
 const now = Date.parse('2026-11-18T22:00:00Z');
 const ago = minutes => new Date(now - minutes * 60000).toISOString();
@@ -30,7 +30,7 @@ test('every check reports a line, and a failing check is a warning, not a crash'
     return '[]';
   };
   const checks = runChecks({ now, run, exists: () => true, mtimeMs: () => now - 10 * 60000, home: '/h', hourPt: 12 });
-  assert.deepEqual(checks.map(check => check.name), ['docker', 'supervisors', 'slack-liveness', 'handoffs', 'needs-dawit', 'blocked', 'supervisor-log', 'token-snapshot', 'stalled-blockers', 'cost-snapshot', 'idle-with-questions', 'external-config', 'weekly-maintenance']);
+  assert.deepEqual(checks.map(check => check.name), ['docker', 'supervisors', 'slack-liveness', 'handoffs', 'needs-dawit', 'blocked', 'supervisor-log', 'token-snapshot', 'stalled-blockers', 'cost-snapshot', 'idle-with-questions', 'external-config', 'red-main', 'weekly-maintenance']);
   const byName = Object.fromEntries(checks.map(check => [check.name, check]));
   assert.equal(byName.docker.status, 'warn');
   assert.match(byName.supervisors.detail, /app/);
@@ -90,4 +90,13 @@ test('weekly maintenance is due until a Weekly receipt comment lands within 8 da
   assert.equal(weeklyMaintenanceDue([{ body: 'ack', createdAt: ago(10) }], now), true);
   assert.equal(weeklyMaintenanceDue([receipt(9)], now), true);
   assert.equal(weeklyMaintenanceDue([receipt(3)], now), false);
+});
+
+test('a red post-merge run on main is flagged until a newer run of the same workflow is green', () => {
+  const run = (workflowName, conclusion, databaseId) => ({ workflowName, conclusion, databaseId, headSha: 'abcdef123456' });
+  assert.deepEqual(redMainRuns([run('Verify', 'failure', 3), run('Verify', 'success', 2), run('Main full suite', 'success', 1)]).map(item => item.databaseId), [3]);
+  assert.deepEqual(redMainRuns([run('Verify', 'success', 4), run('Verify', 'failure', 3)]), []);
+  assert.deepEqual(redMainRuns([run('Verify', null, 5), run('Verify', 'failure', 3)]).map(item => item.databaseId), [3]);
+  assert.deepEqual(redMainRuns([run('Verify', 'success', 4), run('Main full suite', 'failure', 6)]).map(item => item.databaseId), [6]);
+  assert.deepEqual(redMainRuns(undefined), []);
 });
