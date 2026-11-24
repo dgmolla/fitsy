@@ -191,7 +191,7 @@ test('a stopped owned container with no active port restarts before reset', () =
   expect(result.error).toBe('');
   expect(result.calls.some(call => call[0] === 'start')).toBe(true);
   expect(result.calls.some(call => call.includes('psql'))).toBe(true);
-  expect(result.spawned).toHaveLength(4);
+  expect(result.spawned).toHaveLength(5);
 });
 test('startup failure retires a newly created container by its pinned ID', () => {
   const result = scenario('created_startup_failure');
@@ -245,7 +245,7 @@ test.each(['migration_failure', 'existing_migration_failure'])('%s retires the a
   expect(result.error).toMatch(/migration or seed failed/);
   expect(result.calls.some(call => call[0] === 'rm')).toBe(true);
   expect(result.containerExists).toBe(false);
-  expect(result.spawned).toHaveLength(2);
+  expect(result.spawned).toHaveLength(3);
 });
 test('low disk is rejected before Docker starts', () => {
   const result = scenario('low_disk');
@@ -255,14 +255,18 @@ test('low disk is rejected before Docker starts', () => {
 test('controlled flow overrides configured external URLs and checks ownership before each write', () => {
   const result = scenario('success');
   expect(result.error).toBe('');
-  expect(result.spawned).toHaveLength(4);
+  expect(result.spawned).toHaveLength(5);
+  // #1061: the client is generated before migrate and seed so the seed never imports a missing Prisma enum.
+  const seed = result.spawned.findIndex(child => child.args.some(arg => arg.endsWith('prisma/seed.ts')));
+  expect(result.spawned.findIndex(child => child.args.includes('generate'))).toBeLessThan(seed);
+  expect(result.spawned.findIndex(child => child.args.includes('generate'))).toBeLessThan(result.spawned.findIndex(child => child.args.includes('migrate')));
   for (const child of result.spawned) {
     expect(child.url).toBe('postgresql://fitsy_test:fitsy_test@' + ['127', '0', '0', '1'].join('.') + ':55432/fitsy_verify');
     expect(child.direct).toBe(child.url);
     expect(child.id).toBe('owned-container-id');
     expect(child.host).toBe(new URL(child.url).hostname);
   }
-  expect(result.calls.filter(call => call[0] === 'inspect')).toHaveLength(8);
+  expect(result.calls.filter(call => call[0] === 'inspect')).toHaveLength(9);
   expect(result.calls.at(-1)).toEqual(['rm', '-f', 'owned-container-id']);
   expect(result.containerExists).toBe(false);
   expect(result.calls.some(call => call.includes('psql'))).toBe(true);
@@ -301,7 +305,7 @@ test.each(['legacy_running', 'legacy_stopped'])('%s is replaced before readiness
     ['rm', '-f', 'legacy-container-id'], ['rm', '-f', 'owned-container-id'],
   ]);
   expect(result.calls.filter(call => call[0] === 'exec').every(call => call[1] === 'owned-container-id')).toBe(true);
-  expect(result.spawned).toHaveLength(4);
+  expect(result.spawned).toHaveLength(5);
 });
 test('legacy retirement refuses a replacement container before removing or launching anything', () => {
   const result = scenario('legacy_replaced');
