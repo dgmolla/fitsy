@@ -44,6 +44,9 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
   const activeShuffle = useRef<ShufflePage | undefined>(undefined);
   const shownRestaurantIds = useRef(new Set<string>());
   const shuffleInFlight = useRef(false);
+  // Context whose page is on screen. Tab focus and targets reloads re-run the fetch effect with an
+  // unchanged context; they must reuse this page instead of calling the API again (#1065).
+  const loadedContext = useRef<string | undefined>(undefined);
   const rememberShown = useCallback((data: RestaurantResult[]) => {
     for (const row of data) {
       shownRestaurantIds.current.delete(row.id);
@@ -85,6 +88,7 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
       // Coverage is re-read for every fresh search; only the preview sets it from its own response.
       if (!isOnboardingPreview && !shuffle) setNearbyDishCount(undefined);
       if (!shuffle) pagesLoadedRef.current = 0;
+      if (!shuffle && !isRefresh) loadedContext.current = undefined;
       isLoadingMoreRef.current = false;
       setLoadingMore(false);
       endReachedFiredRef.current = false;
@@ -153,6 +157,7 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
         }
         setResults(data);
         activeShuffle.current = shuffle;
+        loadedContext.current = requestContext;
         if (!shuffle) shownRestaurantIds.current.clear();
         rememberShown(data);
         setNextCursor(cursor);
@@ -300,6 +305,9 @@ export function useDiscoveryResults({ inputs, query, location, canSearch, target
     rememberShown,
   ]);
   useEffect(() => {
+    // Same context as the page on screen (e.g. returning to the Search tab): keep it, no refetch, no loading flash.
+    if (canSearch && loadedContext.current === currentContext.current) return;
+    loadedContext.current = undefined;
     requestController.current?.abort();
     pageController.current?.abort();
     fetchGeneration.current++;

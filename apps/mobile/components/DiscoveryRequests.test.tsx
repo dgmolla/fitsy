@@ -339,3 +339,36 @@ it('a search with results never asks for coverage (#1004)', async () => {
   await act(async () => {});
   expect(requests).toHaveLength(1);
 });
+
+it('reuses the on-screen page when Search regains focus with unchanged inputs, but still refetches for a new shuffle or changed inputs (#1065)', async () => {
+  const props = (targetsLoaded: boolean, query: string) => ({ inputs, query, location, canSearch: true, targetsLoaded, previewReady: true, isOnboardingPreview: false });
+  const { result, rerender } = renderHook((p: ReturnType<typeof props>) => useDiscoveryResults(p), { initialProps: props(true, 'focus-cache') });
+  await act(async () => {});
+  await act(async () => respond(0, ['one', 'two'], { locked: false }));
+  expect(requests).toHaveLength(1);
+  // Focus reload of saved targets: targetsLoaded flips false then true.
+  rerender(props(false, 'focus-cache'));
+  expect(result.current.loading).toBe(false);
+  rerender(props(true, 'focus-cache'));
+  await act(async () => jest.advanceTimersByTime(2000));
+  expect(requests).toHaveLength(1);
+  expect(result.current.loading).toBe(false);
+  expect(result.current.results.map(r => r.id)).toEqual(['one', 'two']);
+  // New shuffle: one more call, with a seed.
+  act(() => result.current.handleShuffle());
+  await act(async () => {});
+  expect(requests).toHaveLength(2);
+  expect(Object.fromEntries(new URL(requests[1].url).searchParams).seed).toBeTruthy();
+  await act(async () => respond(1, ['three'], { locked: false }));
+  // Returning again keeps the shuffled rows and makes no third call.
+  rerender(props(false, 'focus-cache'));
+  rerender(props(true, 'focus-cache'));
+  await act(async () => jest.advanceTimersByTime(2000));
+  expect(requests).toHaveLength(2);
+  expect(result.current.results.map(r => r.id)).toEqual(['three']);
+  // Changed query: a new unshuffled call.
+  rerender(props(true, 'other'));
+  await act(async () => jest.advanceTimersByTime(600));
+  expect(requests).toHaveLength(3);
+  expect(new URL(requests[2].url).searchParams.has('seed')).toBe(false);
+});
