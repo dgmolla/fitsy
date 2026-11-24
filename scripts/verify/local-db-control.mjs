@@ -138,7 +138,8 @@ export function databaseControl({ root = repository, command = runCommand, spawn
         '--env=POSTGRES_PRISMA_URL', '--env=POSTGRES_URL_NON_POOLING'], { cwd: root, env: childEnv, stdio: 'inherit' });
       if (guard.status !== 0) throw new Error('owned database target guard failed');
       docker(['exec', pinnedId, 'psql', '-U', 'fitsy_test', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-c', 'DROP DATABASE IF EXISTS fitsy_verify WITH (FORCE)', '-c', 'CREATE DATABASE fitsy_verify']);
-      for (const commandArgs of [['node_modules/prisma/build/index.js', 'migrate', 'deploy'], ['node_modules/tsx/dist/cli.mjs', 'prisma/seed.ts', '--data-only']]) {
+      // Generate the client first: the seed imports enums from it, and a restored cache or racing install can leave it missing (#1061).
+      for (const commandArgs of [['node_modules/prisma/build/index.js', 'generate', '--schema', 'prisma/schema.prisma'], ['node_modules/prisma/build/index.js', 'migrate', 'deploy'], ['node_modules/tsx/dist/cli.mjs', 'prisma/seed.ts', '--data-only']]) {
         assert(childEnv);
         const result = spawn(process.execPath, commandArgs, { cwd: root, env: childEnv, stdio: 'inherit' });
         if (result.status !== 0) throw new Error('owned database migration or seed failed');
