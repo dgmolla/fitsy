@@ -41,6 +41,7 @@ export async function collect({ home = process.env.HOME, now = new Date(), extra
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const { snapshot, alerts } = await collect({ extraReaders: { Vercel: vercelPlanReader() } });
   const withData = snapshot.services.filter(row => row.status === 'ok').length;
-  process.stdout.write(`cost snapshot: ${withData} of ${snapshot.services.length} services with data, projected $${snapshot.totalProjectedUsd}\n`);
+  const estimated = snapshot.services.filter(row => row.basis.startsWith('estimated')).length;
+  process.stdout.write(`cost snapshot: ${withData} of ${snapshot.services.length} services with data, ${estimated} estimated, projected $${snapshot.totalProjectedUsd} measured, $${snapshot.totalProjectedWithEstimatesUsd} with estimates\n`);
   for (const alert of alerts) process.stdout.write(`ALERT ${alert}\n`);
 }
