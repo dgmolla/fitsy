@@ -92,6 +92,22 @@ export function vercelPlanReader({ run = (...args) => execFileSync(args[0], args
   };
 }
 
+// RevenueCat: GET /v2/projects/{id}/metrics/overview with a key scoped to the overview metrics only. RevenueCat is free until $2,500 of
+// monthly tracked revenue and then 1 percent of it (https://www.revenuecat.com/pricing), so usage is the trailing 28-day revenue against
+// that threshold and the spend is the 1 percent above it, an estimate.
+const REVENUECAT_FREE_REVENUE_USD = 2500;
+export function revenuecatReader({ key, projectId, fetchImpl = fetch, host = 'https://api.revenuecat.com' }) {
+  return async () => {
+    const response = await fetchImpl(`${host}/v2/projects/${encodeURIComponent(projectId)}/metrics/overview`, { headers: { authorization: `Bearer ${key}` }, redirect: 'error' });
+    if (!response.ok) throw new Error(`revenuecat metrics read failed (HTTP ${response.status})`);
+    const body = await response.json();
+    const revenue = (body.metrics ?? []).find(metric => metric.id === 'revenue')?.value;
+    if (!Number.isFinite(revenue)) throw new Error('revenuecat overview has no revenue metric');
+    const spend = Math.round(Math.max(0, revenue - REVENUECAT_FREE_REVENUE_USD) * 0.01 * 100) / 100;
+    return { used: revenue, limit: REVENUECAT_FREE_REVENUE_USD, unit: 'USD revenue, last 28 days', spendUsd: spend, projectedSpendUsd: spend, note: '1% above $2,500, estimate' };
+  };
+}
+
 export function defaultReaders({ home = process.env.HOME, fetchImpl = fetch } = {}) {
   const dir = resolve(home, '.config/fitsy');
   const readers = {};
@@ -101,5 +117,8 @@ export function defaultReaders({ home = process.env.HOME, fetchImpl = fetch } = 
   if (anthropicKey) readers['Anthropic API'] = anthropicReader({ key: anthropicKey, fetchImpl });
   const supabaseKey = keyFromEnvFile(resolve(dir, 'supabase.env'), 'SUPABASE_ACCESS_TOKEN');
   if (supabaseKey) readers.Supabase = supabaseReader({ key: supabaseKey, fetchImpl });
+  const revenuecatKey = keyFromEnvFile(resolve(dir, 'revenuecat.env'), 'REVENUECAT_METRICS_READ_KEY');
+  const revenuecatProject = keyFromEnvFile(resolve(dir, 'revenuecat.env'), 'REVENUECAT_PROJECT_ID');
+  if (revenuecatKey && revenuecatProject) readers.RevenueCat = revenuecatReader({ key: revenuecatKey, projectId: revenuecatProject, fetchImpl });
   return readers;
 }

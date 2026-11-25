@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { anthropicReader, defaultReaders, keyFromEnvFile, posthogReader, supabaseReader, vercelPlanReader } from './readers.mjs';
+import { anthropicReader, defaultReaders, keyFromEnvFile, posthogReader, revenuecatReader, supabaseReader, vercelPlanReader } from './readers.mjs';
 
 const billing = {
   billing_plan: 'paid', current_total_amount_usd_after_discount: '12.50', projected_total_amount_usd_after_discount: '30.00',
@@ -91,4 +91,17 @@ test('the Vercel plan reader prices the plan at its list price and labels it an 
   assert.equal(JSON.stringify(reading).includes('team_secret'), false);
   assert.equal((await vercelPlanReader({ run: () => JSON.stringify({ teams: [{ billing: { plan: 'enterprise' } }] }) })()).spendUsd, null);
   await assert.rejects(vercelPlanReader({ run: () => JSON.stringify({ teams: [] }) })(), /not readable/);
+});
+
+test('the RevenueCat reader compares 28-day revenue with the free threshold, estimates 1 percent above it, and sends only a bearer header', async () => {
+  const seen = [];
+  const body = value => ({ metrics: [{ id: 'mrr', value: 1 }, { id: 'revenue', value }] });
+  const make = value => async (url, init) => { seen.push({ url, auth: init.headers.authorization }); return { ok: true, status: 200, json: async () => body(value) }; };
+  const low = await revenuecatReader({ key: 'sk_secret', projectId: 'proj1', fetchImpl: make(1200) })();
+  assert.deepEqual(low, { used: 1200, limit: 2500, unit: 'USD revenue, last 28 days', spendUsd: 0, projectedSpendUsd: 0, note: '1% above $2,500, estimate' });
+  assert.equal((await revenuecatReader({ key: 'sk_secret', projectId: 'proj1', fetchImpl: make(12500) })()).spendUsd, 100);
+  assert.deepEqual(seen[0], { url: 'https://api.revenuecat.com/v2/projects/proj1/metrics/overview', auth: 'Bearer sk_secret' });
+  assert.equal(JSON.stringify(low).includes('sk_secret'), false);
+  await assert.rejects(revenuecatReader({ key: 'sk_secret', projectId: 'p', fetchImpl: async () => ({ ok: false, status: 403 }) })(), /HTTP 403/);
+  await assert.rejects(revenuecatReader({ key: 'sk_secret', projectId: 'p', fetchImpl: async () => ({ ok: true, json: async () => ({ metrics: [] }) }) })(), /no revenue metric/);
 });
