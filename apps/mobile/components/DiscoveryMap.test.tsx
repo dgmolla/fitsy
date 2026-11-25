@@ -543,13 +543,25 @@ it('never changes the native marker child list across refetch, load-more and sel
   const nativeChildren = () => screen.getByTestId('discovery-map-surface').children
     .map((child: unknown) => typeof child === 'string' ? child : (child as { props: { identifier: string } }).props.identifier);
   const initial = nativeChildren();
-  expect(initial.length).toBeGreaterThan(restaurants.length);
+  expect(initial.length).toBeGreaterThan(40);
   await act(async () => fireEvent.press(screen.getByTestId('map-pin-1')));
   expect(nativeChildren()).toEqual(initial);
   rows = restaurants.slice(2);
   nextCursor = null;
   await act(async () => fireEvent.press(screen.getByTestId('map-load-more')));
   await screen.findByTestId('map-pin-3');
+  expect(nativeChildren()).toEqual(initial);
+  // Pagination across the old 20-pin chunk boundaries must not change the list either.
+  const many = (count: number, tag: string) => Array.from({ length: count }, (_, i) => ({ ...restaurants[i % 4], id: `${tag}-${i}`, lat: 34.04 + i * 0.001 }));
+  rows = many(21, 'p');
+  nextCursor = 'again';
+  await act(async () => fireEvent.press(screen.getByTestId('shuffle-button')));
+  await screen.findByTestId('map-pin-20');
+  expect(nativeChildren()).toEqual(initial);
+  rows = many(25, 'q');
+  nextCursor = 'again';
+  await act(async () => fireEvent.press(screen.getByTestId('map-load-more')));
+  await screen.findByTestId('map-pin-44');
   expect(nativeChildren()).toEqual(initial);
   rows = [{ ...restaurants[3], id: 'fresh-0' }];
   await act(async () => fireEvent.press(screen.getByTestId('shuffle-button')));

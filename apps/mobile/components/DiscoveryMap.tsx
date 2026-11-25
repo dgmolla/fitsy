@@ -24,8 +24,10 @@ const DELTA = { latitudeDelta: 0.09, longitudeDelta: 0.09 };
 // react-native-maps runs through RN's legacy interop, where AIRMap keeps its own subview array and
 // inserts at the index Fabric hands it. Adding, removing or reordering <Marker> children desyncs the
 // two (crash in -[AIRMap insertReactSubview:atIndex:], and pins that vanish; #1075). So the map
-// renders a pool of slots keyed by slot index, updated in place. The pool only grows (append-only)
-// in chunks, e.g. when "More spots" loads results; an unused slot is a transparent, inert marker.
+// renders a constant pool of slots keyed by slot index, updated in place; an unused slot is a
+// transparent, inert marker. Results beyond the pool (many "More spots" pages) keep their carousel
+// card but get no pin.
+const MAP_SLOTS = 60;
 const RestaurantMarker = React.memo(function RestaurantMarker({ result, position, selected, onSelect, slot, lat, lng }: {
   result?: RestaurantResult; position: number; selected: boolean; onSelect: (result: RestaurantResult) => void;
   slot: number; lat: number; lng: number;
@@ -86,8 +88,6 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
   const index = cards.findIndex(result => result.id === selectedId);
   const fallback = !d.location.loading && d.location.source.startsWith('fallback-');
   const { lat, lng } = d.location;
-  const slotCount = useRef(20);
-  slotCount.current = Math.max(slotCount.current, Math.ceil(pins.length / 20) * 20);
   useEffect(() => { setPendingArea(null); panning.current = false; }, [lat, lng]);
   const firstId = cards[0]?.id;
   // The map stays mounted behind the ordinary list. Coming back to it starts
@@ -179,7 +179,7 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
       legalLabelInsets={{ top: 0, right: 0, bottom: trayHeight + bottomClearance + 8, left: 12 }}
       showsUserLocation={d.location.source === 'gps'} showsMyLocationButton={false}
       showsCompass={false} showsPointsOfInterest={false} scrollEnabled rotateEnabled={false}>
-      {Array.from({ length: slotCount.current }, (_, slot) => {
+      {Array.from({ length: MAP_SLOTS }, (_, slot) => {
         const result = pins[slot];
         return <RestaurantMarker key={`slot-${slot}`} slot={slot} lat={lat} lng={lng} result={result}
           position={cards.indexOf(result as RestaurantResult)} selected={!!result && result.id === selectedId} onSelect={select} />;
