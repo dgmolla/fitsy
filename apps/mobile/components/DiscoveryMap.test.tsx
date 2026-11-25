@@ -534,6 +534,29 @@ it('uses the existing cursor to load more pins and browse previews', async () =>
   expect(screen.getByText('2 / 4')).toBeTruthy();
 });
 
+it('never changes the native marker child list across refetch, load-more and selection (#1075)', async () => {
+  // AIRMap (legacy interop) crashes or drops pins when its marker children change length or order.
+  rows = restaurants.slice(0, 2);
+  nextCursor = 'next-page';
+  const screen = open();
+  await screen.findByTestId('map-pin-0');
+  const nativeChildren = () => screen.getByTestId('discovery-map-surface').children
+    .map((child: unknown) => typeof child === 'string' ? child : (child as { props: { identifier: string } }).props.identifier);
+  const initial = nativeChildren();
+  expect(initial.length).toBeGreaterThan(restaurants.length);
+  await act(async () => fireEvent.press(screen.getByTestId('map-pin-1')));
+  expect(nativeChildren()).toEqual(initial);
+  rows = restaurants.slice(2);
+  nextCursor = null;
+  await act(async () => fireEvent.press(screen.getByTestId('map-load-more')));
+  await screen.findByTestId('map-pin-3');
+  expect(nativeChildren()).toEqual(initial);
+  rows = [{ ...restaurants[3], id: 'fresh-0' }];
+  await act(async () => fireEvent.press(screen.getByTestId('shuffle-button')));
+  await waitFor(() => expect(screen.queryByTestId('map-pin-1')).toBeNull());
+  expect(nativeChildren()).toEqual(initial);
+});
+
 it.each(['denied', 'error'])('shows the fallback area and lets a user change it when GPS is %s', async status => {
   await SecureStore.deleteItemAsync(MANUAL_LOCATION_KEY);
   if (status === 'denied') jest.mocked(ExpoLocation.requestForegroundPermissionsAsync).mockResolvedValue({ status: 'denied' } as never);

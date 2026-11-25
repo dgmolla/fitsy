@@ -20,9 +20,17 @@ import { useFloatingNavClearance } from '@/lib/floatingNav';
 type Discovery = ReturnType<typeof useDiscoveryState>;
 const DELTA = { latitudeDelta: 0.09, longitudeDelta: 0.09 };
 
-// Snapshot only paint/selection changes, with no asynchronous image in a marker.
-const RestaurantMarker = React.memo(function RestaurantMarker({ result, position, selected, onSelect }: {
-  result: RestaurantResult; position: number; selected: boolean; onSelect: (result: RestaurantResult) => void;
+// The native MapView child list must never change length or order while mounted: on Expo 54
+// react-native-maps runs through RN's legacy interop, where AIRMap keeps its own subview array and
+// inserts at the index Fabric hands it. Adding, removing or reordering <Marker> children desyncs the
+// two (crash in -[AIRMap insertReactSubview:atIndex:], and pins that vanish; #1075). So the map
+// renders a pool of slots keyed by slot index, updated in place. The pool only grows (append-only)
+// in chunks, e.g. when "More spots" loads results; an unused slot is a transparent, inert marker.
+const SLOT_CHUNK = 20;
+
+const RestaurantMarker = React.memo(function RestaurantMarker({ result, position, selected, onSelect, slot, parked }: {
+  result?: RestaurantResult; position: number; selected: boolean; onSelect: (result: RestaurantResult) => void;
+  slot: number; parked: { latitude: number; longitude: number };
 }) {
   const [tracking, setTracking] = useState(true);
   useEffect(() => {
@@ -32,8 +40,14 @@ const RestaurantMarker = React.memo(function RestaurantMarker({ result, position
     const timer = setTimeout(() => setTracking(false), 250);
     return () => clearTimeout(timer);
   }, [selected]);
-  return <Marker identifier={result.id} coordinate={{ latitude: result.lat, longitude: result.lng }}
-    anchor={{ x: 0.5, y: 0.5 }} stopPropagation tracksViewChanges={tracking}
+  if (!result) {
+    return <Marker identifier={`slot-${slot}`} coordinate={parked} opacity={0} tracksViewChanges={false}
+      accessible={false} pointerEvents="none">
+      <View style={[s.pin, s.emojiPin]} collapsable={false}><Text style={s.pinEmoji}>🍴</Text></View>
+    </Marker>;
+  }
+  return <Marker identifier={`slot-${slot}`} coordinate={{ latitude: result.lat, longitude: result.lng }}
+    anchor={{ x: 0.5, y: 0.5 }} stopPropagation tracksViewChanges={tracking} opacity={1}
     zIndex={selected ? 1000 : 100 - position} testID={`map-pin-${position}`}
     accessibilityRole="button" accessibilityLabel={mapRestaurantLabel(result)}
     accessibilityHint="Select restaurant card" accessibilityState={{ selected }} onPress={() => onSelect(result)}>
@@ -80,6 +94,9 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
   const index = cards.findIndex(result => result.id === selectedId);
   const fallback = !d.location.loading && d.location.source.startsWith('fallback-');
   const { lat, lng } = d.location;
+  const slotCount = useRef(SLOT_CHUNK);
+  slotCount.current = Math.max(slotCount.current, Math.ceil(pins.length / SLOT_CHUNK) * SLOT_CHUNK);
+  const parked = useMemo(() => ({ latitude: lat, longitude: lng }), [lat, lng]);
   useEffect(() => { setPendingArea(null); panning.current = false; }, [lat, lng]);
   const firstId = cards[0]?.id;
   // The map stays mounted behind the ordinary list. Coming back to it starts
@@ -116,12 +133,16 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
     // Refresh/error states unmount this view while retaining the selected row.
     carousel.current?.scrollTo({ x: Math.max(0, index) * stride, animated: false });
   }, [index, stride]);
-  function select(result: RestaurantResult, scroll = true) {
+  // Stable identity keeps the memoized markers from re-rendering on every state change.
+  const latest = useRef({ cards, stride });
+  latest.current = { cards, stride };
+  const select = useCallback((result: RestaurantResult, scroll = true) => {
     setSelectedId(result.id);
     if (scroll) {
-      carousel.current?.scrollTo({ x: cards.findIndex(card => card.id === result.id) * stride, animated: true });
+      const { cards: current, stride: step } = latest.current;
+      carousel.current?.scrollTo({ x: current.findIndex(card => card.id === result.id) * step, animated: true });
     }
-  }
+  }, []);
   function open(result: RestaurantResult) {
     trackRestaurantTapped({ restaurant_id: result.id, restaurant_name: result.name,
       position: cards.findIndex(card => card.id === result.id), entry_point: 'section' });
@@ -172,8 +193,11 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
       legalLabelInsets={{ top: 0, right: 0, bottom: trayHeight + bottomClearance + 8, left: 12 }}
       showsUserLocation={d.location.source === 'gps'} showsMyLocationButton={false}
       showsCompass={false} showsPointsOfInterest={false} scrollEnabled rotateEnabled={false}>
-      {pins.map(result => <RestaurantMarker key={result.id} result={result} position={cards.indexOf(result)}
-        selected={result.id === selectedId} onSelect={select} />)}
+      {Array.from({ length: slotCount.current }, (_, slot) => {
+        const result = pins[slot];
+        return <RestaurantMarker key={`slot-${slot}`} slot={slot} parked={parked} result={result}
+          position={result ? cards.indexOf(result) : -1} selected={!!result && result.id === selectedId} onSelect={select} />;
+      })}
     </MapView>
     {pendingArea && <View pointerEvents="none" style={s.areaCenter} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       <Ionicons name="add" size={28} color={EDITORIAL.green} />
