@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { anthropicReader, defaultReaders, keyFromEnvFile, posthogReader, revenuecatReader, supabaseReader, vercelPlanReader } from './readers.mjs';
+import { anthropicReader, defaultReaders, firecrawlReader, keyFromEnvFile, posthogReader, revenuecatReader, sentryReader, supabaseReader, vercelPlanReader } from './readers.mjs';
 
 const billing = {
   billing_plan: 'paid', current_total_amount_usd_after_discount: '12.50', projected_total_amount_usd_after_discount: '30.00',
@@ -104,4 +104,25 @@ test('the RevenueCat reader compares 28-day revenue with the free threshold, est
   assert.equal(JSON.stringify(low).includes('sk_secret'), false);
   await assert.rejects(revenuecatReader({ key: 'sk_secret', projectId: 'p', fetchImpl: async () => ({ ok: false, status: 403 }) })(), /HTTP 403/);
   await assert.rejects(revenuecatReader({ key: 'sk_secret', projectId: 'p', fetchImpl: async () => ({ ok: true, json: async () => ({ metrics: [] }) }) })(), /no revenue metric/);
+});
+
+test('the Sentry reader reports accepted errors over 30 days against the Developer limit with a bearer header only', async () => {
+  const seen = [];
+  const fetchImpl = async (url, init) => { seen.push({ url, auth: init.headers.authorization }); return { ok: true, status: 200, json: async () => ({ groups: [{ by: { outcome: 'filtered' }, totals: { 'sum(quantity)': 9 } }, { by: { outcome: 'accepted' }, totals: { 'sum(quantity)': 5 } }] }) }; };
+  const reading = await sentryReader({ key: 'sntryu_secret', org: 'fitsy-ui', fetchImpl })();
+  assert.deepEqual(reading, { used: 5, limit: 5000, unit: 'errors, last 30 days (Developer limit)', spendUsd: null, projectedSpendUsd: null, note: 'accepted error events' });
+  assert.match(seen[0].url, /^https:\/\/sentry\.io\/api\/0\/organizations\/fitsy-ui\/stats_v2\/\?/);
+  assert.equal(seen[0].auth, 'Bearer sntryu_secret');
+  assert.equal(JSON.stringify(reading).includes('sntryu_secret'), false);
+  assert.equal((await sentryReader({ key: 'k', org: 'o', fetchImpl: async () => ({ ok: true, json: async () => ({ groups: [] }) }) })()).used, 0);
+  await assert.rejects(sentryReader({ key: 'sntryu_secret', org: 'o', fetchImpl: async () => ({ ok: false, status: 403 }) })(), error => /HTTP 403/.test(error.message) && !error.message.includes('sntryu'));
+});
+
+test('the Firecrawl reader turns remaining credits into usage and refuses a response without plan credits', async () => {
+  const ok = { ok: true, status: 200, json: async () => ({ success: true, data: { remainingCredits: 940, planCredits: 1000 } }) };
+  const reading = await firecrawlReader({ key: 'fc-secret', fetchImpl: async (url, init) => { assert.equal(init.headers.authorization, 'Bearer fc-secret'); return ok; } })();
+  assert.deepEqual(reading, { used: 60, limit: 1000, unit: 'credits this period', spendUsd: null, projectedSpendUsd: null, note: 'plan price not exposed by the API' });
+  assert.equal(JSON.stringify(reading).includes('fc-secret'), false);
+  await assert.rejects(firecrawlReader({ key: 'fc-secret', fetchImpl: async () => ({ ok: true, json: async () => ({ data: {} }) }) })(), /no plan credits/);
+  await assert.rejects(firecrawlReader({ key: 'fc-secret', fetchImpl: async () => ({ ok: false, status: 401 }) })(), /HTTP 401/);
 });

@@ -138,10 +138,16 @@
       "envPrefixes": [
         "FIRECRAWL"
       ],
-      "plan": "1,000 credits per period, price unread",
+      "plan": "Free (read from the console)",
       "pricing": "https://www.firecrawl.dev/pricing",
       "watch": "credits per month",
-      "monitor": "none yet"
+      "monitor": "none yet",
+      "estimate": {
+        "basis": "free tier",
+        "monthlyUsd": 0,
+        "limit": "1,000 credits per period",
+        "note": "Free plan per the Firecrawl console, Nov 25"
+      }
     },
     {
       "name": "Brave Search API",

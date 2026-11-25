@@ -108,6 +108,33 @@ export function revenuecatReader({ key, projectId, fetchImpl = fetch, host = 'ht
   };
 }
 
+// Sentry: GET /api/0/organizations/{org}/stats_v2/ with a personal token scoped to org:read only. Usage is the accepted error events over
+// the last 30 days against the Developer plan's 5,000 errors per month. The plan price is not readable with this scope, so spend stays
+// blank and the inventory estimate supplies it.
+const SENTRY_DEVELOPER_ERRORS = 5000;
+export function sentryReader({ key, org, fetchImpl = fetch, host = 'https://sentry.io' }) {
+  return async () => {
+    const url = `${host}/api/0/organizations/${encodeURIComponent(org)}/stats_v2/?field=${encodeURIComponent('sum(quantity)')}&category=error&interval=1d&statsPeriod=30d&groupBy=outcome`;
+    const response = await fetchImpl(url, { headers: { authorization: `Bearer ${key}` }, redirect: 'error' });
+    if (!response.ok) throw new Error(`sentry stats read failed (HTTP ${response.status})`);
+    const body = await response.json();
+    const accepted = (body.groups ?? []).find(group => group.by?.outcome === 'accepted')?.totals?.['sum(quantity)'];
+    const used = Number.isFinite(accepted) ? accepted : 0;
+    return { used, limit: SENTRY_DEVELOPER_ERRORS, unit: 'errors, last 30 days (Developer limit)', spendUsd: null, projectedSpendUsd: null, note: 'accepted error events' };
+  };
+}
+
+// Firecrawl: GET /v2/team/credit-usage with the app's own key (read-only endpoint). Used is the plan credits minus the remaining ones.
+export function firecrawlReader({ key, fetchImpl = fetch, host = 'https://api.firecrawl.dev' }) {
+  return async () => {
+    const response = await fetchImpl(`${host}/v2/team/credit-usage`, { headers: { authorization: `Bearer ${key}` }, redirect: 'error' });
+    if (!response.ok) throw new Error(`firecrawl credit read failed (HTTP ${response.status})`);
+    const data = (await response.json()).data ?? {};
+    if (!Number.isFinite(data.planCredits) || !Number.isFinite(data.remainingCredits)) throw new Error('firecrawl credit usage has no plan credits');
+    return { used: data.planCredits - data.remainingCredits, limit: data.planCredits, unit: 'credits this period', spendUsd: null, projectedSpendUsd: null, note: 'plan price not exposed by the API' };
+  };
+}
+
 export function defaultReaders({ home = process.env.HOME, fetchImpl = fetch } = {}) {
   const dir = resolve(home, '.config/fitsy');
   const readers = {};
@@ -120,5 +147,10 @@ export function defaultReaders({ home = process.env.HOME, fetchImpl = fetch } = 
   const revenuecatKey = keyFromEnvFile(resolve(dir, 'revenuecat.env'), 'REVENUECAT_METRICS_READ_KEY');
   const revenuecatProject = keyFromEnvFile(resolve(dir, 'revenuecat.env'), 'REVENUECAT_PROJECT_ID');
   if (revenuecatKey && revenuecatProject) readers.RevenueCat = revenuecatReader({ key: revenuecatKey, projectId: revenuecatProject, fetchImpl });
+  const sentryToken = keyFromEnvFile(resolve(dir, 'sentry.env'), 'SENTRY_READ_TOKEN');
+  const sentryOrg = keyFromEnvFile(resolve(dir, 'sentry.env'), 'SENTRY_ORG');
+  if (sentryToken && sentryOrg) readers.Sentry = sentryReader({ key: sentryToken, org: sentryOrg, fetchImpl });
+  const firecrawlKey = keyFromEnvFile(resolve(dir, 'firecrawl.env'), 'FIRECRAWL_API_KEY');
+  if (firecrawlKey) readers.Firecrawl = firecrawlReader({ key: firecrawlKey, fetchImpl });
   return readers;
 }
