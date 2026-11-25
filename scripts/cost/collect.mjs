@@ -4,7 +4,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { defaultReaders } from './readers.mjs';
+import { defaultReaders, vercelPlanReader } from './readers.mjs';
 import { buildSnapshot, evaluateAlerts, loadInventory, renderPage } from './snapshot.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -39,7 +39,7 @@ export async function collect({ home = process.env.HOME, now = new Date(), extra
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const { snapshot, alerts } = await collect();
+  const { snapshot, alerts } = await collect({ extraReaders: { Vercel: vercelPlanReader() } });
   const withData = snapshot.services.filter(row => row.status === 'ok').length;
   process.stdout.write(`cost snapshot: ${withData} of ${snapshot.services.length} services with data, projected $${snapshot.totalProjectedUsd}\n`);
   for (const alert of alerts) process.stdout.write(`ALERT ${alert}\n`);

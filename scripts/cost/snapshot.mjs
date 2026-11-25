@@ -1,5 +1,5 @@
 // Cost dashboard core (#994): turns provider readings into a sanitized snapshot, evaluates alerts, and renders a static page.
-// Providers are plain functions that return a reading or null (no access yet); this module never sees a key.
+// Providers are plain functions that return a reading or null (manual/unknown); this module never sees a key.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -29,7 +29,7 @@ export async function buildSnapshot({ services, readers, now = new Date() }) {
     try { reading = sanitizeReading(await readers[service.name]?.()); } catch (failure) { error = String(failure?.message ?? failure).split('\n')[0].slice(0, 120); }
     rows.push({
       name: service.name, plan: service.plan, pricing: service.pricing, watch: service.watch,
-      status: error ? 'error' : reading ? 'ok' : 'no access yet', error, ...(reading ?? {}),
+      status: error ? 'error' : reading ? 'ok' : 'manual/unknown', error, ...(reading ?? {}),
     });
   }
   const totalSpend = rows.reduce((sum, row) => sum + (row.spendUsd ?? 0), 0);
@@ -54,7 +54,7 @@ export function evaluateAlerts(snapshot, previous) {
 export function renderPage(snapshot, alerts = []) {
   const money = value => (value === null || value === undefined ? '-' : `$${Number(value).toFixed(2)}`);
   const usage = row => (row.used === null || row.used === undefined
-    ? escapeHtml(row.status) : `${row.used}${row.limit ? ` / ${row.limit}` : ''} ${escapeHtml(row.unit ?? '')}`);
+    ? escapeHtml(row.note ? `${row.status}: ${row.note}` : row.status) : `${row.used}${row.limit ? ` / ${row.limit}` : ''} ${escapeHtml(row.unit ?? '')}`);
   const rows = snapshot.services.map(row => `<tr class="${row.percent >= 80 ? 'warn' : ''}"><td><a href="${escapeHtml(row.pricing)}">${escapeHtml(row.name)}</a></td>`
     + `<td>${escapeHtml(row.plan)}</td><td>${usage(row)}</td>`
     + `<td>${row.percent === null || row.percent === undefined ? '-' : `${row.percent}%`}</td><td>${money(row.spendUsd)}</td><td>${money(row.projectedSpendUsd)}</td></tr>`).join('\n');

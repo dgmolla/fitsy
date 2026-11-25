@@ -25,7 +25,7 @@ test('a snapshot marks missing access, survives a failing reader and totals spen
   });
   const byName = Object.fromEntries(snapshot.services.map(row => [row.name, row]));
   assert.equal(byName['Upstash Redis'].status, 'ok');
-  assert.equal(byName.Vercel.status, 'no access yet');
+  assert.equal(byName.Vercel.status, 'manual/unknown');
   assert.equal(byName.Broken.status, 'error');
   assert.equal(byName.Broken.error, 'HTTP 500 from provider');
   assert.equal(snapshot.totalSpendUsd, 1.4);
@@ -52,4 +52,12 @@ test('the page is static, escapes content and carries no secrets', async () => {
   assert.ok(!html.includes('<script>'));
   assert.ok(html.includes('&lt;b&gt;Evil&lt;/b&gt;'));
   assert.ok(html.includes('50%'));
+});
+
+test('a service without a usage figure shows its note on the page, and unread services show manual/unknown', async () => {
+  const snapshot = await buildSnapshot({ services: [{ name: 'A', plan: 'p', pricing: 'https://a.example', watch: 'w' }, { name: 'B', plan: 'p', pricing: 'https://b.example', watch: 'w' }],
+    readers: { A: async () => ({ spendUsd: 20, note: 'plan pro, list price (est.)' }) } });
+  const html = renderPage(snapshot, []);
+  assert.match(html, /ok: plan pro, list price \(est\.\)/);
+  assert.match(html, /manual\/unknown/);
 });

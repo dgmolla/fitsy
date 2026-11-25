@@ -27,7 +27,7 @@ test('collect writes a snapshot and a page, alerts on a near-full quota, and com
     assert.deepEqual(first.alerts, ['Supabase is at 90% of its MB limit']);
     const snapshot = JSON.parse(readFileSync(join(config, 'cost-snapshot.json'), 'utf8'));
     assert.equal(snapshot.services.find(row => row.name === 'Supabase').status, 'ok');
-    assert.equal(snapshot.services.find(row => row.name === 'Vercel').status, 'no access yet');
+    assert.equal(snapshot.services.find(row => row.name === 'Vercel').status, 'manual/unknown');
     const page = readFileSync(join(config, 'cost-page/index.html'), 'utf8');
     assert.ok(page.includes('Supabase is at 90%'));
     assert.ok(!/sk_|Bearer/.test(readFileSync(join(config, 'cost-snapshot.json'), 'utf8')));

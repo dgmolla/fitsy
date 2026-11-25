@@ -1,6 +1,7 @@
 // Provider readers for the cost collector (#994). Each reader is read-only (GET), returns plain numbers, and never returns or
 // logs its key. Keys come from ~/.config/fitsy/*.env files created for this purpose (chmod 600); a missing file means the reader
-// is simply not registered and the service shows as "no access yet".
+// is simply not registered and the service shows as "manual/unknown".
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -72,6 +73,22 @@ export function supabaseReader({ key, fetchImpl = fetch, host = 'https://api.sup
     for (const project of projects) requests += Number((await get(`/v1/projects/${project.ref}/analytics/endpoints/usage.api-requests-count`)).result?.[0]?.count) || 0;
     const unhealthy = projects.filter(project => project.status !== 'ACTIVE_HEALTHY').map(project => project.name);
     return { used: requests, limit: null, unit: 'API requests (recent)', spendUsd: null, projectedSpendUsd: null, note: unhealthy.length ? `not healthy: ${unhealthy.join(', ')}` : `${projects.length} projects healthy` };
+  };
+}
+
+// Vercel: the billing endpoints are not available to this team, but the team record carries its plan. The spend is the plan's published
+// list price per seat (Pro is $20 per seat per month, https://vercel.com/pricing) times an assumed single seat: an estimate, labelled so.
+const VERCEL_LIST_PRICE_USD = { hobby: 0, pro: 20 };
+export function vercelPlanReader({ run = (...args) => execFileSync(args[0], args.slice(1), { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 30000 }) } = {}) {
+  return async () => {
+    const body = JSON.parse(run('vercel', 'api', '/v2/teams'));
+    const plan = body.teams?.[0]?.billing?.plan;
+    if (typeof plan !== 'string') throw new Error('vercel team plan not readable');
+    const price = VERCEL_LIST_PRICE_USD[plan];
+    return {
+      used: null, limit: null, unit: null, spendUsd: price ?? null, projectedSpendUsd: price ?? null,
+      note: price === undefined ? `plan ${plan}: no list price recorded, manual` : `plan ${plan}, list price (est.) $${price}/seat/month x 1 seat, vercel.com/pricing`,
+    };
   };
 }
 
