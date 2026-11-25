@@ -28,12 +28,6 @@ const DELTA = { latitudeDelta: 0.09, longitudeDelta: 0.09 };
 // transparent, inert marker. Carousel infinite scroll (#1081) can load more results than slots, so the
 // pool shows a window of pins centred on the selected card, again updated in place (never resized).
 const MAP_SLOTS = 60;
-const END_THRESHOLD_CARDS = 2;
-// First pin shown in the slot pool: keeps the selected pin inside the window, stable while it moves within it.
-export function pinWindowStart(count: number, selected: number) {
-  if (count <= MAP_SLOTS) return 0;
-  return Math.min(count - MAP_SLOTS, Math.max(0, selected - Math.floor(MAP_SLOTS / 2)));
-}
 const RestaurantMarker = React.memo(function RestaurantMarker({ result, position, selected, onSelect, slot, lat, lng }: {
   result?: RestaurantResult; position: number; selected: boolean; onSelect: (result: RestaurantResult) => void;
   slot: number; lat: number; lng: number;
@@ -91,17 +85,14 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
       : d.locked ? d.results.slice(0, 3) : d.results) : [],
     [d.canSearch, d.loading, d.locked, d.isOnboardingPreview, d.results, d.lockedTeaser]);
   const pins = useMemo(() => cards.filter(hasMapCoordinate), [cards]);
-  const selectedPin = pins.findIndex(result => result.id === selectedId);
-  const windowStart = pinWindowStart(pins.length, selectedPin);
   const index = cards.findIndex(result => result.id === selectedId);
+  // First pin shown in the slot pool: keeps the selected card's pin inside the window.
+  const windowStart = Math.min(Math.max(0, pins.length - MAP_SLOTS), Math.max(0, index - MAP_SLOTS / 2));
   const fallback = !d.location.loading && d.location.source.startsWith('fallback-');
   const { lat, lng } = d.location;
   useEffect(() => { setPendingArea(null); panning.current = false; }, [lat, lng]);
   const firstId = cards[0]?.id;
   // Camera fits the results of a search, not every appended page: a page loaded by scrolling must not move the map.
-  const pinsRef = useRef(pins);
-  pinsRef.current = pins;
-  const hasPins = pins.length > 0;
   // The map stays mounted behind the ordinary list. Coming back to it starts
   // the carousel at the first current result again, as before the dual mount.
   useEffect(() => {
@@ -118,7 +109,6 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
       // A touch may finish without a native region event. A later intentional
       // fit supersedes that gesture and must not be mistaken for an area pick.
       panning.current = false;
-      const pins = pinsRef.current.slice(0, MAP_SLOTS);
       if (!pins.length) {
         map.current?.animateToRegion({ latitude: lat, longitude: lng, ...DELTA }, 0);
         return;
@@ -132,7 +122,8 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
       }, animated: false });
     });
     return () => cancelAnimationFrame(frame);
-  }, [mapRevision, firstId, hasPins, controlsBottom, trayHeight, bottomClearance, layoutHeight, lat, lng, d.location.loading, pendingArea]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pins intentionally omitted: appended pages must not refit the camera
+  }, [mapRevision, firstId, controlsBottom, trayHeight, bottomClearance, layoutHeight, lat, lng, d.location.loading, pendingArea]);
   const restoreCarousel = useCallback(() => {
     // Refresh/error states unmount this view while retaining the selected row.
     carousel.current?.scrollTo({ x: Math.max(0, index) * stride, animated: false });
@@ -157,11 +148,11 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
   const emptyTitle = !d.canSearch ? 'Find your next meal' : d.hasQuery ? 'No matches for this search' : 'No meals with nutrition nearby';
   // Infinite scroll, like the list: near the end of the carousel the next cursor page loads; a failed page retries on the next scroll.
   const paged = !d.locked && !d.isOnboardingPreview && !d.loading;
-  const trailer = paged && (d.loadingMore ? 'loading' : d.nextCursor ? 'pending' : cards.length > 1 ? 'end' : null);
+  const more = d.loadingMore || !!d.nextCursor;
   const loadMoreNearEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (!paged || !d.nextCursor || d.loadingMore || d.refreshing) return;
+    if (!paged) return;
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    if (contentOffset.x + layoutMeasurement.width >= contentSize.width - stride * END_THRESHOLD_CARDS) void d.handleEndReached();
+    if (contentOffset.x + layoutMeasurement.width >= contentSize.width - stride * 2) void d.handleEndReached();
   };
   return <View style={s.root} testID="discovery-map" onLayout={event => setLayoutHeight(event.nativeEvent.layout.height)}>
     {/* Always mounted, even while location is loading (it has a fallback
@@ -274,7 +265,7 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
         {showRestaurants && <ScrollView ref={carousel} horizontal testID="map-carousel" style={{ height: compact ? 174 : 210, flexGrow: 0 }}
           showsHorizontalScrollIndicator={false} snapToInterval={stride} decelerationRate="fast" disableIntervalMomentum
           contentContainerStyle={s.carousel} keyboardShouldPersistTaps="handled"
-          onLayout={() => { restoreCarousel(); onTourLayoutChange?.(); }} onContentSizeChange={restoreCarousel}
+          onLayout={() => { restoreCarousel(); onTourLayoutChange?.(); }} onContentSizeChange={() => { if (!userDragged.current) restoreCarousel(); }}
           onScrollBeginDrag={() => { userDragged.current = true; }}
           onScroll={loadMoreNearEnd} scrollEventThrottle={64}
           onMomentumScrollEnd={event => {
@@ -291,9 +282,8 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
               label={`Open ${mapRestaurantLabel(result)}`} page={`${position + 1} / ${cards.length}`}
               pageTestID={position === Math.max(0, index) ? 'map-page' : undefined} />
           </View>)}
-          {trailer && <View style={s.moreCard} testID={trailer === 'end' ? 'map-end-of-results' : 'map-loading-more'}>
-            {trailer === 'end' ? <Text style={s.link}>That's every spot nearby</Text>
-              : <ActivityIndicator color={EDITORIAL.green} accessibilityLabel="Loading more spots" />}
+          {paged && (more || cards.length > 1) && <View style={s.moreCard}>
+            {more ? <ActivityIndicator color={EDITORIAL.green} /> : <Text style={s.link}>That's all nearby</Text>}
           </View>}
         </ScrollView>}
         {d.isOnboardingPreview && !d.loading && !d.refreshing && !d.error && !d.outOfArea &&

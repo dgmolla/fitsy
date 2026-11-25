@@ -316,8 +316,7 @@ env:
     id: map-pin-3
 - assertNotVisible:
     id: map-pin-4
-- assertNotVisible:
-    id: map-end-of-results
+- assertNotVisible: "That's all nearby"
 - assertNotVisible:
     id: shuffle-button
 - assertVisible:

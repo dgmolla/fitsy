@@ -532,7 +532,7 @@ it('loads the next cursor page once when the carousel nears its end, and not bef
   await act(async () => fireEvent.scroll(screen.getByTestId('map-carousel'), { nativeEvent: {
     contentOffset: { x: 0, y: 0 }, contentSize: { width: 5000, height: 210 }, layoutMeasurement: { width: 320, height: 210 } } }));
   expect(calls()).toBe(0);
-  expect(screen.queryByText("That's every spot nearby")).toBeNull();
+  expect(screen.queryByText("That's all nearby")).toBeNull();
   rows = restaurants.slice(2);
   nextCursor = null;
   await act(async () => { scrollCarouselToEnd(screen); scrollCarouselToEnd(screen); });
@@ -566,6 +566,20 @@ it('keeps the native marker list fixed and the selected pin visible past the slo
   expect(nativeChildren()).toEqual(initial);
 });
 
+it('does not pull the carousel back when a page lands mid-swipe (#1081)', async () => {
+  rows = restaurants.slice(0, 3);
+  nextCursor = 'next-page';
+  const screen = open();
+  await screen.findByTestId('map-pin-0');
+  const scrollTo = jest.spyOn(ScrollView.prototype, 'scrollTo');
+  const carousel = screen.getByTestId('map-carousel');
+  act(() => fireEvent(carousel, 'scrollBeginDrag'));
+  scrollTo.mockClear();
+  act(() => fireEvent(carousel, 'contentSizeChange', 5000, 210));
+  expect(scrollTo).not.toHaveBeenCalled();
+  scrollTo.mockRestore();
+});
+
 it('uses the existing cursor to load more pins and browse previews', async () => {
   rows = restaurants.slice(0, 2);
   nextCursor = 'next-page';
@@ -578,8 +592,7 @@ it('uses the existing cursor to load more pins and browse previews', async () =>
   await act(async () => scrollCarouselToEnd(screen));
   await screen.findByTestId('map-pin-3');
   expect(searchParams()).toMatchObject({ cursor: 'next-page' });
-  expect(screen.queryByTestId('map-loading-more')).toBeNull();
-  expect(screen.getByTestId('map-end-of-results')).toBeTruthy();
+  expect(screen.getByText("That's all nearby")).toBeTruthy();
   expect(screen.getByText('2 / 4')).toBeTruthy();
 });
 
@@ -700,7 +713,7 @@ it('keeps the same free preview boundary as the list', async () => {
   expect(screen.queryByTestId('map-pin-3')).toBeNull();
   await act(async () => fireEvent.press(screen.getByTestId('map-pin-0')));
   expect(screen.getByTestId('map-preview')).toBeTruthy();
-  expect(screen.queryByTestId('map-end-of-results')).toBeNull();
+  expect(screen.queryByText("That's all nearby")).toBeNull();
 });
 
 it('offers the list and a real photo placeholder when provider map data is incomplete', async () => {
@@ -747,7 +760,7 @@ it('recovers the production map preview, preserves sample disclosure, and carrie
   await act(async () => fireEvent.press(screen.getByTestId('preview-retry')));
   await screen.findByTestId('map-card-2');
   expect(screen.queryByTestId('map-card-3')).toBeNull();
-  expect(screen.queryByTestId('map-end-of-results')).toBeNull();
+  expect(screen.queryByText("That's all nearby")).toBeNull();
   expect(screen.queryByTestId('shuffle-button')).toBeNull();
   expect(screen.getByText('Meal 0')).toBeTruthy();
   expect(screen.queryByText('Meal 1')).toBeNull();

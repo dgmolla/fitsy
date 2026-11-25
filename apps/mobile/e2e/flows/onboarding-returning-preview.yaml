@@ -274,8 +274,7 @@ env:
     id: discovery-map
 - assertVisible:
     id: preview-back
-- assertNotVisible:
-    id: map-end-of-results
+- assertNotVisible: "That's all nearby"
 - tapOn:
     id: map-pin-0
 - assertVisible:
