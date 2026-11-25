@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { anthropicReader, defaultReaders, keyFromEnvFile, posthogReader, supabaseReader } from './readers.mjs';
+import { anthropicReader, defaultReaders, keyFromEnvFile, posthogReader, supabaseReader, vercelPlanReader } from './readers.mjs';
 
 const billing = {
   billing_plan: 'paid', current_total_amount_usd_after_discount: '12.50', projected_total_amount_usd_after_discount: '30.00',
@@ -81,4 +81,14 @@ test('the Supabase reader sums recent API requests across projects and flags unh
   assert.equal(seen.length, 3);
   assert.equal(JSON.stringify(reading).includes('sbp_secret'), false);
   await assert.rejects(supabaseReader({ key: 'sbp_secret', fetchImpl: async () => ({ ok: false, status: 403 }) })(), /HTTP 403/);
+});
+
+test('the Vercel plan reader prices the plan at its list price and labels it an estimate, and refuses an unreadable plan', async () => {
+  const run = () => JSON.stringify({ teams: [{ billing: { plan: 'pro', status: 'active', currency: 'usd' }, id: 'team_secret' }] });
+  const reading = await vercelPlanReader({ run })();
+  assert.equal(reading.spendUsd, 20);
+  assert.match(reading.note, /list price \(est\.\) \$20\/seat\/month/);
+  assert.equal(JSON.stringify(reading).includes('team_secret'), false);
+  assert.equal((await vercelPlanReader({ run: () => JSON.stringify({ teams: [{ billing: { plan: 'enterprise' } }] }) })()).spendUsd, null);
+  await assert.rejects(vercelPlanReader({ run: () => JSON.stringify({ teams: [] }) })(), /not readable/);
 });
