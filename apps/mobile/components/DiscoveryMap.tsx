@@ -26,25 +26,22 @@ const DELTA = { latitudeDelta: 0.09, longitudeDelta: 0.09 };
 // two (crash in -[AIRMap insertReactSubview:atIndex:], and pins that vanish; #1075). So the map
 // renders a pool of slots keyed by slot index, updated in place. The pool only grows (append-only)
 // in chunks, e.g. when "More spots" loads results; an unused slot is a transparent, inert marker.
-const SLOT_CHUNK = 20;
-
-const RestaurantMarker = React.memo(function RestaurantMarker({ result, position, selected, onSelect, slot, parked }: {
+const RestaurantMarker = React.memo(function RestaurantMarker({ result, position, selected, onSelect, slot, lat, lng }: {
   result?: RestaurantResult; position: number; selected: boolean; onSelect: (result: RestaurantResult) => void;
-  slot: number; parked: { latitude: number; longitude: number };
+  slot: number; lat: number; lng: number;
 }) {
   const [tracking, setTracking] = useState(true);
   useEffect(() => {
     // A deselected pin needs no re-snapshot; it reverts to an already-correct look.
-    if (!selected) { setTracking(false); return; }
-    setTracking(true);
+    setTracking(selected);
+    if (!selected) return;
     const timer = setTimeout(() => setTracking(false), 250);
     return () => clearTimeout(timer);
   }, [selected]);
-  const live = !!result;
-  return <Marker identifier={`slot-${slot}`} coordinate={result ? { latitude: result.lat, longitude: result.lng } : parked}
-    anchor={{ x: 0.5, y: 0.5 }} stopPropagation tracksViewChanges={live && tracking} opacity={live ? 1 : 0}
-    zIndex={selected ? 1000 : 100 - position} testID={live ? `map-pin-${position}` : undefined}
-    accessible={live} accessibilityRole="button" accessibilityLabel={result && mapRestaurantLabel(result)}
+  return <Marker identifier={`slot-${slot}`} coordinate={result ? { latitude: result.lat, longitude: result.lng } : { latitude: lat, longitude: lng }}
+    anchor={{ x: 0.5, y: 0.5 }} stopPropagation tracksViewChanges={!!result && tracking} opacity={result ? 1 : 0}
+    zIndex={selected ? 1000 : 100 - position} testID={result ? `map-pin-${position}` : undefined}
+    accessibilityRole="button" accessibilityLabel={result && mapRestaurantLabel(result)}
     accessibilityHint="Select restaurant card" accessibilityState={{ selected }} onPress={() => result && onSelect(result)}>
     <View style={[s.pin, s.emojiPin, selected && s.selectedPin]} collapsable={false}>
       <Text style={s.pinEmoji}>🍴</Text>
@@ -89,9 +86,8 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
   const index = cards.findIndex(result => result.id === selectedId);
   const fallback = !d.location.loading && d.location.source.startsWith('fallback-');
   const { lat, lng } = d.location;
-  const slotCount = useRef(SLOT_CHUNK);
-  slotCount.current = Math.max(slotCount.current, Math.ceil(pins.length / SLOT_CHUNK) * SLOT_CHUNK);
-  const parked = useMemo(() => ({ latitude: lat, longitude: lng }), [lat, lng]);
+  const slotCount = useRef(20);
+  slotCount.current = Math.max(slotCount.current, Math.ceil(pins.length / 20) * 20);
   useEffect(() => { setPendingArea(null); panning.current = false; }, [lat, lng]);
   const firstId = cards[0]?.id;
   // The map stays mounted behind the ordinary list. Coming back to it starts
@@ -129,15 +125,10 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
     carousel.current?.scrollTo({ x: Math.max(0, index) * stride, animated: false });
   }, [index, stride]);
   // Stable identity keeps the memoized markers from re-rendering on every state change.
-  const latest = useRef({ cards, stride });
-  latest.current = { cards, stride };
   const select = useCallback((result: RestaurantResult, scroll = true) => {
     setSelectedId(result.id);
-    if (scroll) {
-      const { cards: current, stride: step } = latest.current;
-      carousel.current?.scrollTo({ x: current.findIndex(card => card.id === result.id) * step, animated: true });
-    }
-  }, []);
+    if (scroll) carousel.current?.scrollTo({ x: cards.findIndex(card => card.id === result.id) * stride, animated: true });
+  }, [cards, stride]);
   function open(result: RestaurantResult) {
     trackRestaurantTapped({ restaurant_id: result.id, restaurant_name: result.name,
       position: cards.findIndex(card => card.id === result.id), entry_point: 'section' });
@@ -190,8 +181,8 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
       showsCompass={false} showsPointsOfInterest={false} scrollEnabled rotateEnabled={false}>
       {Array.from({ length: slotCount.current }, (_, slot) => {
         const result = pins[slot];
-        return <RestaurantMarker key={`slot-${slot}`} slot={slot} parked={parked} result={result}
-          position={result ? cards.indexOf(result) : -1} selected={!!result && result.id === selectedId} onSelect={select} />;
+        return <RestaurantMarker key={`slot-${slot}`} slot={slot} lat={lat} lng={lng} result={result}
+          position={cards.indexOf(result as RestaurantResult)} selected={!!result && result.id === selectedId} onSelect={select} />;
       })}
     </MapView>
     {pendingArea && <View pointerEvents="none" style={s.areaCenter} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
