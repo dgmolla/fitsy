@@ -40,17 +40,12 @@ const RestaurantMarker = React.memo(function RestaurantMarker({ result, position
     const timer = setTimeout(() => setTracking(false), 250);
     return () => clearTimeout(timer);
   }, [selected]);
-  if (!result) {
-    return <Marker identifier={`slot-${slot}`} coordinate={parked} opacity={0} tracksViewChanges={false}
-      accessible={false} pointerEvents="none">
-      <View style={[s.pin, s.emojiPin]} collapsable={false}><Text style={s.pinEmoji}>🍴</Text></View>
-    </Marker>;
-  }
-  return <Marker identifier={`slot-${slot}`} coordinate={{ latitude: result.lat, longitude: result.lng }}
-    anchor={{ x: 0.5, y: 0.5 }} stopPropagation tracksViewChanges={tracking} opacity={1}
-    zIndex={selected ? 1000 : 100 - position} testID={`map-pin-${position}`}
-    accessibilityRole="button" accessibilityLabel={mapRestaurantLabel(result)}
-    accessibilityHint="Select restaurant card" accessibilityState={{ selected }} onPress={() => onSelect(result)}>
+  const live = !!result;
+  return <Marker identifier={`slot-${slot}`} coordinate={result ? { latitude: result.lat, longitude: result.lng } : parked}
+    anchor={{ x: 0.5, y: 0.5 }} stopPropagation tracksViewChanges={live && tracking} opacity={live ? 1 : 0}
+    zIndex={selected ? 1000 : 100 - position} testID={live ? `map-pin-${position}` : undefined}
+    accessible={live} accessibilityRole="button" accessibilityLabel={result && mapRestaurantLabel(result)}
+    accessibilityHint="Select restaurant card" accessibilityState={{ selected }} onPress={() => result && onSelect(result)}>
     <View style={[s.pin, s.emojiPin, selected && s.selectedPin]} collapsable={false}>
       <Text style={s.pinEmoji}>🍴</Text>
     </View>
