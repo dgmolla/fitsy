@@ -275,7 +275,7 @@ env:
 - assertVisible:
     id: preview-back
 - assertNotVisible:
-    id: map-load-more
+    id: map-end-of-results
 - tapOn:
     id: map-pin-0
 - assertVisible:

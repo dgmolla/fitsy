@@ -317,7 +317,7 @@ env:
 - assertNotVisible:
     id: map-pin-4
 - assertNotVisible:
-    id: map-load-more
+    id: map-end-of-results
 - assertNotVisible:
     id: shuffle-button
 - assertVisible:

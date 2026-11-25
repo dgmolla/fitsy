@@ -518,6 +518,54 @@ it('keeps a craving and its targets when Shuffle finds no close-fit meals, then 
   expect(screen.getByTestId('shuffle-button').props.accessibilityState.disabled).toBe(false);
 });
 
+function scrollCarouselToEnd(screen: ReturnType<typeof open>) {
+  fireEvent.scroll(screen.getByTestId('map-carousel'), { nativeEvent: {
+    contentOffset: { x: 4700, y: 0 }, contentSize: { width: 5000, height: 210 }, layoutMeasurement: { width: 320, height: 210 } } });
+}
+
+it('loads the next cursor page once when the carousel nears its end, and not before (#1081)', async () => {
+  rows = restaurants.slice(0, 2);
+  nextCursor = 'next-page';
+  const screen = open();
+  await screen.findByTestId('map-pin-0');
+  const calls = () => searchRequests().filter(url => url.searchParams.has('cursor')).length;
+  await act(async () => fireEvent.scroll(screen.getByTestId('map-carousel'), { nativeEvent: {
+    contentOffset: { x: 0, y: 0 }, contentSize: { width: 5000, height: 210 }, layoutMeasurement: { width: 320, height: 210 } } }));
+  expect(calls()).toBe(0);
+  expect(screen.queryByText("That's every spot nearby")).toBeNull();
+  rows = restaurants.slice(2);
+  nextCursor = null;
+  await act(async () => { scrollCarouselToEnd(screen); scrollCarouselToEnd(screen); });
+  await screen.findByTestId('map-pin-3');
+  expect(calls()).toBe(1);
+  expect(screen.queryByText('More spots')).toBeNull();
+});
+
+it('keeps the native marker list fixed and the selected pin visible past the slot pool (#1081)', async () => {
+  const many = Array.from({ length: 100 }, (_, i) => ({ ...restaurants[i % 4], id: `w-${i}`, lat: 34.04 + i * 0.001 }));
+  rows = many.slice(0, 20);
+  nextCursor = 'p2';
+  const screen = open();
+  await screen.findByTestId('map-pin-0');
+  const nativeChildren = () => screen.getByTestId('discovery-map-surface').children
+    .map((child: unknown) => (child as { props: { identifier: string } }).props.identifier);
+  const initial = nativeChildren();
+  for (let page = 1; page < 5; page++) {
+    rows = many.slice(page * 20, page * 20 + 20);
+    nextCursor = page < 4 ? `p${page + 2}` : null;
+    await act(async () => scrollCarouselToEnd(screen));
+    await waitFor(() => expect(screen.getByText(`1 / ${(page + 1) * 20}`)).toBeTruthy());
+    expect(nativeChildren()).toEqual(initial);
+  }
+  // Pins 60..99 have no slot until the selection moves toward them.
+  expect(screen.queryByTestId('map-pin-99')).toBeNull();
+  fireEvent.press(screen.getByTestId('map-pin-59'));
+  expect(screen.getByTestId('map-pin-59').props.accessibilityState.selected).toBe(true);
+  await waitFor(() => expect(screen.getByTestId('map-pin-88')).toBeTruthy());
+  expect(screen.queryByTestId('map-pin-0')).toBeNull();
+  expect(nativeChildren()).toEqual(initial);
+});
+
 it('uses the existing cursor to load more pins and browse previews', async () => {
   rows = restaurants.slice(0, 2);
   nextCursor = 'next-page';
@@ -527,10 +575,11 @@ it('uses the existing cursor to load more pins and browse previews', async () =>
   expect(screen.getByTestId('map-pin-1').props.accessibilityState.selected).toBe(true);
   rows = restaurants.slice(2);
   nextCursor = null;
-  await act(async () => fireEvent.press(screen.getByTestId('map-load-more')));
+  await act(async () => scrollCarouselToEnd(screen));
   await screen.findByTestId('map-pin-3');
   expect(searchParams()).toMatchObject({ cursor: 'next-page' });
-  expect(screen.queryByTestId('map-load-more')).toBeNull();
+  expect(screen.queryByTestId('map-loading-more')).toBeNull();
+  expect(screen.getByTestId('map-end-of-results')).toBeTruthy();
   expect(screen.getByText('2 / 4')).toBeTruthy();
 });
 
@@ -548,7 +597,7 @@ it('never changes the native marker child list across refetch, load-more and sel
   expect(nativeChildren()).toEqual(initial);
   rows = restaurants.slice(2);
   nextCursor = null;
-  await act(async () => fireEvent.press(screen.getByTestId('map-load-more')));
+  await act(async () => scrollCarouselToEnd(screen));
   await screen.findByTestId('map-pin-3');
   expect(nativeChildren()).toEqual(initial);
   // Pagination across the old 20-pin chunk boundaries must not change the list either.
@@ -560,7 +609,7 @@ it('never changes the native marker child list across refetch, load-more and sel
   expect(nativeChildren()).toEqual(initial);
   rows = many(25, 'q');
   nextCursor = 'again';
-  await act(async () => fireEvent.press(screen.getByTestId('map-load-more')));
+  await act(async () => scrollCarouselToEnd(screen));
   await screen.findByTestId('map-pin-44');
   expect(nativeChildren()).toEqual(initial);
   rows = [{ ...restaurants[3], id: 'fresh-0' }];
@@ -651,7 +700,7 @@ it('keeps the same free preview boundary as the list', async () => {
   expect(screen.queryByTestId('map-pin-3')).toBeNull();
   await act(async () => fireEvent.press(screen.getByTestId('map-pin-0')));
   expect(screen.getByTestId('map-preview')).toBeTruthy();
-  expect(screen.queryByTestId('map-load-more')).toBeNull();
+  expect(screen.queryByTestId('map-end-of-results')).toBeNull();
 });
 
 it('offers the list and a real photo placeholder when provider map data is incomplete', async () => {
@@ -698,7 +747,7 @@ it('recovers the production map preview, preserves sample disclosure, and carrie
   await act(async () => fireEvent.press(screen.getByTestId('preview-retry')));
   await screen.findByTestId('map-card-2');
   expect(screen.queryByTestId('map-card-3')).toBeNull();
-  expect(screen.queryByTestId('map-load-more')).toBeNull();
+  expect(screen.queryByTestId('map-end-of-results')).toBeNull();
   expect(screen.queryByTestId('shuffle-button')).toBeNull();
   expect(screen.getByText('Meal 0')).toBeTruthy();
   expect(screen.queryByText('Meal 1')).toBeNull();
