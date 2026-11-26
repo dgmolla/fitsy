@@ -8,7 +8,7 @@ const profilePath = resolve(__dirname, 'build-profile.mjs');
 const productFlowPath = resolve(__dirname, 'product-flow.mjs');
 const cleanEnv = () => Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')));
 const runCase = (body: string) => JSON.parse(execFileSync(process.execPath, ['--input-type=module', '-e',
-  `import {nativeIdentity,nativeBuildDecision,reusableNativeReceipt,profileIdentity,sealReceipt,identityHash,buildInputDrift} from ${JSON.stringify(modulePath)};
+  `import {nativeIdentity,nativeBuildDecision,reusableNativeReceipt,profileIdentity,sealReceipt,identityHash,buildInputDrift,establishPreparationBaseline} from ${JSON.stringify(modulePath)};
    import {embeddedBundleCompatibility} from ${JSON.stringify(profilePath)};
    import {archiveActiveReceipt,preserveRetainedArtifacts} from ${JSON.stringify(productFlowPath)};
    import {writeFileSync,readFileSync,mkdirSync,readdirSync} from 'node:fs';
@@ -236,4 +236,60 @@ test('a source edit during preparation or compilation cannot be certified by the
     process.stdout.write(JSON.stringify({js:buildInputDrift(before,afterJs,true),native:buildInputDrift(before,afterNative,true)}));`);
   expect(result.js).toContain('JavaScript');
   expect(result.native).toContain('native source or resolved graph');
+});
+
+// #1088: `expo config --type introspect` reads the generated apps/mobile/ios when it exists, so a fresh worktree's identity before
+// prebuild can never equal the identity after it. The baseline must be taken after the project is generated.
+const dependentExecute = `
+  const dependent=(cmd,args)=>{
+    const generated=existsSync(root+'/apps/mobile/ios/Fitsy');
+    if(args.includes('introspect')){ const expo=fixture().expo; return JSON.stringify({...expo,ios:{...expo.ios,infoPlist:{...expo.ios.infoPlist,UIRequiredDeviceCapabilities:generated?['arm64']:['armv7']}}}); }
+    return execute(cmd,args);
+  };
+  const generate=()=>{ mkdirSync(root+'/apps/mobile/ios/Fitsy',{recursive:true}); writeFileSync(root+'/apps/mobile/ios/Fitsy/Info.plist','generated'); calls.push('generate'); };
+  const calls=[];
+  const inputs=native=>({native,jsHash:'js',configHash:'cfg',recipe:{hash:'recipe'}});
+  const freshRoot=()=>rmSync(root+'/apps/mobile/ios',{recursive:true,force:true});`;
+
+test('a fresh worktree passes native preparation: the baseline is taken after generating the project (#1088)', () => {
+  const result = runCase(`
+    import {existsSync,rmSync} from 'node:fs';
+    ${dependentExecute}
+    freshRoot();
+    const early=nativeIdentity(root,{},dependent);
+    generate();
+    const naive=buildInputDrift(inputs(early),inputs(nativeIdentity(root,{},dependent)));
+    calls.length=0; freshRoot();
+    const baseline=establishPreparationBaseline({root,early,generate,identity:()=>nativeIdentity(root,{},dependent)});
+    const afterPrepare=nativeIdentity(root,{},dependent); // a second, idempotent prebuild changes nothing
+    process.stdout.write(JSON.stringify({naive,generated:baseline.generated,calls:[...calls],
+      drift:buildInputDrift(inputs(baseline.native),inputs(afterPrepare))}));`);
+  expect(result.naive).toEqual(['native source or resolved graph']);
+  expect(result.generated).toBe(true);
+  expect(result.calls).toEqual(['generate']);
+  expect(result.drift).toEqual([]);
+});
+
+test('an existing generated project keeps its identity as the baseline and generates nothing (#1088)', () => {
+  const result = runCase(`
+    import {existsSync,rmSync} from 'node:fs';
+    ${dependentExecute}
+    generate(); calls.length=0;
+    const early=nativeIdentity(root,{},dependent);
+    const baseline=establishPreparationBaseline({root,early,generate,identity:()=>nativeIdentity(root,{},dependent)});
+    process.stdout.write(JSON.stringify({generated:baseline.generated,calls,same:baseline.native.hash===early.hash}));`);
+  expect(result).toEqual({ generated: false, calls: [], same: true });
+});
+
+test('the guard stays strict: a native source change while generating the baseline is still refused (#1088)', () => {
+  const result = runCase(`
+    import {existsSync,rmSync} from 'node:fs';
+    ${dependentExecute}
+    freshRoot();
+    const early=nativeIdentity(root,{},dependent);
+    let message='';
+    try { establishPreparationBaseline({root,early,generate:()=>{generate(); const f=fixture(); f.expoGraph.modules.push({packageName:'js-only',packageVersion:'1.0.0'}); writeFileSync(root+'/fixture.json',JSON.stringify(f));},
+      identity:()=>nativeIdentity(root,{},dependent)}); } catch(error){ message=error.message; }
+    process.stdout.write(JSON.stringify({message}));`);
+  expect(result.message).toMatch(/Inputs changed while generating the native project baseline/);
 });

@@ -13,7 +13,7 @@ import { root, inputHash, candidatePlan, selectedFlows, acceptanceExceptions, di
 import { journeyFixture, withFixtureEnvironment, prepareJourney, assertJourneyStore } from './journey-fixtures.mjs';
 import { backendOrigin, backendRevision, maestroApiArgs } from './backend-identity.mjs';
 import { buildProfile, bundleDelegate, embeddedBundleCompatibility, embeddedArtifactPlan, fixtureLabel, metroRoute } from './build-profile.mjs';
-import { nativeIdentity, buildInputDrift, profileIdentity, nativeBuildDecision, reusableNativeReceipt, sealReceipt, identityHash } from './native-identity.mjs';
+import { nativeIdentity, buildInputDrift, profileIdentity, nativeBuildDecision, reusableNativeReceipt, sealReceipt, identityHash, establishPreparationBaseline } from './native-identity.mjs';
 import { appTreeHash as treeHash, sharedNativeCacheDirectory, importNativeArtifact, importedArtifactIntact, publishNativeArtifact } from './shared-native-cache.mjs';
 import { admitDisk, appendRecordedFlowFailure, applyCapturePolicy, archiveFailureEvidence, clock, completeMaestroRun, event, latestMaestroLog, nearestFailure, needsDiagnosis, recordFlowOutcome, recordRunFailure, requireMetro, runRecordedFlow, runOwnedMaestro } from './runner-controls.mjs';
 import { classifySimulatorFailure, collectFlowFailures, flowFailuresError, flowFailuresSummary, maestroFailure, withEnvironmentRetry } from './failure-policy.mjs';
@@ -551,6 +551,23 @@ function receipt(udid) {
   assert(r === checkedActive, 'A retained compatible artifact must be activated through build before product flows');
   return checkedActive;
 }
+// #1088: generates apps/mobile/ios (idempotent) before the preparation baseline is taken. This deliberately duplicates the prebuild step
+// of prepareNative instead of sharing it: prepareNative's source is hashed into the native recipe identity (recipeIdentity), so editing it
+// would invalidate every cached native artifact.
+export function generateNativeProject(testStore) {
+  const env = { ...repoEnv(), EXPO_NO_DOTENV: '1', NODE_ENV: testStore ? 'development' : 'production',
+    FITSY_ALLOW_MISSING_PUBLIC_ENV: '1', CI: '1', FORCE_BUNDLING: '1', SKIP_BUNDLING: '' };
+  const packageFile = join(mobile, 'package.json'), packageBefore = readFileSync(packageFile);
+  try {
+    run('npx', ['expo', 'prebuild', '--platform', 'ios', '--no-install'], { cwd: mobile, env, stdio: 'inherit' });
+  } finally {
+    const before = JSON.parse(packageBefore), after = read(packageFile);
+    after.scripts = before.scripts;
+    assert(JSON.stringify(after) === JSON.stringify(before), 'Prebuild changed dependencies; inspect package.json before retrying');
+    writeFileSync(packageFile, packageBefore);
+  }
+  return env;
+}
 export function prepareNative(profile, testStore) {
   // Keyless Release is useful for baseline navigation, but cannot verify billing.
   const env = { ...repoEnv(), EXPO_NO_DOTENV: '1', NODE_ENV: testStore ? 'development' : 'production',
@@ -655,13 +672,19 @@ async function build(udid, testStore, forceReason = null, refreshEmbedded = fals
     const outputApp = join(buildDir, `Build/Products/${profile.configuration}-iphonesimulator/Fitsy.app`);
     preserveRetainedArtifacts(outputApp);
     archiveActiveReceipt(outputApp);
+    // #1088: the baseline for the preparation guard is taken after the native project exists, not before it is generated.
+    let baselineEnv = null;
+    const baseline = establishPreparationBaseline({ root, early: native,
+      generate: () => { baselineEnv = generateNativeProject(testStore); },
+      identity: () => nativeIdentity(root, baselineEnv) });
+    const preparationBaseline = { ...initialBuildInputs, native: baseline.native };
     const env = prepareNative(profile, testStore);
     const preparedNative = nativeIdentity(root, env);
     const preparedJsHash = inputHash(root, 'js');
     const preparedConfigHash = environment().configHash;
     const preparedInputs = { native: preparedNative, jsHash: preparedJsHash,
       configHash: preparedConfigHash, recipe: recipeIdentity() };
-    const preparationDrift = buildInputDrift(initialBuildInputs, preparedInputs);
+    const preparationDrift = buildInputDrift(preparationBaseline, preparedInputs);
     assert(preparationDrift.length === 0,
       `Inputs changed during native preparation: ${preparationDrift.join(', ')}; discard this artifact`);
     const { app, entitlements } = compileNative(profile, udid, env);

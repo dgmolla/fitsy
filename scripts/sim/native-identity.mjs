@@ -107,6 +107,24 @@ export function nativeIdentity(root, env = process.env, execute = command) {
 export const nativeSourceIdentityHash = native => identityHash(Object.fromEntries(
   Object.entries(native.inputs).filter(([key]) => key !== 'generatedFiles')));
 
+// Parts of the identity that do not depend on the generated project. `expo config --type introspect` (nativeConfig) reads the existing
+// apps/mobile/ios, so it differs before and after the first prebuild even though no source changed.
+const independentOfGeneratedProject = native => identityHash(Object.fromEntries(
+  Object.entries(native.inputs).filter(([key]) => !['generatedFiles', 'nativeConfig'].includes(key))));
+
+// #1088: take the preparation baseline from a checkout that already has its generated native project. With no apps/mobile/ios the
+// early identity can never equal the identity after prebuild, so a fresh worktree failed its first build with "Inputs changed during
+// native preparation". Generating first (an idempotent prebuild) and re-taking the identity fixes that; the parts of the identity
+// that do not depend on the generated project (graphs, packages, tracked native files) must still match the early identity.
+export function establishPreparationBaseline({ root, early, generate, identity }) {
+  if (generatedIosFiles(root).length > 0) return { native: early, generated: false };
+  generate();
+  const baseline = identity();
+  if (independentOfGeneratedProject(early) !== independentOfGeneratedProject(baseline))
+    throw new Error('Inputs changed while generating the native project baseline: native source or resolved graph; discard this artifact');
+  return { native: baseline, generated: true };
+}
+
 export function buildInputDrift(before, after, includeGenerated = false) {
   const changed = [];
   const nativeHash = includeGenerated ? item => item.native.hash : item => nativeSourceIdentityHash(item.native);
