@@ -15,6 +15,7 @@ import { archiveActiveMacroTargets, clearActiveMacroTargets } from './macroStora
 import { clearAccountOnboardingData } from './onboardingStorage';
 import { forgetPendingProfileSync } from './profileSyncStorage';
 import { clearDiscoverySignIn } from './discoverySignIn';
+import { clearSavedLocation } from './locationCache';
 import { clearWidget } from './widgetSync';
 import { rememberAccountHistory, rememberAccountOnboarding } from './accountHistory';
 
@@ -68,7 +69,7 @@ export async function clearToken({ reason = 'logout', forgetTargets = false }: {
   await archiveActiveMacroTargets(data.session?.user?.id ?? null, forgetTargets);
   await clearAccountOnboardingData(data.session?.user?.id ?? null, forgetTargets);
   if (reason === 'logout') await Promise.allSettled([
-    clearPaywallIntent(), clearPaymentSignInContinuation(), clearPendingMealClaim(), clearDiscoverySignIn(),
+    clearPaywallIntent(), clearPaymentSignInContinuation(), clearPendingMealClaim(), clearDiscoverySignIn(), clearSavedLocation(),
   ]);
   // Supabase's signOut clears its own SecureStore key (the session blob).
   await supabase.auth.signOut().catch(() => {
