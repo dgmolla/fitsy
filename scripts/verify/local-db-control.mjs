@@ -84,6 +84,13 @@ export function databaseControl({ root = repository, command = runCommand, spawn
         }
       }
       if (!container) {
+        // #1077: `docker run` pulls a missing image inside its own 60 s limit, and two CI shards hit that limit within a second of each
+        // other (spawnSync docker ETIMEDOUT) while Docker Hub was slow. Pull first with a longer, bounded retry. A failed pull is not
+        // fatal: an image that is already present still runs, and a truly missing one fails in `run` exactly as before.
+        for (let attempt = 1; attempt <= 2; attempt += 1) {
+          try { command('docker', ['pull', '--quiet', image], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 240000 }); break; }
+          catch (error) { console.error(`docker pull ${image} attempt ${attempt} failed: ${String(error.code || error.message).split('\n')[0]}`); }
+        }
         createdId = docker(['run', '-d', '--name', name, '--memory', String(databaseLimits.Memory),
           '--memory-swap', String(databaseLimits.MemorySwap), '--cpus', String(databaseLimits.NanoCpus / 1000000000), '--label', `fitsy.verify.owner=${owner}`,
           // Mask the image's declared volume without allocating the database in
