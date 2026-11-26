@@ -1,6 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 
 const KEY = 'fitsy_last_known_coords';
+export const MANUAL_LOCATION_KEY = 'fitsy_manual_location';
 
 export interface CachedCoords {
   lat: number;
@@ -31,4 +32,10 @@ export async function getCachedCoords(): Promise<CachedCoords | null> {
   } catch {
     return null;
   }
+}
+
+/** Forget the saved area (GPS cache and manual pick) so the next account on this device starts fresh (#839). */
+export async function clearSavedLocation(): Promise<void> {
+  memoryCache = null;
+  await Promise.allSettled([SecureStore.deleteItemAsync(KEY), SecureStore.deleteItemAsync(MANUAL_LOCATION_KEY)]);
 }

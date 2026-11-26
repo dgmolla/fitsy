@@ -6,13 +6,14 @@ import {
   trackLocationPermissionDenied,
   trackLocationTimeout,
 } from './analytics';
+import { MANUAL_LOCATION_KEY } from './locationCache';
 
 export const FALLBACK_LAT = 34.0868;
 export const FALLBACK_LNG = -118.3273;
 
 // SecureStore keys must contain only alphanumeric, '.', '-', '_' (no ':')
 // — matches the `fitsy_authToken` convention used in authClient.ts.
-export const MANUAL_LOCATION_KEY = 'fitsy_manual_location';
+export { MANUAL_LOCATION_KEY };
 
 export type LocationSource =
   | 'gps'

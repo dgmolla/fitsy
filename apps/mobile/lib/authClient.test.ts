@@ -226,6 +226,14 @@ describe('confirmed session adoption', () => {
     expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('fitsy_authToken');
     for (const key of keys) expect(await AsyncStorage.getItem(key)).toBe(reason === 'logout' ? null : 'retained-checkout');
   });
+
+  it.each(['logout', 'session-expired'] as const)('%s: only explicit logout forgets the saved area (#839)', async reason => {
+    await clearToken({ reason });
+    const deleted = jest.mocked(SecureStore.deleteItemAsync).mock.calls.map(c => c[0]);
+    for (const key of ['fitsy_last_known_coords', 'fitsy_manual_location']) {
+      expect(deleted.includes(key)).toBe(reason === 'logout');
+    }
+  });
 });
 
 describe('loginAndStore', () => {
