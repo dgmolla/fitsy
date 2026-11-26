@@ -123,3 +123,21 @@ test.each<AuthChangeEvent>(['USER_UPDATED', 'TOKEN_REFRESHED'])('%s re-identifie
   });
   expect(mockClient.reset).not.toHaveBeenCalled();
 });
+
+test('an anonymous visitor keeps one analytics identity across sign-in, token refresh and cold start (#838)', () => {
+  const anon = { id: 'anon-visitor', is_anonymous: true } as AnalyticsUser;
+  renderHook(useAuthAnalytics);
+  emit('INITIAL_SESSION', null);
+  emit('SIGNED_IN', anon);
+  emit('TOKEN_REFRESHED', anon);
+  emit('INITIAL_SESSION', anon);
+  expect(mockClient.reset).not.toHaveBeenCalled();
+  expect(mockClient.identify).not.toHaveBeenCalled();
+});
+
+test('an identified account falling back to anonymous resets identity once', () => {
+  renderHook(useAuthAnalytics);
+  emit('SIGNED_IN', user);
+  emit('SIGNED_IN', { id: 'anon-visitor', is_anonymous: true } as AnalyticsUser);
+  expect(mockClient.reset).toHaveBeenCalledTimes(1);
+});

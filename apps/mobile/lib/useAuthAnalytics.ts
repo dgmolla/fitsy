@@ -15,7 +15,9 @@ export function useAuthAnalytics(): void {
         identifyAnalyticsUser({ ...session.user, internalOrTest: isReviewEmail(session.user.email) });
         if (event === 'TOKEN_REFRESHED') trackSessionRefreshed();
         priorSessionUserId = session.user.id;
-      } else if (event === 'SIGNED_OUT' || event === 'INITIAL_SESSION' || session?.user.is_anonymous) {
+      } else if (event === 'SIGNED_OUT' || (priorSessionUserId && (event === 'INITIAL_SESSION' || session?.user.is_anonymous))) {
+        // Reset only on a real identity transition. An anonymous visitor keeps one PostHog id across
+        // sign-in, hourly token refreshes and cold starts so the onboarding funnel stays whole (#838).
         if (event === 'SIGNED_OUT' && priorSessionUserId) trackSessionRefreshFailed();
         priorSessionUserId = null;
         resetAnalyticsSession();
