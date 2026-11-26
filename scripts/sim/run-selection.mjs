@@ -18,3 +18,13 @@ export function resolveSelection(explicit, recorded) {
   if (active(recorded) && typeof recorded.skipBillingReason === 'string' && recorded.skipBillingReason.length > 0) return normalize(recorded);
   return normalize(explicit);
 }
+
+// The selection recorded in a report may only be inherited by the candidate that report belongs to (review of #1094): a stale report on disk
+// must never narrow acceptance for a different candidate. It has to be a final-candidate report, for the same source hash, with a completed
+// result, and preflight (which plans a run that has not happened yet) never inherits.
+export function selectionFromReport(report, { currentInputHash, preflight = false } = {}) {
+  if (preflight || !report || report.evidenceMode !== 'final-candidate') return undefined;
+  if (!currentInputHash || report.inputHash !== currentInputHash) return undefined;
+  if (!['pass', 'awaiting-walkthrough'].includes(report.result)) return undefined;
+  return report.runSelection;
+}

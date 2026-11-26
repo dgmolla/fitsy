@@ -12,7 +12,7 @@ import { journeyFixture } from './journey-fixtures.mjs';
 import { validateMediaReceipt } from '../verify/media-integration.mjs';
 import { publicationArtifacts, redactSecrets } from './publication-artifacts.mjs';
 import { readPreviousReportForReuse } from './evidence-mode.mjs';
-import { resolveSelection } from './run-selection.mjs';
+import { resolveSelection, selectionFromReport } from './run-selection.mjs';
 import { comparison, isMain, simulatorContext } from '../verify/impact-plan.mjs';
 const yaml = createRequire(import.meta.url)('js-yaml');
 const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { cwd: root, encoding: 'utf8', env: repoEnv(), maxBuffer: 16 * 1024 * 1024, ...opts })?.trim() || '';
@@ -234,9 +234,12 @@ export async function publishProductFlow(prNumber, {
   const resolved = resolvePlan({ labels: (pr.labels || []).map(label => label.name), recoverHistoricalReport: preflight }),
     includeBaseline = process.argv.includes('--include-baseline');
   const unfiltered = includeBaseline ? { ...resolved, flows: [...new Set([...(resolved.flows || []), ...baseline])].sort(), baseline } : resolved;
-  // #1092: inherit the flags the run was started with when none are passed here.
+  // #1092: inherit the flags the run was started with when none are passed here, but only from a report that belongs to this exact candidate.
   let recordedSelection;
-  try { recordedSelection = JSON.parse(readFileSync(resolve(evidenceDirectory, 'report.json'), 'utf8')).runSelection; } catch { /* no run report yet */ }
+  try {
+    recordedSelection = selectionFromReport(JSON.parse(readFileSync(resolve(evidenceDirectory, 'report.json'), 'utf8')),
+      { currentInputHash: sourceHash(), preflight });
+  } catch { /* no run report yet */ }
   ({ skipBillingPersonas, skipBillingReason, excludeFlows, waiveWalkthrough } = resolveSelection(
     { skipBillingPersonas, skipBillingReason, excludeFlows, waiveWalkthrough }, recordedSelection));
   const { plan, skippedFlows } = applyBillingPersonaSkip(unfiltered, { skipBillingPersonas, skipBillingReason, excludeFlows, waiveWalkthrough });
