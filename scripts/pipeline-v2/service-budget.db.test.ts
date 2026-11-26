@@ -27,7 +27,7 @@ suite('fleet budgets with real PostgreSQL and independent workers', () => {
     await db.brand.upsert({ where: { id: brandId }, update: {}, create: { id: brandId, displayName: 'Budget PDF Brand', slug: brandId, detectionConf: 'high' } });
     await db.$executeRaw`DELETE FROM public.pipeline_pdf_jobs WHERE brand_id=${brandId}`;
     await budgets[0]!.configure('jev', 5, 100000); await budgets[0]!.configure('google',5,1000); await budgets[0]!.configure('pdf_finder',0,10);
-  });
+  }, 15_000); // Seven sequential round-trips to the shared dev DB exceeded the 5 s default in CI (#1093).
   afterAll(async () => {
     try {
       await db.$executeRaw`DELETE FROM public.pipeline_paid_requests`;
