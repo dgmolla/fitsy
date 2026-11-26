@@ -13,6 +13,7 @@ import { root, inputHash, candidatePlan, selectedFlows, acceptanceExceptions, di
 import { journeyFixture, withFixtureEnvironment, prepareJourney, assertJourneyStore } from './journey-fixtures.mjs';
 import { backendOrigin, backendRevision, maestroApiArgs } from './backend-identity.mjs';
 import { buildProfile, bundleDelegate, embeddedBundleCompatibility, embeddedArtifactPlan, fixtureLabel, metroRoute } from './build-profile.mjs';
+import { recordedRunSelection, resolveSelection, selectionFromReport } from './run-selection.mjs';
 import { nativeIdentity, buildInputDrift, profileIdentity, nativeBuildDecision, reusableNativeReceipt, sealReceipt, identityHash, establishPreparationBaseline } from './native-identity.mjs';
 import { appTreeHash as treeHash, sharedNativeCacheDirectory, importNativeArtifact, importedArtifactIntact, publishNativeArtifact } from './shared-native-cache.mjs';
 import { admitDisk, appendRecordedFlowFailure, applyCapturePolicy, archiveFailureEvidence, clock, completeMaestroRun, event, latestMaestroLog, nearestFailure, needsDiagnosis, recordFlowOutcome, recordRunFailure, requireMetro, runRecordedFlow, runOwnedMaestro } from './runner-controls.mjs';
@@ -733,6 +734,7 @@ async function execute(udid, names, mode, { approvalId, environmentRetryAllowed 
     const fixture = read(process.env.FITSY_PRODUCT_FLOW_TEST_FIXTURE);
     const { runner, commandsFile, captureReceipt, reportFile, flowName } = fixture;
     const report = { ...fixture.reportTemplate, result: 'running', evidenceMode: mode.name,
+      runSelection: recordedRunSelection({ skipBillingPersonas, skipBillingReason, excludeFlows, waiveWalkthrough }),
       videoRequested: mode.recordVideo, flows: fixture.reportTemplate?.flows || [] };
     save(reportFile, report);
     let recorded, attachment;
@@ -856,6 +858,7 @@ async function execute(udid, names, mode, { approvalId, environmentRetryAllowed 
     const report = { version: 1, ...buildIdentity, storeMode: currentStoreMode,
       ...identity, ...server, inputHash: hash, headAtCollection, cleanAtCollection,
       selection: plan.simulator, releaseExceptionId: approvalId, exceptions, environmentRetryAllowed,
+      runSelection: recordedRunSelection({ skipBillingPersonas, skipBillingReason, excludeFlows, waiveWalkthrough }),
       jsHash: inputHash(root, 'js'), configHash: environment().configHash,
       publicConfig: environment().publicConfig,
       publicConfigAcceptance: { keys: publicConfigKeys },
@@ -1041,6 +1044,9 @@ async function finish(walkthrough, { skipBillingPersonas = false, skipBillingRea
   assert(report.inputHash === inputHash() && report.appHash === r.appHash, 'Candidate changed after tests');
   assert(report.backendDeployment === backend().backendDeployment, 'Backend changed after tests');
   await checkBundle(report);
+  // #1092: inherit the flags the run was started with, only from this candidate's own report (the asserts above bind it to this candidate).
+  ({ skipBillingPersonas, skipBillingReason, excludeFlows, waiveWalkthrough } = resolveSelection(
+    { skipBillingPersonas, skipBillingReason, excludeFlows, waiveWalkthrough }, selectionFromReport(report, { currentInputHash: inputHash() })));
   // Walkthrough JSON: array of category/expected/observed/branches/result/trace.
   // trace paths must already be inside the run evidence directory; no secrets.
   report.exploration = walkthrough ? read(resolve(walkthrough)) : [];
@@ -1075,6 +1081,8 @@ async function check({ skipBillingPersonas = false, skipBillingReason, excludeFl
   assert(report.backendDeployment === backend().backendDeployment, 'Dev deployment changed after tests');
   installedApp(report.simulator, r.appHash);
   await checkBundle(report);
+  ({ skipBillingPersonas, skipBillingReason, excludeFlows, waiveWalkthrough } = resolveSelection(
+    { skipBillingPersonas, skipBillingReason, excludeFlows, waiveWalkthrough }, selectionFromReport(report, { currentInputHash: inputHash() })));
   // #883: same shape as finish()'s #876 fix - narrow the plan with
   // applyBillingPersonaSkip before validating, or this standalone
   // confirmation re-requires every flow regardless of what the run (and
