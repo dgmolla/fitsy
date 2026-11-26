@@ -25,6 +25,11 @@ function scenario(name: string) {
         if (mode === 'legacy_replaced' && calls.filter(call => call[0] === 'inspect').length === 2) container.Id = 'replacement-id';
         return JSON.stringify([container]);
       }
+      if (args[0] === 'pull') {
+        if (mode === 'pull_slow_once' && calls.filter(call => call[0] === 'pull').length === 1) { const error = new Error('spawnSync docker ETIMEDOUT'); error.code = 'ETIMEDOUT'; throw error; }
+        if (mode === 'pull_down') { const error = new Error('registry unreachable'); error.code = 'ETIMEDOUT'; throw error; }
+        return '';
+      }
       if (args[0] === 'run') { container = makeContainer(control.owner);
         if (mode === 'created_startup_failure') container.State.Running = false;
         return container.Id; }
@@ -425,4 +430,25 @@ test('shared target refusal prevents every database reset, migration and seed', 
   expect(result.resetCalls).toEqual([]);
   expect(result.spawned).toHaveLength(1);
   expect(result.calls).toContainEqual(['rm', '-f', 'owned-container-id']);
+});
+
+// #1077: the image pull is bounded and retried before `docker run`, and a failed pull never blocks an image that is already present.
+test('a slow first image pull is retried once, then the database starts', () => {
+  const result = scenario('pull_slow_once');
+  expect(result.error).toBe('');
+  const pulls = result.calls.map(call => call[0]).filter(name => name === 'pull');
+  expect(pulls).toEqual(['pull', 'pull']);
+  const order = result.calls.map(call => call[0]);
+  expect(order.lastIndexOf('pull')).toBeLessThan(order.indexOf('run'));
+});
+test('a pull that keeps failing does not stop an image that is already present', () => {
+  const result = scenario('pull_down');
+  expect(result.error).toBe('');
+  expect(result.calls.filter(call => call[0] === 'pull')).toHaveLength(2);
+  expect(result.calls.some(call => call[0] === 'run')).toBe(true);
+});
+test('the image is pulled once, quietly, before the first run', () => {
+  const result = scenario('success');
+  expect(result.calls.filter(call => call[0] === 'pull')).toHaveLength(1);
+  expect(result.calls.find(call => call[0] === 'pull')).toEqual(['pull', '--quiet']);
 });
