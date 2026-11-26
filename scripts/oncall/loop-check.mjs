@@ -2,8 +2,8 @@
 // Hourly loop-check pass for the Fitsy on-call agent (#991). Deterministic, read-only, no LLM: each check prints one line
 // (ok / warn) so the log shows every check ran. Escalation and routing stay with the on-call session and its prompt.
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 
 const repository = resolve(new URL('../..', import.meta.url).pathname);
 const minutes = ms => Math.round(ms / 60000);
@@ -21,6 +21,13 @@ export function unackedHandoffs(issues, now) {
 export function redMainRuns(runs, names = ['Verify', 'Main full suite']) {
   return names.map(name => (runs ?? []).find(run => run.workflowName === name && ['success', 'failure'].includes(run.conclusion)))
     .filter(run => run?.conclusion === 'failure');
+}
+
+// Pure: every red post-merge run on main that has not been recorded yet, newest first. Unlike redMainRuns this looks at all listed runs, so a
+// red run that a later merge turned green before the hourly check is still found (#1077).
+export function unrecordedRedRuns(runs, recorded, names = ['Verify', 'Main full suite']) {
+  const seen = new Set(recorded ?? []);
+  return (runs ?? []).filter(run => names.includes(run.workflowName) && run.conclusion === 'failure' && !seen.has(run.databaseId));
 }
 
 // Pure: #1054 weekly maintenance is due when no receipt comment ("Weekly receipt") landed in the last 8 days.
@@ -49,7 +56,8 @@ export function stalledBlockers(issues, now, limitMinutes = 60) {
 }
 
 export function runChecks({ now = Date.now(), run = (...args) => execFileSync(args[0], args.slice(1), { encoding: 'utf8' }),
-  exists = existsSync, readText = file => readFileSync(file, 'utf8'), mtimeMs = file => statSync(file).mtimeMs, home = process.env.HOME,
+  exists = existsSync, readText = file => readFileSync(file, 'utf8'),
+  writeText = (file, text) => { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, text); }, mtimeMs = file => statSync(file).mtimeMs, home = process.env.HOME,
   hourPt = Number(new Intl.DateTimeFormat('en-US', { hour: 'numeric', hour12: false, timeZone: 'America/Los_Angeles' }).format(new Date(now))) % 24 } = {}) {
   const checks = [];
   const attempt = (name, body) => { try { checks.push(body()); } catch (error) { checks.push(result(name, false, `check failed: ${error.message.split('\n')[0]}`)); } };
@@ -120,7 +128,32 @@ export function runChecks({ now = Date.now(), run = (...args) => execFileSync(ar
   attempt('red-main', () => {
     const runs = JSON.parse(run('gh', 'run', 'list', '--repo', 'dgmolla/fitsy', '--branch', 'main', '--event', 'push', '--limit', '20', '--json', 'workflowName,conclusion,databaseId,headSha'));
     const red = redMainRuns(runs);
-    return result('red-main', red.length === 0, red.length ? red.map(item => `${item.workflowName} red on ${String(item.headSha).slice(0, 8)} (run ${item.databaseId}): rerun or file within the hour`).join('; ') : 'latest main runs are green');
+    // #1077: a warning line alone reached nobody (the Nov 24 red run warned twice and was never touched), so every red run is also filed once
+    // as a lane:tooling handoff, remembered by run id, even if a later run is already green. A failed filing is retried at the next pass.
+    const stateFile = resolve(home, '.config/fitsy/red-main-recorded.json');
+    let recorded = [], seeded = false;
+    try { recorded = JSON.parse(readText(stateFile)); } catch {
+      // First pass: remember the runs that are already red instead of filing an issue for old history.
+      recorded = unrecordedRedRuns(runs, []).map(item => item.databaseId); seeded = true;
+    }
+    const filed = [];
+    for (const item of seeded ? [] : unrecordedRedRuns(runs, recorded)) {
+      let jobs = 'unknown';
+      try { jobs = run('gh', 'run', 'view', String(item.databaseId), '--repo', 'dgmolla/fitsy', '--json', 'jobs', '--jq', '[.jobs[]|select(.conclusion=="failure")|.name]|join(", ")').trim() || 'unknown'; } catch { /* keep unknown */ }
+      const sha = String(item.headSha).slice(0, 8);
+      const url = `https://github.com/dgmolla/fitsy/actions/runs/${item.databaseId}`;
+      try {
+        const issue = run('gh', 'issue', 'create', '--repo', 'dgmolla/fitsy', '--label', 'lane:tooling', '--label', 'handoff',
+          '--title', `Main ${item.workflowName} red on ${sha} (run ${item.databaseId})`,
+          '--body', `**TL;DR:** A post-merge ${item.workflowName} run on main failed and nobody has recorded it yet; filed automatically by the hourly loop-check (#1077).\n\n- Run: ${url}\n- Commit: ${item.headSha}\n- Failed jobs: ${jobs}\n- Next: rerun the failed jobs, or find the cause; note the outcome here and close this issue.`).trim();
+        recorded = [...recorded, item.databaseId];
+        filed.push(issue);
+      } catch { /* not recorded, so the next pass retries */ }
+    }
+    if (filed.length || seeded) writeText(stateFile, `${JSON.stringify(recorded.slice(-200))}\n`);
+    const detail = [red.length ? red.map(item => `${item.workflowName} red on ${String(item.headSha).slice(0, 8)} (run ${item.databaseId}): rerun or file within the hour`).join('; ') : 'latest main runs are green',
+      filed.length ? `filed ${filed.join(' ')}` : ''].filter(Boolean).join('; ');
+    return result('red-main', red.length === 0, detail);
   });
   // #1054: the tooling lane owes one receipt comment a week; this warning is what wakes it up (no new sender or schedule).
   attempt('weekly-maintenance', () => {
