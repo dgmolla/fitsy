@@ -13,6 +13,7 @@ import { root, inputHash, candidatePlan, selectedFlows, acceptanceExceptions, di
 import { journeyFixture, withFixtureEnvironment, prepareJourney, assertJourneyStore } from './journey-fixtures.mjs';
 import { backendOrigin, backendRevision, maestroApiArgs } from './backend-identity.mjs';
 import { buildProfile, bundleDelegate, embeddedBundleCompatibility, embeddedArtifactPlan, fixtureLabel, metroRoute } from './build-profile.mjs';
+import { recordedRunSelection, resolveSelection } from './run-selection.mjs';
 import { nativeIdentity, buildInputDrift, profileIdentity, nativeBuildDecision, reusableNativeReceipt, sealReceipt, identityHash, establishPreparationBaseline } from './native-identity.mjs';
 import { appTreeHash as treeHash, sharedNativeCacheDirectory, importNativeArtifact, importedArtifactIntact, publishNativeArtifact } from './shared-native-cache.mjs';
 import { admitDisk, appendRecordedFlowFailure, applyCapturePolicy, archiveFailureEvidence, clock, completeMaestroRun, event, latestMaestroLog, nearestFailure, needsDiagnosis, recordFlowOutcome, recordRunFailure, requireMetro, runRecordedFlow, runOwnedMaestro } from './runner-controls.mjs';
@@ -733,6 +734,7 @@ async function execute(udid, names, mode, { approvalId, environmentRetryAllowed 
     const fixture = read(process.env.FITSY_PRODUCT_FLOW_TEST_FIXTURE);
     const { runner, commandsFile, captureReceipt, reportFile, flowName } = fixture;
     const report = { ...fixture.reportTemplate, result: 'running', evidenceMode: mode.name,
+      runSelection: recordedRunSelection({ skipBillingPersonas, skipBillingReason, excludeFlows, waiveWalkthrough }),
       videoRequested: mode.recordVideo, flows: fixture.reportTemplate?.flows || [] };
     save(reportFile, report);
     let recorded, attachment;
@@ -856,6 +858,7 @@ async function execute(udid, names, mode, { approvalId, environmentRetryAllowed 
     const report = { version: 1, ...buildIdentity, storeMode: currentStoreMode,
       ...identity, ...server, inputHash: hash, headAtCollection, cleanAtCollection,
       selection: plan.simulator, releaseExceptionId: approvalId, exceptions, environmentRetryAllowed,
+      runSelection: recordedRunSelection({ skipBillingPersonas, skipBillingReason, excludeFlows, waiveWalkthrough }),
       jsHash: inputHash(root, 'js'), configHash: environment().configHash,
       publicConfig: environment().publicConfig,
       publicConfigAcceptance: { keys: publicConfigKeys },
@@ -1036,6 +1039,8 @@ async function execute(udid, names, mode, { approvalId, environmentRetryAllowed 
 }
 async function finish(walkthrough, { skipBillingPersonas = false, skipBillingReason, excludeFlows = [], waiveWalkthrough = false } = {}) {
   const report = read(join(out, 'report.json'));
+  ({ skipBillingPersonas, skipBillingReason, excludeFlows, waiveWalkthrough } = resolveSelection(
+    { skipBillingPersonas, skipBillingReason, excludeFlows, waiveWalkthrough }, report.runSelection));
   const r = receipt(report.simulator);
   assert(report.result === 'awaiting-walkthrough', 'A completed deterministic run is required');
   assert(report.inputHash === inputHash() && report.appHash === r.appHash, 'Candidate changed after tests');
@@ -1066,6 +1071,8 @@ async function finish(walkthrough, { skipBillingPersonas = false, skipBillingRea
 }
 async function check({ skipBillingPersonas = false, skipBillingReason, excludeFlows = [], waiveWalkthrough = false } = {}) {
   const report = read(join(out, 'report.json'));
+  ({ skipBillingPersonas, skipBillingReason, excludeFlows, waiveWalkthrough } = resolveSelection(
+    { skipBillingPersonas, skipBillingReason, excludeFlows, waiveWalkthrough }, report.runSelection));
   const r = receipt(report.simulator);
   assert(report.appHash === r.appHash && report.configHash === environment().configHash,
     'Artifact or public configuration changed after tests');
