@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,8 +25,8 @@ const DELTA = { latitudeDelta: 0.09, longitudeDelta: 0.09 };
 // inserts at the index Fabric hands it. Adding, removing or reordering <Marker> children desyncs the
 // two (crash in -[AIRMap insertReactSubview:atIndex:], and pins that vanish; #1075). So the map
 // renders a constant pool of slots keyed by slot index, updated in place; an unused slot is a
-// transparent, inert marker. Results beyond the pool (many "More spots" pages) keep their carousel
-// card but get no pin.
+// transparent, inert marker. Carousel infinite scroll (#1081) can load more results than slots, so the
+// pool shows a window of pins centred on the selected card, again updated in place (never resized).
 const MAP_SLOTS = 60;
 const RestaurantMarker = React.memo(function RestaurantMarker({ result, position, selected, onSelect, slot, lat, lng }: {
   result?: RestaurantResult; position: number; selected: boolean; onSelect: (result: RestaurantResult) => void;
@@ -86,10 +86,13 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
     [d.canSearch, d.loading, d.locked, d.isOnboardingPreview, d.results, d.lockedTeaser]);
   const pins = useMemo(() => cards.filter(hasMapCoordinate), [cards]);
   const index = cards.findIndex(result => result.id === selectedId);
+  // First pin shown in the slot pool: keeps the selected card's pin inside the window.
+  const windowStart = Math.min(Math.max(0, pins.length - MAP_SLOTS), Math.max(0, index - MAP_SLOTS / 2));
   const fallback = !d.location.loading && d.location.source.startsWith('fallback-');
   const { lat, lng } = d.location;
   useEffect(() => { setPendingArea(null); panning.current = false; }, [lat, lng]);
   const firstId = cards[0]?.id;
+  // Camera fits the results of a search, not every appended page: a page loaded by scrolling must not move the map.
   // The map stays mounted behind the ordinary list. Coming back to it starts
   // the carousel at the first current result again, as before the dual mount.
   useEffect(() => {
@@ -119,7 +122,8 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
       }, animated: false });
     });
     return () => cancelAnimationFrame(frame);
-  }, [mapRevision, pins, controlsBottom, trayHeight, bottomClearance, layoutHeight, lat, lng, d.location.loading, pendingArea]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- pins intentionally omitted: appended pages must not refit the camera
+  }, [mapRevision, firstId, controlsBottom, trayHeight, bottomClearance, layoutHeight, lat, lng, d.location.loading, pendingArea]);
   const restoreCarousel = useCallback(() => {
     // Refresh/error states unmount this view while retaining the selected row.
     carousel.current?.scrollTo({ x: Math.max(0, index) * stride, animated: false });
@@ -142,11 +146,14 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
   // Coverage confirmed (meals exist nearby) yet nothing passed the filters: the targets are the lever (#1004).
   const macrosMismatch = !d.hasQuery && (d.nearbyDishCount ?? 0) > 0;
   const emptyTitle = !d.canSearch ? 'Find your next meal' : d.hasQuery ? 'No matches for this search' : 'No meals with nutrition nearby';
-  const more = d.nextCursor && !d.locked && !d.isOnboardingPreview && !d.loading && <Pressable style={s.more} disabled={d.loadingMore || d.refreshing}
-    onPress={() => { void d.handleEndReached(); }} testID="map-load-more" accessibilityRole="button"
-    accessibilityState={{ disabled: d.loadingMore || d.refreshing }}>
-    <Text style={s.link}>{d.loadingMore ? 'Loading more…' : 'More spots'}</Text>
-  </Pressable>;
+  // Infinite scroll, like the list: near the end of the carousel the next cursor page loads; a failed page retries on the next scroll.
+  const paged = !d.locked && !d.isOnboardingPreview && !d.loading;
+  const more = d.loadingMore || !!d.nextCursor;
+  const loadMoreNearEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (!paged) return;
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    if (contentOffset.x + layoutMeasurement.width >= contentSize.width - stride * 2) void d.handleEndReached();
+  };
   return <View style={s.root} testID="discovery-map" onLayout={event => setLayoutHeight(event.nativeEvent.layout.height)}>
     {/* Always mounted, even while location is loading (it has a fallback
         coordinate from first render) - tearing the native MapView down and
@@ -180,7 +187,7 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
       showsUserLocation={d.location.source === 'gps'} showsMyLocationButton={false}
       showsCompass={false} showsPointsOfInterest={false} scrollEnabled rotateEnabled={false}>
       {Array.from({ length: MAP_SLOTS }, (_, slot) => {
-        const result = pins[slot];
+        const result = pins[windowStart + slot];
         return <RestaurantMarker key={`slot-${slot}`} slot={slot} lat={lat} lng={lng} result={result}
           position={cards.indexOf(result as RestaurantResult)} selected={!!result && result.id === selectedId} onSelect={select} />;
       })}
@@ -258,8 +265,9 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
         {showRestaurants && <ScrollView ref={carousel} horizontal testID="map-carousel" style={{ height: compact ? 174 : 210, flexGrow: 0 }}
           showsHorizontalScrollIndicator={false} snapToInterval={stride} decelerationRate="fast" disableIntervalMomentum
           contentContainerStyle={s.carousel} keyboardShouldPersistTaps="handled"
-          onLayout={() => { restoreCarousel(); onTourLayoutChange?.(); }} onContentSizeChange={restoreCarousel}
+          onLayout={() => { restoreCarousel(); onTourLayoutChange?.(); }} onContentSizeChange={() => { if (!userDragged.current) restoreCarousel(); }}
           onScrollBeginDrag={() => { userDragged.current = true; }}
+          onScroll={loadMoreNearEnd} scrollEventThrottle={64}
           onMomentumScrollEnd={event => {
             if (!userDragged.current) return;
             userDragged.current = false;
@@ -274,7 +282,9 @@ export default function DiscoveryMap({ discovery: d, onShowList, previewHeader, 
               label={`Open ${mapRestaurantLabel(result)}`} page={`${position + 1} / ${cards.length}`}
               pageTestID={position === Math.max(0, index) ? 'map-page' : undefined} />
           </View>)}
-          {more && <View style={s.moreCard}>{more}</View>}
+          {paged && (more || cards.length > 1) && <View style={s.moreCard}>
+            {more ? <ActivityIndicator color={EDITORIAL.green} /> : <Text style={s.link}>That's all nearby</Text>}
+          </View>}
         </ScrollView>}
         {d.isOnboardingPreview && !d.loading && !d.refreshing && !d.error && !d.outOfArea &&
           <Pressable ref={active ? d.tourMoreRef : undefined} collapsable={false} style={s.previewUnlock} testID="locked-value-cta"

@@ -306,7 +306,8 @@ env:
       - waitForAnimationToEnd
 - copyTextFrom:
     id: map-page
-- assertTrue: ${Number(maestro.copiedText.split(' / ')[0]) === output.mapCount && Number(maestro.copiedText.split(' / ')[1]) === output.mapCount}
+# Infinite scroll (#1081) may already have appended the next page, so the total can exceed the first page.
+- assertTrue: ${Number(maestro.copiedText.split(' / ')[0]) === output.mapCount && Number(maestro.copiedText.split(' / ')[1]) >= output.mapCount}
 - copyTextFrom:
     id: map-preview-open
 - assertTrue: ${maestro.copiedText.indexOf('Open ') === 0 && maestro.copiedText.indexOf(' · ') > 5}

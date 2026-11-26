@@ -178,7 +178,7 @@ Debug keeps its existing boolean PostHog flags and local `mapDebug=1` walkthroug
 Production activation must also be checked in an embedded Release app or the actual TestFlight consumer, without relying on a Debug query switch.
 `GET /api/restaurants` supplies the single search boundary: three miles and 20 restaurants per page by default; the mobile caller supplies neither a radius nor a limit override.
 Pins come only from the current shared Discovery results with valid coordinates, retaining the list's three-result locked preview boundary.
-Explicit More spots loads the same cursor-based pages as the list; pan/zoom does not fetch, and Search this area starts the same bounded search only after confirmation.
+Scrolling the carousel near its end loads the same cursor-based pages as the list (no More spots card; the slot-pool pins follow the selected card); pan/zoom does not fetch, and Search this area starts the same bounded search only after confirmation.
 The first flow opens a pin, enters the restaurant menu, searches pizza, edits meal targets, switches map/list without losing state, shuffles, and clears search.
 The second launches with location denied, requires the existing Los Angeles fallback chip, selects Hollywood, and repeats search and view switching.
 Both map journeys submit the single-line search field with `pressKey: Enter`, which uses its native Search return key to dismiss the keyboard.
