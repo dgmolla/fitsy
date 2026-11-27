@@ -388,6 +388,22 @@ test('EAS inactivity expires old receipts but cannot erase a recent receipt or a
   await assert.rejects(workflowMetrics('eas-build.yml', 'EAS Build + TestFlight', context));
 });
 
+test('a retention touch on an old EAS run (updated_at moves, created_at does not) does not re-raise it (#1104)', async () => {
+  const key = 'workflow:EAS Build + TestFlight';
+  const touched = { id: 23571906592, run_attempt: 1, path: '.github/workflows/eas-build.yml',
+    event: 'workflow_dispatch', head_branch: 'main', status: 'completed', conclusion: 'failure',
+    created_at: '2026-03-26T08:00:00Z', updated_at: new Date(now - 3_600_000).toISOString() };
+  const context = { now, policy, env: { GITHUB_TOKEN: 'fixture' }, state: { incidents: {
+    [key]: { active: true, since: now - 1_800_000, workflowUpdatedAt: touched.updated_at, workflowRunId: touched.id },
+  } }, fetchImpl: async () => Response.json({ workflow_runs: [touched] }) };
+  assert.deepEqual(await workflowMetrics('eas-build.yml', 'EAS Build + TestFlight', context), []);
+  context.state = { incidents: {} };
+  assert.deepEqual(await workflowMetrics('eas-build.yml', 'EAS Build + TestFlight', context), []);
+  const recent = { ...touched, created_at: new Date(now - 3_600_000).toISOString() };
+  context.fetchImpl = async () => Response.json({ workflow_runs: [recent] });
+  assert.equal((await workflowMetrics('eas-build.yml', 'EAS Build + TestFlight', context))[0].severity, 'P1');
+});
+
 test('a superseded Deploy success neither hides retained failure nor manufactures recovery', async () => {
   const old = { id: 1, run_attempt: 1, path: '.github/workflows/deploy.yml', event: 'workflow_run',
     head_branch: 'main', status: 'completed', conclusion: 'failure', updated_at: new Date(now).toISOString() };

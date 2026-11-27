@@ -209,8 +209,11 @@ export async function workflowMetrics(file, name, context) {
     // Expire inactive history through normal state/recovery delivery. Active
     // attempts and recent persisted receipts still retain the #737 safeguards.
     const previousAt = previous?.workflowUpdatedAt ? Date.parse(previous.workflowUpdatedAt) : previous?.since;
-    if (runs.every(item => item.status === 'completed' && Date.parse(item.updated_at) < cutoff)
-        && (!previous?.active || (Number.isFinite(previousAt) && previousAt < cutoff))) return [];
+    // #1104: a retention touch moves updated_at on a months-old run, so age a run by its stable created_at when present.
+    const ageOf = item => { const created = Date.parse(item.created_at); return Number.isFinite(created) ? created : Date.parse(item.updated_at); };
+    const sameStaleRun = previous?.active && runs.some(item => item.id === previous.workflowRunId && ageOf(item) < cutoff);
+    if (runs.every(item => item.status === 'completed' && ageOf(item) < cutoff)
+        && (!previous?.active || sameStaleRun || (Number.isFinite(previousAt) && previousAt < cutoff))) return [];
     if (!runs.length) return null;
   }
   const completed = runs.filter(item => item.status === 'completed' && !['skipped', 'neutral'].includes(item.conclusion))
