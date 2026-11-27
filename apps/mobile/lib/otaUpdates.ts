@@ -24,6 +24,8 @@ export function otaDiagnostics(): OtaDiagnostics {
 /** Only real TestFlight builds check on foreground; production keeps expo-updates' launch check. */
 export const isTestflightOta = (): boolean => !__DEV__ && Updates.isEnabled && Updates.channel === 'testflight';
 
+const errorName = (error: unknown): string => (error instanceof Error ? error.name : 'unknown').replace(/\W/g, '').slice(0, 40) || 'unknown';
+
 const MIN_GAP_MS = 60_000;
 let lastCheckAt = 0;
 let running = false;
@@ -46,10 +48,15 @@ export async function checkTestflightUpdate(now = Date.now()): Promise<void> {
     trackOtaUpdateCheck({ ...base, stage: 'reload_prompt', remote_update_id: fetched.manifest?.id });
     Alert.alert('Update ready', 'A new version of Fitsy is ready.', [
       { text: 'Later', style: 'cancel' },
-      { text: 'Restart', onPress: () => { void Updates.reloadAsync(); } },
+      { text: 'Restart', onPress: () => {
+        Updates.reloadAsync().catch((error: unknown) => {
+          trackOtaUpdateCheck({ ...base, stage: 'error', error_name: `reload:${errorName(error)}` });
+          captureException(error);
+        });
+      } },
     ]);
   } catch (error) {
-    trackOtaUpdateCheck({ ...base, stage: 'error', error_name: `${stage}:${error instanceof Error ? error.name : 'unknown'}` });
+    trackOtaUpdateCheck({ ...base, stage: 'error', error_name: `${stage}:${errorName(error)}` });
     captureException(error);
   } finally {
     running = false;
