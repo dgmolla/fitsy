@@ -39,6 +39,7 @@ import {
 import { EDITORIAL, FONTS } from '@/lib/brand';
 import { usePurchases } from '@/lib/usePurchases';
 import { useFloatingNavClearance } from '@/lib/floatingNav';
+import { isTestflightOta, otaDiagnostics } from '@/lib/otaUpdates';
 
 const GOAL_OPTIONS = [
   { id: 'lose_fat', label: 'Lose Weight', icon: 'flame-outline', description: 'Calorie deficit for fat loss' },
@@ -363,6 +364,13 @@ export default function ProfileScreen() {
 
         {__DEV__ && <DevTestAccountControl />}
 
+        {isTestflightOta() && (
+          <Text testID="profile-ota-diagnostics" selectable style={s.otaDiagnostics}>
+            {(({ updateId, channel, runtimeVersion, isEmbeddedLaunch }) =>
+              `Update ${updateId}\nChannel ${channel} - ${isEmbeddedLaunch ? 'embedded' : 'downloaded'}\nRuntime ${runtimeVersion.slice(0, 8)}`)(otaDiagnostics())}
+          </Text>
+        )}
+
         {/* Logout */}
         <Pressable testID="profile-logout" style={s.logoutBtn} onPress={handleLogout}>
           <Ionicons name="log-out-outline" size={16} color="#B85450" />
@@ -628,6 +636,7 @@ const s = StyleSheet.create({
     paddingVertical: 14,
     marginTop: 8,
   },
+  otaDiagnostics: { fontFamily: FONTS.nunitoSans, fontSize: 11, lineHeight: 15, color: EDITORIAL.textSoft, textAlign: 'center', marginTop: 12 },
   deleteText: { fontFamily: FONTS.nunitoSans, fontSize: 13, fontWeight: '500', color: '#B85450' },
   disclaimer: {
     fontFamily: FONTS.nunitoSans,
