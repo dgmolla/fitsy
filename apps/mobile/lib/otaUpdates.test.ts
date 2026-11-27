@@ -20,6 +20,7 @@ beforeEach(() => {
   (globalThis as { __DEV__?: boolean }).__DEV__ = false;
   jest.clearAllMocks();
   __resetOtaCheckForTesting();
+  updates.reloadAsync.mockResolvedValue(undefined);
   updates.channel = 'testflight';
   alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 });
@@ -52,6 +53,18 @@ it('reports a failed download with its stage to analytics and Sentry', async () 
   updates.fetchUpdateAsync.mockRejectedValue(new TypeError('network'));
   await checkTestflightUpdate();
   expect(trackOtaUpdateCheck).toHaveBeenLastCalledWith(expect.objectContaining({ stage: 'error', error_name: 'fetch:TypeError' }));
+  expect(captureException).toHaveBeenCalledTimes(1);
+});
+
+it('reports a rejected restart', async () => {
+  updates.checkForUpdateAsync.mockResolvedValue({ isAvailable: true, manifest: { id: 'new-id' } } as never);
+  updates.fetchUpdateAsync.mockResolvedValue({ isNew: true, manifest: { id: 'new-id' } } as never);
+  updates.reloadAsync.mockRejectedValue(new Error('relaunch failed'));
+  await checkTestflightUpdate();
+  (alertSpy.mock.calls[0][2] as { text: string; onPress?: () => void }[]).find(b => b.text === 'Restart')?.onPress?.();
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(trackOtaUpdateCheck).toHaveBeenLastCalledWith(expect.objectContaining({ stage: 'error', error_name: 'reload:Error' }));
   expect(captureException).toHaveBeenCalledTimes(1);
 });
 

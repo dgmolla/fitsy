@@ -74,6 +74,18 @@ test('coarse operational search counts survive the privacy filter', () => {
   expect(sent[0]!.properties).toMatchObject({ result_count: 10, query_length: 5, success: true });
 });
 
+test('OTA diagnostics survive the privacy filter; malformed values do not', () => {
+  const id = '01a219e2-c381-76cb-95ea-23410284aadf';
+  expect(sanitizeAnalyticsEvent({ event: 'ota_update_check', properties: { stage: 'error', update_id: id,
+    is_embedded_launch: true, remote_update_id: id, error_name: 'fetch:TypeError' } })?.properties).toMatchObject({
+    stage: 'error', update_id: id, is_embedded_launch: true, remote_update_id: id, error_name: 'fetch:TypeError' });
+  const bad = sanitizeAnalyticsEvent({ event: 'ota_update_check', properties: { stage: 'other', update_id: 'alice-private-note',
+    error_name: 'fetch:network down at home' } })?.properties;
+  expect(bad).not.toHaveProperty('stage');
+  expect(bad).not.toHaveProperty('update_id');
+  expect(bad).not.toHaveProperty('error_name');
+});
+
 test('launch markers accept only the narrow contract and never clear internal status', () => {
   expect(sanitizeAnalyticsEvent({ event: '$set',
     properties: { la_cohort: 'Hollywood', unlocked: 520, has_macros: { protein: 42 },

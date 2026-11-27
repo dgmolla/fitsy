@@ -15,6 +15,7 @@ const allowed = new Set([
   '$feature_flag', '$feature_flag_response', '$geoip_disable', '$process_person_profile',
   'analytics_contract', 'distribution_channel', '$internal_or_test_user', 'la_cohort',
   'unlocked', 'has_macros', 'item_count',
+  'stage', 'update_id', 'is_embedded_launch', 'remote_update_id', 'error_name',
 ]);
 
 export function sanitizeAnalyticsEvent(event: CaptureEvent | null): CaptureEvent | null {
@@ -26,6 +27,9 @@ export function sanitizeAnalyticsEvent(event: CaptureEvent | null): CaptureEvent
     if (!allowed.has(key) && !(identityEvent && key === '$anon_distinct_id')) continue;
     if (['$internal_or_test_user', 'la_cohort', 'unlocked', 'has_macros'].includes(key) && typeof value !== 'boolean') continue;
     if (key === 'analytics_contract' && value !== 1) continue;
+    if (key === 'stage' && !['launch', 'check', 'fetch', 'reload_prompt', 'error'].includes(String(value))) continue;
+    if ((key === 'update_id' || key === 'remote_update_id') && !/^(none|[a-f0-9-]{36})$/i.test(String(value))) continue;
+    if (key === 'error_name' && !/^(check|fetch|reload):\w{1,40}$/.test(String(value))) continue;
     if (key === 'distribution_channel' && !['development', 'testflight', 'production', 'unknown'].includes(String(value))) continue;
     if (typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value)) ||
         (typeof value === 'string' && value.length <= 128 && !/[@\s]|Bearer|eyJ/i.test(value))) {
