@@ -16,6 +16,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuthAnalytics } from '@/lib/useAuthAnalytics';
 import { initializeSentry, wrap } from '@/lib/sentry';
 import { setDevPaywallAccess } from '@/lib/paywallAccess';
+import { useTestflightOtaCheck } from '@/lib/otaUpdates';
 
 // Module scope so uncaught errors during the very first render are captured.
 initializeSentry();
@@ -88,6 +89,7 @@ function RootLayout() {
   }, []);
 
   useAuthAnalytics();
+  useTestflightOtaCheck();
 
   if (!fontsLoaded) return null;
 

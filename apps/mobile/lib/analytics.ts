@@ -913,3 +913,9 @@ export function trackReminderAction(props: { action: 'opened'; kind: 'meal' | 't
   try { getPostHogClient().capture('reminder_action', props); }
   catch (error) { logCaptureError('reminder_action', error); }
 }
+
+/** TestFlight OTA delivery (#1099): which bundle a device runs and where an update check stopped. */
+export function trackOtaUpdateCheck(props: { stage: 'launch' | 'check' | 'fetch' | 'reload_prompt' | 'error'; update_id: string; is_embedded_launch: boolean; remote_update_id?: string; error_name?: string }): void {
+  try { getPostHogClient().capture('ota_update_check', props); }
+  catch (error) { logCaptureError('ota_update_check', error); }
+}

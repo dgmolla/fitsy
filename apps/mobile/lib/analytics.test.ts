@@ -27,6 +27,7 @@ import {
   trackProfileAccountDeleted,
   trackProfileFieldEdited,
   trackProfileLogoutTapped,
+  trackOtaUpdateCheck,
   trackRestaurantDetailFailed,
   trackSaveFailed,
   trackSaveMacroTargetsFailed,
@@ -221,6 +222,13 @@ describe('trackProfileFieldEdited', () => {
   it('captures profile_field_edited with the field name', () => {
     trackProfileFieldEdited({ field: 'goal' });
     expect(captureMock).toHaveBeenCalledWith('profile_field_edited', { field: 'goal' });
+  });
+});
+
+describe('trackOtaUpdateCheck', () => {
+  it('captures ota_update_check with the stage and update ids', () => {
+    trackOtaUpdateCheck({ stage: 'fetch', update_id: 'a', is_embedded_launch: false, remote_update_id: 'b' });
+    expect(captureMock).toHaveBeenCalledWith('ota_update_check', { stage: 'fetch', update_id: 'a', is_embedded_launch: false, remote_update_id: 'b' });
   });
 });
 

@@ -225,6 +225,7 @@ between any two edges is measurable as a PostHog funnel step.
 | `profile_field_edited` | User taps any editable stat in profile | `field: 'goal' \| 'activity' \| 'height' \| 'weight' \| 'age'` | Which fields get adjusted post-onboarding? |
 | `profile_logout_tapped` | User taps "Log out" | none | Explicit-logout rate (vs forced-logout via session_refresh_failed) |
 | `profile_account_deleted` | `DELETE /api/user` resolves | `success: boolean` | Account-deletion volume + delete-API reliability |
+| `ota_update_check` | TestFlight build launches, checks, downloads or fails an OTA update | `stage: 'launch' \| 'check' \| 'fetch' \| 'reload_prompt' \| 'error'`, `update_id`, `is_embedded_launch`, `remote_update_id?`, `error_name?` | Is a published OTA reaching devices, and where does it stop? (#1099) |
 
 ## Naming conventions
 
