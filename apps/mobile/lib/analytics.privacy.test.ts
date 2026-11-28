@@ -84,6 +84,11 @@ test('OTA diagnostics survive the privacy filter; malformed values do not', () =
   expect(bad).not.toHaveProperty('stage');
   expect(bad).not.toHaveProperty('update_id');
   expect(bad).not.toHaveProperty('error_name');
+  const malformed = sanitizeAnalyticsEvent({ event: 'ota_update_check', properties: {
+    update_id: '-'.repeat(36), remote_update_id: 'abcdef0123456789abcdef0123456789abcd', is_embedded_launch: 'yes' } })?.properties;
+  expect(malformed).not.toHaveProperty('update_id');
+  expect(malformed).not.toHaveProperty('remote_update_id');
+  expect(malformed).not.toHaveProperty('is_embedded_launch');
 });
 
 test('launch markers accept only the narrow contract and never clear internal status', () => {
